@@ -5,6 +5,7 @@ MarueFerry スクレイパーのユニットテスト。
 HTTP リクエストは responses ライブラリでモック。
 DBは SQLite in-memory を使用（conftest.py の db_session / marue_ferry_company フィクスチャ）。
 """
+import pytest
 import responses as resp_mock
 from datetime import date
 
@@ -263,3 +264,48 @@ def test_no_duplicate_for_same_route(db_session, marue_ferry_company):
 
     recs_down = [r for r in records if r["route_id"] == down.id]
     assert len(recs_down) == 1, "同一ルートのレコードは1件のみ"
+
+
+# 鹿児島ページ: div.ferry-name が存在しない（サイト構造変更で船ブロックが消えた想定）
+HTML_KAGOSHIMA_NO_FERRY_BLOCKS = """
+<html><body>
+<div class="page-content">
+  <p>現在、航路情報はありません。</p>
+</div>
+</body></html>
+"""
+
+# 鹿児島ページ: div.ferry-name はあるが div.tag-list span が全てない
+HTML_KAGOSHIMA_NO_TAG_SPANS = """
+<html><body>
+<a href="/status/route-kagoshima/ferry-akebono/1/">
+  <div class="route-head">
+    <div class="ferry-name">フェリーあけぼの</div>
+  </div>
+  <div class="tag-list"></div>
+  <div class="situation-excerpt">情報なし</div>
+</a>
+</body></html>
+"""
+
+
+@resp_mock.activate
+def test_parse_raises_when_no_ferry_blocks(db_session, marue_ferry_company):
+    """has_service=True なのに div.ferry-name が一件もない場合は RuntimeError を送出する。"""
+    resp_mock.add(resp_mock.POST, SEARCH_URL, body=HTML_SEARCH_HAS_SERVICE, status=200)
+    resp_mock.add(resp_mock.GET, KAGOSHIMA_URL, body=HTML_KAGOSHIMA_NO_FERRY_BLOCKS, status=200)
+
+    scraper = MarueFerry(db_session, marue_ferry_company.id)
+    with pytest.raises(RuntimeError, match="no ship statuses parsed"):
+        scraper.parse(scraper.fetch())
+
+
+@resp_mock.activate
+def test_parse_raises_when_all_tag_spans_missing(db_session, marue_ferry_company):
+    """has_service=True なのに div.tag-list span が全てない場合は RuntimeError を送出する。"""
+    resp_mock.add(resp_mock.POST, SEARCH_URL, body=HTML_SEARCH_HAS_SERVICE, status=200)
+    resp_mock.add(resp_mock.GET, KAGOSHIMA_URL, body=HTML_KAGOSHIMA_NO_TAG_SPANS, status=200)
+
+    scraper = MarueFerry(db_session, marue_ferry_company.id)
+    with pytest.raises(RuntimeError, match="no ship statuses parsed"):
+        scraper.parse(scraper.fetch())

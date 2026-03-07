@@ -22,12 +22,10 @@ scraper/tests/test_marue_ferry.py         # テスト（追加・更新）
 # スクレイパーを1回実行（マルエーフェリーも含む全社）
 make scraper-run
 
-# マルエーフェリーのみ確認したい場合はシェル接続して直接実行
+# マルエーフェリーのみ確認したい場合はシェル接続して手動実行
 make shell-scraper
-python -c "
-from scraper.scrapers.marue_ferry import MarueFerry
-# テスト実行（DB接続あり）
-"
+# コンテナ内で make scraper-run か、scraper CLI の使い方に従って
+# マルエーフェリー向けスクレイパーのみを実行してください。
 ```
 
 ## デバッグ

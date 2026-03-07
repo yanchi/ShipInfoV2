@@ -114,8 +114,8 @@ class MarueFerry(BaseScraper):
             ship_statuses.append((status, detail))
 
         if not ship_statuses:
-            self._log.warning("no_records_parsed", html_len=len(html))
-            return records
+            self._log.error("no_records_parsed", html_len=len(html))
+            raise RuntimeError("MarueFerry.parse: no ship statuses parsed (possible site structure change)")
 
         # 複数船で異なるステータスがある場合は最も深刻なものを採用して warning
         _SEVERITY = {

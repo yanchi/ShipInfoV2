@@ -22,7 +22,7 @@ def create_session(
         total=retries,
         backoff_factor=backoff_factor,
         status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET", "HEAD"],
+        allowed_methods=["GET", "HEAD", "POST"],
     )
     adapter = HTTPAdapter(max_retries=retry)
     session.mount("https://", adapter)
