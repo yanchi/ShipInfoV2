@@ -17,8 +17,8 @@
 
 **Purpose**: 変更対象の BaseScraper インターフェースと既存コードを理解してから実装に入る
 
-- [ ] T001 `scraper/scraper/scrapers/base.py` を読み、`fetch()` → `parse()` → `save()` の呼び出しフロー・戻り値型を把握する
-- [ ] T002 `scraper/scraper/scrapers/marue_ferry.py` を読み、現行の URL 定数・ヘルパーメソッド一覧を把握する
+- [X] T001 `scraper/scraper/scrapers/base.py` を読み、`fetch()` → `parse()` → `save()` の呼び出しフロー・戻り値型を把握する
+- [X] T002 `scraper/scraper/scrapers/marue_ferry.py` を読み、現行の URL 定数・ヘルパーメソッド一覧を把握する
 
 ---
 
@@ -28,8 +28,8 @@
 
 **⚠️ CRITICAL**: Phase 1 完了後に実施。実装方針を確定してから US1/US2 へ進む
 
-- [ ] T003 `scraper/scraper/scrapers/marue_ferry.py` の先頭で `SOURCE_URL` を削除し、`SEARCH_URL = "https://www.aline-ferry.com/search/result.php"` と `KAGOSHIMA_URL = "https://www.aline-ferry.com/kagoshima/"` の 2 定数に置き換える
-- [ ] T004 `MarueFerry` クラスに `self._has_service: bool = True` と `self._valid_date: date` のインスタンス変数を追加する（`fetch()` → `parse()` 間の状態受け渡しに使用）
+- [X] T003 `scraper/scraper/scrapers/marue_ferry.py` の先頭で `SOURCE_URL` を削除し、`SEARCH_URL = "https://www.aline-ferry.com/search/result.php"` と `KAGOSHIMA_URL = "https://www.aline-ferry.com/kagoshima/"` の 2 定数に置き換える
+- [X] T004 `MarueFerry` クラスに `self._has_service: bool = True` と `self._valid_date: date` のインスタンス変数を追加する（`fetch()` → `parse()` 間の状態受け渡しに使用）
 
 **Checkpoint**: 定数・状態変数の設計確定 → US1/US2 実装開始可能
 
@@ -43,9 +43,9 @@
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] `scraper/scraper/scrapers/marue_ferry.py` に `_check_service(target_date: date) -> bool` メソッドを実装する。`SEARCH_URL` へ `{"startDate": target_date.isoformat(), "startPort": "50", "endPort": "83"}` を POST し、`BeautifulSoup` で `table.s-result tbody tr` が 1 行以上あれば `True`、なければ `False` を返す。`table.s-result` が見つからない場合は `self._log.warning("search_table_not_found")` を記録して `True`（安全側）を返す
-- [ ] T006 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `fetch()` メソッドを書き換える。`target_date = date.today()` で `_check_service(target_date)` を呼び、結果を `self._has_service` に格納し `self._valid_date = target_date` をセットする。`has_service=True` なら `KAGOSHIMA_URL` を GET して HTML を返す。`has_service=False` なら空文字列 `""` を返す（`raw_html_hash` の計算対象は鹿児島ページの HTML のみ）
-- [ ] T007 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `parse()` メソッドに、冒頭で `if not self._has_service:` を判定するブロックを追加する。`False` の場合は `_load_routes()` で上り・下り両ルートを取得し、両方に `OperationStatusEnum.cancelled`・`valid_date=self._valid_date`・`source_url=SEARCH_URL` のレコードを生成して返す（以降の鹿児島解析をスキップ）
+- [X] T005 [US1] `scraper/scraper/scrapers/marue_ferry.py` に `_check_service(target_date: date) -> bool` メソッドを実装する。`SEARCH_URL` へ `{"startDate": target_date.isoformat(), "startPort": "50", "endPort": "83"}` を POST し、`BeautifulSoup` で `table.s-result tbody tr` が 1 行以上あれば `True`、なければ `False` を返す。`table.s-result` が見つからない場合は `self._log.warning("search_table_not_found")` を記録して `True`（安全側）を返す
+- [X] T006 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `fetch()` メソッドを書き換える。`target_date = date.today()` で `_check_service(target_date)` を呼び、結果を `self._has_service` に格納し `self._valid_date = target_date` をセットする。`has_service=True` なら `KAGOSHIMA_URL` を GET して HTML を返す。`has_service=False` なら空文字列 `""` を返す（`raw_html_hash` の計算対象は鹿児島ページの HTML のみ）
+- [X] T007 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `parse()` メソッドに、冒頭で `if not self._has_service:` を判定するブロックを追加する。`False` の場合は `_load_routes()` で上り・下り両ルートを取得し、両方に `OperationStatusEnum.cancelled`・`valid_date=self._valid_date`・`source_url=SEARCH_URL` のレコードを生成して返す（以降の鹿児島解析をスキップ）
 
 **Checkpoint**: US1 完了 → `make scraper-run` で便なし日に `cancelled` が記録されることを確認可能
 
@@ -59,10 +59,10 @@
 
 ### Implementation for User Story 2
 
-- [ ] T008 [US2] `scraper/scraper/scrapers/marue_ferry.py` に `_parse_status_text(text: str) -> OperationStatusEnum | None` メソッドを実装する。引数テキストに `欠航` → `cancelled`、`条件付` → `delayed`、`遅延` / `スケジュール変更` → `delayed`、`運休` → `suspended`、`通常` → `operating` を順に判定して返す。いずれも一致しない場合は `None` を返す
-- [ ] T009 [US2] `scraper/scraper/scrapers/marue_ferry.py` の `parse()` メソッドの `else` ブロック（`has_service=True` 時）に鹿児島ページ解析ロジックを実装する。`BeautifulSoup` で `h3` タグを全て取得し、各 `h3` の次の兄弟 `p` タグのテキストを `_parse_status_text()` に渡してステータスを取得する。ステータスが `None`（判定不能）の場合は `self._log.warning("kagoshima_status_unknown", ship=h3.get_text())` を記録してスキップする
-- [ ] T010 [US2] T009 の解析結果を `_load_routes()` の上り・下り両ルートに適用するレコード生成ロジックを `parse()` に追加する。`route_id=down_route.id` と `route_id=up_route.id` それぞれに同一の `status` / `status_detail` / `valid_date=self._valid_date` / `source_url=KAGOSHIMA_URL` を持つ辞書を生成してリストに追加する
-- [ ] T011 [US2] `scraper/scraper/scrapers/marue_ferry.py` から不要になった旧ヘルパーメソッド（`_parse_direction()`・`_parse_date()`・`_parse_status()`）を削除する。`_load_routes()` は再利用するため残す
+- [X] T008 [US2] `scraper/scraper/scrapers/marue_ferry.py` に `_parse_status_text(text: str) -> OperationStatusEnum | None` メソッドを実装する。引数テキストに `欠航` → `cancelled`、`条件付` → `delayed`、`遅延` / `スケジュール変更` → `delayed`、`運休` → `suspended`、`通常` → `operating` を順に判定して返す。いずれも一致しない場合は `None` を返す
+- [X] T009 [US2] `scraper/scraper/scrapers/marue_ferry.py` の `parse()` メソッドの `else` ブロック（`has_service=True` 時）に鹿児島ページ解析ロジックを実装する。`BeautifulSoup` で `h3` タグを全て取得し、各 `h3` の次の兄弟 `p` タグのテキストを `_parse_status_text()` に渡してステータスを取得する。ステータスが `None`（判定不能）の場合は `self._log.warning("kagoshima_status_unknown", ship=h3.get_text())` を記録してスキップする
+- [X] T010 [US2] T009 の解析結果を `_load_routes()` の上り・下り両ルートに適用するレコード生成ロジックを `parse()` に追加する。`route_id=down_route.id` と `route_id=up_route.id` それぞれに同一の `status` / `status_detail` / `valid_date=self._valid_date` / `source_url=KAGOSHIMA_URL` を持つ辞書を生成してリストに追加する
+- [X] T011 [US2] `scraper/scraper/scrapers/marue_ferry.py` から不要になった旧ヘルパーメソッド（`_parse_direction()`・`_parse_date()`・`_parse_status()`）を削除する。`_load_routes()` は再利用するため残す
 
 **Checkpoint**: US2 完了 → `make scraper-run` で通常運航日に `operating` が上り・下り両方に記録されることを確認
 
@@ -72,10 +72,10 @@
 
 **Purpose**: エッジケース確認・動作検証・コード整合性チェック
 
-- [ ] T012 `scraper/scraper/scrapers/marue_ferry.py` の `parse()` 冒頭で `html` が空文字列（`has_service=False`）の際に `raw_html_hash` 計算をスキップする処理が既存 `BaseScraper` のロジックと整合しているか確認し、必要に応じて `fetch()` の戻り値を調整する
-- [ ] T013 [P] quickstart.md のデバッグ手順に従い `make shell-scraper` で検索エンドポイントのPOSTレスポンスを実際に確認する。`table.s-result tbody` の実際の HTML 構造が T005 の実装と一致しているか検証し、ズレがあれば T005 を修正する
-- [ ] T014 [P] `make scraper-run` を実行し、`operation_statuses` テーブルにマルエーフェリーのレコードが保存されることを quickstart.md の確認クエリで検証する
-- [ ] T015 [P] `make test-scraper` を実行し、既存のスクレイパーテストが全てパスすることを確認する
+- [X] T012 `scraper/scraper/scrapers/marue_ferry.py` の `parse()` 冒頭で `html` が空文字列（`has_service=False`）の際に `raw_html_hash` 計算をスキップする処理が既存 `BaseScraper` のロジックと整合しているか確認し、必要に応じて `fetch()` の戻り値を調整する
+- [X] T013 [P] quickstart.md のデバッグ手順に従い `make shell-scraper` で検索エンドポイントのPOSTレスポンスを実際に確認する。`table.s-result tbody` の実際の HTML 構造が T005 の実装と一致しているか検証し、ズレがあれば T005 を修正する
+- [X] T014 [P] `make scraper-run` を実行し、`operation_statuses` テーブルにマルエーフェリーのレコードが保存されることを quickstart.md の確認クエリで検証する
+- [X] T015 [P] `make test-scraper` を実行し、既存のスクレイパーテストが全てパスすることを確認する
 
 ---
 

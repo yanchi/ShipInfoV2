@@ -10,26 +10,23 @@
 **URL**: `https://www.aline-ferry.com/kagoshima/`
 （参考: `/status/status-route/route-kagoshima` も同構造の運航状況ページとして存在）
 
-### 確認済み構造
+### 確認済み構造（スクレイパー実装時に実サイトで再確認済み）
 
 ```html
-<h2>鹿児島航路</h2>
-
-<!-- 通常運航時（船ごとに繰り返し） -->
-<div>
-  <h3>フェリーあけぼの</h3>
-  <p>鹿児島 - 名瀬 - 亀徳 - 和泊 - 与論 - 本部 - 那覇</p>
-  <p>通常運航</p>
-  <p>通常運航致しております。</p>
-</div>
-
-<div>
-  <h3>フェリー波之上</h3>
-  <p>鹿児島 - 名瀬 - 亀徳 - 和泊 - 与論 - 本部 - 那覇</p>
-  <p>通常運航</p>
-  <p>通常運航致しております。</p>
-</div>
+<!-- 船ごとに繰り返し。a タグがブロック全体を囲む -->
+<a href="/status/route-kagoshima/ferry-akebono/21525/">
+  <div class="route-head">
+    <div class="ferry-name">フェリーあけぼの</div>
+    <div class="route-detail">鹿児島 - 名瀬 - 亀徳 - 和泊 - 与論 - 本部 - 那覇</div>
+  </div>
+  <div class="tag-list">
+    <span class="tag-normal">通常運航</span>
+  </div>
+  <div class="situation-excerpt">通常運航致しております。</div>
+</a>
 ```
+
+**修正**: 当初 `h3/p` 構造と推測していたが、実際は `div.ferry-name` + `span.tag-*` + `div.situation-excerpt` 構造。スクレイパー実装時に実サイト確認で修正済み。
 
 ### 重要な確認事項
 
