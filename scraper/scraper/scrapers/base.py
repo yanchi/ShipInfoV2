@@ -1,11 +1,12 @@
 import hashlib
 from abc import ABC, abstractmethod
-from datetime import date, datetime
+from datetime import datetime
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from scraper.db.models import OperationStatus, OperationStatusEnum, ScraperLog, ScraperStatusEnum
+from scraper.db.models import OperationStatus, ScraperLog, ScraperStatusEnum
 from scraper.utils.http import create_session
 
 log = structlog.get_logger()
@@ -70,7 +71,6 @@ class BaseScraper(ABC):
             scraper_log.finished_at = datetime.now()
             scraper_log.error_message = str(exc)
             self._log.error("scraper_error", error=str(exc))
-            raise
 
     def _upsert(self, records: list[dict], html: str) -> tuple[int, int]:
         """Insert or update operation_statuses; skip if raw HTML unchanged."""
@@ -78,14 +78,12 @@ class BaseScraper(ABC):
         html_hash = hashlib.sha256(html.encode()).hexdigest()
 
         for rec in records:
-            existing = (
-                self.session.query(OperationStatus)
-                .filter(
+            existing = self.session.execute(
+                select(OperationStatus).where(
                     OperationStatus.route_id == rec["route_id"],
                     OperationStatus.valid_date == rec["valid_date"],
                 )
-                .first()
-            )
+            ).scalar_one_or_none()
 
             if existing:
                 if existing.raw_html_hash == html_hash:

@@ -6,7 +6,6 @@ from urllib3.util.retry import Retry
 def create_session(
     retries: int = 3,
     backoff_factor: float = 1.0,
-    timeout: int = 30,
 ) -> requests.Session:
     """Create a requests Session with retry logic and a Japanese browser UA."""
     session = requests.Session()
@@ -28,8 +27,5 @@ def create_session(
     adapter = HTTPAdapter(max_retries=retry)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
-    session.request = lambda method, url, **kwargs: requests.Session.request(  # type: ignore[method-assign]
-        session, method, url, timeout=kwargs.pop("timeout", timeout), **kwargs
-    )
 
     return session

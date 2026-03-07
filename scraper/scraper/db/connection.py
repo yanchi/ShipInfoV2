@@ -13,7 +13,7 @@ engine = create_engine(
     echo=False,
 )
 
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+SessionLocal = sessionmaker(engine, autocommit=False, autoflush=False)
 
 
 @contextmanager

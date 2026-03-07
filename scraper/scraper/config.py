@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 
@@ -19,7 +20,7 @@ class Settings:
     @property
     def db_url(self) -> str:
         return (
-            f"mysql+mysqldb://{self.db_user}:{self.db_password}"
+            f"mysql+mysqldb://{quote_plus(self.db_user)}:{quote_plus(self.db_password)}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
             f"?charset=utf8mb4"
         )
