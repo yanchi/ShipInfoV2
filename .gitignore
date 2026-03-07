@@ -2,6 +2,8 @@
 .env
 app/.env.local
 app/.env.*.local
+app/.env.dev
+app/.env.test
 scraper/.env
 
 # Docker overrides
@@ -20,6 +22,8 @@ scraper/*.egg-info/
 scraper/.mypy_cache/
 scraper/.ruff_cache/
 scraper/.pytest_cache/
+scraper/.coverage
+scraper/htmlcov/
 
 # macOS
 .DS_Store
