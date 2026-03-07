@@ -1,13 +1,14 @@
-FROM php:8.3-fpm-alpine
+FROM php:8.3-fpm
 
 # System dependencies
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     unzip \
-    icu-dev \
+    libicu-dev \
     libzip-dev \
-    oniguruma-dev
+    libonig-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # PHP extensions
 RUN docker-php-ext-install \

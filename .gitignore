@@ -26,3 +26,6 @@ scraper/.pytest_cache/
 
 # IDE
 .idea/
+
+# SpecKit
+.specify/extensions.yml
