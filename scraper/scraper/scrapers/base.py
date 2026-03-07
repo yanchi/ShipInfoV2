@@ -17,10 +17,10 @@ class BaseScraper(ABC):
 
     company_id: int
 
-    def __init__(self, session: Session, company_id: int) -> None:
+    def __init__(self, session: Session, company_id: int, *, retry_post: bool = False) -> None:
         self.session = session
         self.company_id = company_id
-        self.http = create_session()
+        self.http = create_session(retry_post=retry_post)
         self._log = log.bind(scraper=self.__class__.__name__, company_id=company_id)
 
     @abstractmethod
