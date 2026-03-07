@@ -48,6 +48,7 @@ class MarueFerry(BaseScraper):
             timeout=30,
         )
         resp.raise_for_status()
+        resp.encoding = resp.apparent_encoding
         search_soup = BeautifulSoup(resp.text, "lxml")
         self._has_service = self._check_service(search_soup)
 
@@ -67,7 +68,7 @@ class MarueFerry(BaseScraper):
         routes = [r for r in [down_route, up_route] if r]
         records: list[dict] = []
 
-        if not self._has_service:
+        if not getattr(self, "_has_service", True):
             # 本日便なし → 上り・下り両ルートを cancelled で記録
             for route in routes:
                 records.append({
@@ -129,8 +130,15 @@ class MarueFerry(BaseScraper):
     # ------------------------------------------------------------------
 
     def _check_service(self, soup: BeautifulSoup) -> bool:
-        """table.s-result の tbody に tr が1行以上あれば本日便あり。"""
-        return bool(soup.select("table.s-result tbody tr"))
+        """table.s-result の tbody に tr が1行以上あれば本日便あり。
+        table.s-result 自体が見つからない場合はサイト構造変更とみなし、
+        警告を出したうえで「本日便あり」（安全側）と判定する。
+        """
+        table = soup.select_one("table.s-result")
+        if table is None:
+            self._log.warning("result_table_missing")
+            return True
+        return bool(table.select("tbody tr"))
 
     def _load_routes(self) -> tuple:
         """(down_route, up_route) を返す。origin_port で判定。"""

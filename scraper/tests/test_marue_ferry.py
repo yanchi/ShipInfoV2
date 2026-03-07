@@ -176,7 +176,7 @@ def test_delayed_applies_to_both_routes(db_session, marue_ferry_company):
 
 @resp_mock.activate
 def test_status_detail_collected(db_session, marue_ferry_company):
-    """status_detail に鹿児島ページの3番目の p テキストが格納される。"""
+    """status_detail に鹿児島ページの div.situation-excerpt テキストが格納される。"""
     resp_mock.add(resp_mock.POST, SEARCH_URL, body=HTML_SEARCH_HAS_SERVICE, status=200)
     resp_mock.add(resp_mock.GET, KAGOSHIMA_URL, body=HTML_KAGOSHIMA_DELAYED, status=200)
 

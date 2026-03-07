@@ -43,9 +43,9 @@
 
 ### Implementation for User Story 1
 
-- [X] T005 [US1] `scraper/scraper/scrapers/marue_ferry.py` に `_check_service(target_date: date) -> bool` メソッドを実装する。`SEARCH_URL` へ `{"startDate": target_date.isoformat(), "startPort": "50", "endPort": "83"}` を POST し、`BeautifulSoup` で `table.s-result tbody tr` が 1 行以上あれば `True`、なければ `False` を返す。`table.s-result` が見つからない場合は `self._log.warning("search_table_not_found")` を記録して `True`（安全側）を返す
-- [X] T006 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `fetch()` メソッドを書き換える。`target_date = date.today()` で `_check_service(target_date)` を呼び、結果を `self._has_service` に格納し `self._valid_date = target_date` をセットする。`has_service=True` なら `KAGOSHIMA_URL` を GET して HTML を返す。`has_service=False` なら空文字列 `""` を返す（`raw_html_hash` の計算対象は鹿児島ページの HTML のみ）
-- [X] T007 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `parse()` メソッドに、冒頭で `if not self._has_service:` を判定するブロックを追加する。`False` の場合は `_load_routes()` で上り・下り両ルートを取得し、両方に `OperationStatusEnum.cancelled`・`valid_date=self._valid_date`・`source_url=SEARCH_URL` のレコードを生成して返す（以降の鹿児島解析をスキップ）
+- [X] T005 [US1] `scraper/scraper/scrapers/marue_ferry.py` に `_check_service(soup: BeautifulSoup) -> bool` メソッドを実装する。`BeautifulSoup` で `table.s-result tbody tr` が 1 行以上あれば `True`、なければ `False` を返す。`table.s-result` が見つからない場合は `self._log.warning("result_table_missing")` を記録して `True`（安全側）を返す
+- [X] T006 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `fetch()` メソッドを書き換える。`today_str = date.today().isoformat()` で `SEARCH_URL` に POST し、レスポンスを `BeautifulSoup` でパースして `_check_service(soup)` を呼び、結果を `self._has_service` に格納する。`has_service=True` なら `KAGOSHIMA_URL` を GET して HTML を返す。`has_service=False` なら空文字列 `""` を返す（`raw_html_hash` の計算対象は鹿児島ページの HTML のみ）
+- [X] T007 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `parse()` メソッドに、冒頭で `if not getattr(self, "_has_service", True):` を判定するブロックを追加する。`False` の場合は `_load_routes()` で上り・下り両ルートを取得し、両方に `OperationStatusEnum.cancelled`・`valid_date=date.today()`・`source_url=SEARCH_URL` のレコードを生成して返す（以降の鹿児島解析をスキップ）
 
 **Checkpoint**: US1 完了 → `make scraper-run` で便なし日に `cancelled` が記録されることを確認可能
 

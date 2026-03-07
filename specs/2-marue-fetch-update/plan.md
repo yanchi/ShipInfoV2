@@ -76,7 +76,7 @@ scraper/scraper/db/models.py         # OperationStatusEnum・Route（変更な�
 
 - **URL**: `https://www.aline-ferry.com/kagoshima/`
 - **Method**: GET
-- **構造**: `h2("鹿児島航路")` 配下に船ごとの `div`（`h3`: 船名、`p`: 航路、`p`: ステータステキスト、`p`: 詳細）
+- **構造**: 船ごとに `<a>` ブロック（`div.ferry-name`: 船名、`div.tag-list > span`: ステータス、`div.situation-excerpt`: 詳細テキスト）
 - **ステータスマッピング**:
   - `通常運航` → `operating`
   - `条件付` → `delayed`
