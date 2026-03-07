@@ -39,9 +39,10 @@ KAGOSHIMA_URL = "https://www.aline-ferry.com/kagoshima/"
 class MarueFerry(BaseScraper):
     def fetch(self) -> str:
         self._has_service = True
+        self._valid_date = date.today()
 
         # Step 1: 本日便の有無を確認
-        today_str = date.today().isoformat()
+        today_str = self._valid_date.isoformat()
         resp = self.http.post(
             SEARCH_URL,
             data={"startDate": today_str, "startPort": "50", "endPort": "83"},
@@ -64,7 +65,11 @@ class MarueFerry(BaseScraper):
 
     def parse(self, html: str) -> list[dict]:
         down_route, up_route = self._load_routes()
-        valid_date = date.today()
+        if down_route is None:
+            self._log.warning("route_not_found", direction="down")
+        if up_route is None:
+            self._log.warning("route_not_found", direction="up")
+        valid_date = getattr(self, "_valid_date", date.today())
         routes = [r for r in [down_route, up_route] if r]
         records: list[dict] = []
 
@@ -82,10 +87,10 @@ class MarueFerry(BaseScraper):
             self._log.info("parsed_no_service", records=len(records))
             return records
 
-        # 鹿児島ページを解析
+        # 鹿児島ページを解析: 全船のステータスを収集して最悪値を採用
         # 構造: a > div.route-head > div.ferry-name / div.tag-list > span / div.situation-excerpt
         soup = BeautifulSoup(html, "lxml")
-        seen: set[int] = set()
+        ship_statuses: list[tuple] = []
 
         for ferry_name_div in soup.find_all("div", class_="ferry-name"):
             block = ferry_name_div.find_parent("a")
@@ -93,6 +98,7 @@ class MarueFerry(BaseScraper):
                 continue
             tag_span = block.select_one("div.tag-list span")
             if tag_span is None:
+                self._log.warning("tag_span_not_found", ship=ferry_name_div.get_text(strip=True))
                 continue
 
             status_text = tag_span.get_text(strip=True)
@@ -105,22 +111,33 @@ class MarueFerry(BaseScraper):
             detail = excerpt_div.get_text(strip=True) if excerpt_div else None
             if not detail:
                 detail = None
+            ship_statuses.append((status, detail))
 
-            for route in routes:
-                if route.id in seen:
-                    continue
-                seen.add(route.id)
-                records.append({
-                    "route_id": route.id,
-                    "status": status,
-                    "status_detail": detail,
-                    "valid_date": valid_date,
-                    "scraped_at": datetime.now(),
-                    "source_url": KAGOSHIMA_URL,
-                })
-
-        if not records:
+        if not ship_statuses:
             self._log.warning("no_records_parsed", html_len=len(html))
+            return records
+
+        # 複数船で異なるステータスがある場合は最も深刻なものを採用して warning
+        _SEVERITY = {
+            OperationStatusEnum.cancelled: 4,
+            OperationStatusEnum.suspended: 3,
+            OperationStatusEnum.delayed: 2,
+            OperationStatusEnum.operating: 1,
+        }
+        unique_statuses = {s for s, _ in ship_statuses}
+        if len(unique_statuses) > 1:
+            self._log.warning("mixed_ship_statuses", statuses=[s.value for s in unique_statuses])
+        chosen_status, chosen_detail = max(ship_statuses, key=lambda x: _SEVERITY.get(x[0], 0))
+
+        for route in routes:
+            records.append({
+                "route_id": route.id,
+                "status": chosen_status,
+                "status_detail": chosen_detail,
+                "valid_date": valid_date,
+                "scraped_at": datetime.now(),
+                "source_url": KAGOSHIMA_URL,
+            })
 
         self._log.info("parsed", records=len(records))
         return records
@@ -153,7 +170,7 @@ class MarueFerry(BaseScraper):
         return down, up
 
     def _parse_status_text(self, text: str) -> OperationStatusEnum | None:
-        """鹿児島ページの p タグテキストからステータスを判定。"""
+        """鹿児島ページの div.tag-list 内の span テキストからステータスを判定。"""
         if "欠航" in text:
             return OperationStatusEnum.cancelled
         if "条件付" in text:

@@ -8,6 +8,7 @@ DBは SQLite in-memory を使用（conftest.py の db_session / marue_ferry_comp
 import responses as resp_mock
 from datetime import date
 
+from bs4 import BeautifulSoup
 from sqlalchemy import select
 
 from scraper.scrapers.marue_ferry import MarueFerry, SEARCH_URL, KAGOSHIMA_URL
@@ -17,6 +18,17 @@ from scraper.db.models import OperationStatusEnum, Route
 # ---------------------------------------------------------------------------
 # サンプルHTML
 # ---------------------------------------------------------------------------
+
+# 検索エンドポイント: table.s-result が存在しない（サイト構造変更想定）
+HTML_SEARCH_NO_TABLE = """
+<html><body>
+<div class="result-box">
+  <div class="responsive-table">
+    <!-- table.s-result が欠落 -->
+  </div>
+</div>
+</body></html>
+"""
 
 # 検索エンドポイント: 便あり
 HTML_SEARCH_HAS_SERVICE = """
@@ -226,6 +238,13 @@ def test_valid_date_is_today(db_session, marue_ferry_company):
 
     for rec in records:
         assert rec["valid_date"] == date.today()
+
+
+def test_check_service_returns_true_when_no_result_table(db_session, marue_ferry_company):
+    """table.s-result が存在しない HTML でも _check_service() が True を返す（安全側フォールバック）。"""
+    scraper = MarueFerry(db_session, marue_ferry_company.id)
+    soup = BeautifulSoup(HTML_SEARCH_NO_TABLE, "lxml")
+    assert scraper._check_service(soup) is True
 
 
 @resp_mock.activate

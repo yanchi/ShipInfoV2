@@ -9,10 +9,11 @@ make migrate     # DBマイグレーション（スキーマ変更なし、念�
 
 ## 実装ファイル
 
-変更対象は1ファイルのみ:
+変更対象ファイル:
 
 ```
-scraper/scraper/scrapers/marue_ferry.py
+scraper/scraper/scrapers/marue_ferry.py   # 実装（主要変更）
+scraper/tests/test_marue_ferry.py         # テスト（追加・更新）
 ```
 
 ## 動作確認

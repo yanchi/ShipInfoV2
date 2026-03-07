@@ -147,7 +147,7 @@ Task T015: "make test-scraper でテスト実行"
 
 ## Notes
 
-- 変更対象ファイルは `scraper/scraper/scrapers/marue_ferry.py` のみ
+- 実装の主要な変更は `scraper/scraper/scrapers/marue_ferry.py`（テストは `scraper/tests/test_marue_ferry.py` も更新）
 - DB スキーマ変更なし
 - `_load_routes()` は既存のまま再利用
 - `BaseScraper` の `fetch()` / `parse()` シグネチャは変更しない
