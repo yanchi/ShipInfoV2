@@ -2,54 +2,37 @@
 
 namespace App\Entity;
 
-use ApiPlatform\Metadata\ApiResource;
-use ApiPlatform\Metadata\Get;
-use ApiPlatform\Metadata\GetCollection;
 use App\Repository\RouteRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
-use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: RouteRepository::class)]
 #[ORM\Table(name: 'routes')]
 #[ORM\HasLifecycleCallbacks]
-#[ApiResource(
-    operations: [
-        new GetCollection(),
-        new Get(),
-    ],
-    normalizationContext: ['groups' => ['route:read']],
-)]
 class Route
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: 'integer', options: ['unsigned' => true])]
-    #[Groups(['route:read'])]
     private ?int $id = null;
 
     #[ORM\ManyToOne(targetEntity: FerryCompany::class, inversedBy: 'routes')]
     #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['route:read'])]
     private ?FerryCompany $ferryCompany = null;
 
     #[ORM\Column(length: 255)]
     #[Assert\NotBlank]
-    #[Groups(['route:read'])]
     private string $name = '';
 
     #[ORM\Column(length: 255, nullable: true)]
-    #[Groups(['route:read'])]
     private ?string $originPort = null;
 
     #[ORM\Column(length: 255, nullable: true)]
-    #[Groups(['route:read'])]
     private ?string $destinationPort = null;
 
     #[ORM\Column(type: 'boolean')]
-    #[Groups(['route:read'])]
     private bool $active = true;
 
     #[ORM\Column(type: 'datetime')]

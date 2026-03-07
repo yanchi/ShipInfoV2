@@ -5,7 +5,7 @@
 フェリー会社の運航情報を収集・管理・提供するシステム。
 
 - **スクレイパー**: Python（`scraper/`）
-- **REST API / Webアプリ**: PHP Symfony 7.4 LTS（`app/`）
+- **Webアプリ（MVP）**: PHP Symfony 7.4 LTS + Twig（`app/`）
 - **データベース**: MySQL 8.0
 - **ローカル環境**: Docker Compose
 
@@ -44,7 +44,7 @@ make scraper-run   # スクレイパー即時実行
 ShipInfoV2/
 ├── app/                      # Symfony 7.4アプリ
 │   └── src/
-│       ├── Entity/           # DoctrineエンティティかつAPIリソース
+│       ├── Entity/           # Doctrineエンティティ
 │       ├── Enum/             # PHPバックドEnum
 │       └── Repository/       # Doctrineリポジトリ
 ├── scraper/                  # Pythonスクレイパー
@@ -65,7 +65,8 @@ ShipInfoV2/
 
 ## 重要な設計決定
 
-- API Platformがエンドポイントを自動生成（手動でControllerを書かない）
-- スクレイパーはMySQLに直接書き込む（Symfony APIを経由しない）
+- MVPはTwig + ControllerによるWebサイト（API Platformは使用しない）
+- スクレイパーはMySQLに直接書き込む（Symfonyを経由しない）
 - `raw_html_hash` で重複スクレイピングを防止
 - phpmyadminは `make up-tools` でのみ起動（デフォルト除外）
+- REST APIはMVP以降のフェーズで検討

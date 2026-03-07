@@ -8,10 +8,11 @@
 各フェリー会社は独立したスクレイパークラスとして実装し、`BaseScraper`を継承すること。
 スクレイパーの追加・削除がシステム全体に影響を与えないよう疎結合に設計すること。
 
-### II. APIファースト
-SymfonyはREST APIを通じてデータを提供する。API Platformを使用し、
-OpenAPIドキュメントを自動生成すること。
-エンドポイントは読み取り専用（GET）を基本とし、スクレイパーがDBに直接書き込む設計とする。
+### II. Webサイト優先（MVP）
+MVPではREST APIを提供せず、Twigテンプレートを用いたWebサイトとして運航情報を提供する。
+API Platformは使用しない。Symfonyの標準的なController + Twigの構成とすること。
+スクレイパーはDBに直接書き込む設計とする。
+REST APIの提供はMVP以降のフェーズで検討する。
 
 ### III. データ品質保証
 `raw_html_hash`（SHA-256）による重複スクレイピング防止を必須とする。
@@ -34,7 +35,7 @@ AIの暴走を防ぐため、一度に実装するスコープを明確に制限
 
 ### 使用技術（変更禁止）
 - **スクレイパー**: Python 3.12 + BeautifulSoup4 + SQLAlchemy
-- **Webアプリ/API**: PHP 8.3 + Symfony 7.4 (LTS) + API Platform
+- **Webアプリ（MVP）**: PHP 8.3 + Symfony 7.4 (LTS) + Twig（API Platformは使用しない）
 - **データベース**: MySQL 8.0
 - **ローカル環境**: Docker Compose
 
@@ -64,4 +65,4 @@ AIの暴走を防ぐため、一度に実装するスコープを明確に制限
 変更には明文化された理由が必要。
 技術的負債は即日解消することを原則とする。
 
-**Version**: 1.0.0 | **Ratified**: 2026-03-07 | **Last Amended**: 2026-03-07
+**Version**: 1.1.0 | **Ratified**: 2026-03-07 | **Last Amended**: 2026-03-07

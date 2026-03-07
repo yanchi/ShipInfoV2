@@ -2,70 +2,44 @@
 
 namespace App\Entity;
 
-use ApiPlatform\Metadata\ApiFilter;
-use ApiPlatform\Metadata\ApiResource;
-use ApiPlatform\Metadata\Get;
-use ApiPlatform\Metadata\GetCollection;
-use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
-use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use App\Enum\OperationStatusEnum;
 use App\Repository\OperationStatusRepository;
 use Doctrine\ORM\Mapping as ORM;
-use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: OperationStatusRepository::class)]
 #[ORM\Table(name: 'operation_statuses')]
 #[ORM\Index(columns: ['route_id', 'valid_date'], name: 'idx_route_date')]
 #[ORM\Index(columns: ['valid_date', 'status'], name: 'idx_date_status')]
-#[ApiResource(
-    operations: [
-        new GetCollection(),
-        new Get(),
-    ],
-    normalizationContext: ['groups' => ['status:read']],
-    order: ['validDate' => 'DESC', 'scrapedAt' => 'DESC'],
-)]
-#[ApiFilter(SearchFilter::class, properties: ['status' => 'exact', 'route' => 'exact', 'route.ferryCompany' => 'exact'])]
-#[ApiFilter(DateFilter::class, properties: ['validDate'])]
 class OperationStatus
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: 'bigint', options: ['unsigned' => true])]
-    #[Groups(['status:read'])]
     private ?int $id = null;
 
     #[ORM\ManyToOne(targetEntity: Route::class, inversedBy: 'operationStatuses')]
     #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['status:read'])]
     private ?Route $route = null;
 
     #[ORM\Column(type: 'string', enumType: OperationStatusEnum::class)]
-    #[Groups(['status:read'])]
     private OperationStatusEnum $status = OperationStatusEnum::Unknown;
 
     #[ORM\Column(type: 'text', nullable: true)]
-    #[Groups(['status:read'])]
     private ?string $statusDetail = null;
 
     #[ORM\Column(type: 'datetime', nullable: true)]
-    #[Groups(['status:read'])]
     private ?\DateTimeInterface $departureTime = null;
 
     #[ORM\Column(type: 'datetime', nullable: true)]
-    #[Groups(['status:read'])]
     private ?\DateTimeInterface $arrivalTime = null;
 
     #[ORM\Column(type: 'date')]
-    #[Groups(['status:read'])]
     private ?\DateTimeInterface $validDate = null;
 
     #[ORM\Column(type: 'datetime')]
-    #[Groups(['status:read'])]
     private ?\DateTimeInterface $scrapedAt = null;
 
     #[ORM\Column(length: 512, nullable: true)]
-    #[Groups(['status:read'])]
     private ?string $sourceUrl = null;
 
     #[ORM\Column(length: 64, nullable: true)]
