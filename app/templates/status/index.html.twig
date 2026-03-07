@@ -1,0 +1,58 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}ShipInfo - フェリー運航情報{% endblock %}
+
+{% block body %}
+<div class="container py-4">
+    <h1 class="h4 mb-1">ShipInfo - フェリー運航情報</h1>
+    <p class="text-muted mb-4">{{ today|date('Y年n月j日（') }}{{ ['日','月','火','水','木','金','土'][today|date('w')] }}）の運航状況</p>
+
+    {% if companies is empty %}
+        <div class="alert alert-secondary">現在情報がありません。</div>
+    {% else %}
+        {% for companyData in companies %}
+            {% set company = companyData.company %}
+            <div class="card mb-4">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <a href="{{ path('app_status_company', {id: company.id}) }}" class="fw-bold text-decoration-none">
+                        {{ company.name }}
+                    </a>
+                    {% if company.websiteUrl %}
+                        <a href="{{ company.websiteUrl }}" target="_blank" rel="noopener noreferrer" class="text-muted small">
+                            公式サイト ↗
+                        </a>
+                    {% endif %}
+                </div>
+                <ul class="list-group list-group-flush">
+                    {% for routeData in companyData.routes %}
+                        {% set route = routeData.route %}
+                        {% set status = routeData.status %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>{{ route.name }}</span>
+                            {% if status is null %}
+                                <span class="badge bg-secondary">情報なし</span>
+                            {% elseif status.status.value == 'operating' %}
+                                <span class="badge bg-success">✓ 通常運航</span>
+                            {% elseif status.status.value == 'delayed' %}
+                                <span class="badge bg-warning text-dark">● 条件付・遅延</span>
+                            {% elseif status.status.value == 'cancelled' %}
+                                <span class="badge bg-danger">✗ 欠航</span>
+                            {% elseif status.status.value == 'suspended' %}
+                                <span class="badge bg-secondary">- 運休</span>
+                            {% else %}
+                                <span class="badge bg-secondary">? 情報なし</span>
+                            {% endif %}
+                        </li>
+                    {% else %}
+                        <li class="list-group-item text-muted">航路情報がありません。</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <footer class="text-muted small mt-4">
+        運航情報はスクレイピングにより収集しています。最新情報は各社公式サイトをご確認ください。
+    </footer>
+</div>
+{% endblock %}

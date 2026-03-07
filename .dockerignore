@@ -1,0 +1,21 @@
+.git/
+.DS_Store
+*.log
+
+# Symfony
+app/var/
+app/vendor/
+
+# Python
+scraper/.venv/
+scraper/__pycache__/
+scraper/**/__pycache__/
+scraper/*.egg-info/
+scraper/.mypy_cache/
+scraper/.ruff_cache/
+scraper/.pytest_cache/
+
+# Secrets
+.env
+app/.env.local
+scraper/.env
