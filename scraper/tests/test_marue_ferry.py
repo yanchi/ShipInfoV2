@@ -266,6 +266,28 @@ def test_no_duplicate_for_same_route(db_session, marue_ferry_company):
     assert len(recs_down) == 1, "同一ルートのレコードは1件のみ"
 
 
+# 鹿児島ページ: 2船が混在（1隻は通常運航、1隻は欠航）
+HTML_KAGOSHIMA_MIXED_OPERATING_CANCELLED = """
+<html><body>
+<a href="/status/route-kagoshima/ferry-akebono/1/">
+  <div class="route-head">
+    <div class="ferry-name">フェリーあけぼの</div>
+    <div class="route-detail">鹿児島 - 名瀬 - 亀徳 - 和泊 - 与論 - 本部 - 那覇</div>
+  </div>
+  <div class="tag-list"><span class="tag-normal">通常運航</span></div>
+  <div class="situation-excerpt">通常運航致しております。</div>
+</a>
+<a href="/status/route-kagoshima/ferry-naminoue/2/">
+  <div class="route-head">
+    <div class="ferry-name">フェリー波之上</div>
+    <div class="route-detail">鹿児島 - 名瀬 - 亀徳 - 和泊 - 与論 - 本部 - 那覇</div>
+  </div>
+  <div class="tag-list"><span class="tag-cancelled">欠航</span></div>
+  <div class="situation-excerpt">台風接近のため欠航いたします。</div>
+</a>
+</body></html>
+"""
+
 # 鹿児島ページ: div.ferry-name が存在しない（サイト構造変更で船ブロックが消えた想定）
 HTML_KAGOSHIMA_NO_FERRY_BLOCKS = """
 <html><body>
@@ -287,6 +309,34 @@ HTML_KAGOSHIMA_NO_TAG_SPANS = """
 </a>
 </body></html>
 """
+
+
+@resp_mock.activate
+def test_mixed_ship_statuses_picks_worst_value(db_session, marue_ferry_company):
+    """異なるステータスの2船が存在する場合、最悪値（cancelled）が採用され、
+    status_detail はその船由来のテキストになる。"""
+    resp_mock.add(resp_mock.POST, SEARCH_URL, body=HTML_SEARCH_HAS_SERVICE, status=200)
+    resp_mock.add(resp_mock.GET, KAGOSHIMA_URL, body=HTML_KAGOSHIMA_MIXED_OPERATING_CANCELLED, status=200)
+
+    scraper = MarueFerry(db_session, marue_ferry_company.id)
+    records = scraper.parse(scraper.fetch())
+
+    routes = db_session.execute(
+        select(Route).where(Route.ferry_company_id == marue_ferry_company.id)
+    ).scalars().all()
+    down = next(r for r in routes if r.origin_port == "鹿児島")
+    up = next(r for r in routes if r.origin_port == "那覇")
+
+    rec_down = next((r for r in records if r["route_id"] == down.id), None)
+    rec_up = next((r for r in records if r["route_id"] == up.id), None)
+
+    # 最悪値（cancelled）が両ルートに適用される
+    assert rec_down is not None and rec_down["status"] == OperationStatusEnum.cancelled
+    assert rec_up is not None and rec_up["status"] == OperationStatusEnum.cancelled
+
+    # status_detail は欠航船（フェリー波之上）の situation-excerpt 由来
+    assert rec_down["status_detail"] == "台風接近のため欠航いたします。"
+    assert rec_up["status_detail"] == "台風接近のため欠航いたします。"
 
 
 @resp_mock.activate
