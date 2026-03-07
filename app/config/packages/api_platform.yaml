@@ -1,0 +1,15 @@
+api_platform:
+    title: 'ShipInfo API'
+    description: 'フェリー運航情報 REST API'
+    version: '1.0.0'
+    formats:
+        json: ['application/json']
+        jsonld: ['application/ld+json']
+    docs_formats:
+        jsonopenapi: ['application/vnd.openapi+json']
+        html: ['text/html']
+    defaults:
+        pagination_enabled: true
+        pagination_items_per_page: 30
+    mapping:
+        paths: ['%kernel.project_dir%/src/Entity']

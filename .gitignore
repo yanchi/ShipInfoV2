@@ -1,0 +1,28 @@
+# Environment secrets
+.env
+app/.env.local
+app/.env.*.local
+scraper/.env
+
+# Docker overrides
+docker-compose.override.yml
+
+# Symfony
+app/var/
+app/vendor/
+app/.phpunit.result.cache
+
+# Python
+scraper/__pycache__/
+scraper/**/__pycache__/
+scraper/.venv/
+scraper/*.egg-info/
+scraper/.mypy_cache/
+scraper/.ruff_cache/
+scraper/.pytest_cache/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/

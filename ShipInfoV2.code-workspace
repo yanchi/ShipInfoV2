@@ -1,0 +1,25 @@
+{
+	"folders": [
+		{ "path": ".", "name": "Root" },
+		{ "path": "app", "name": "Symfony App" },
+		{ "path": "scraper", "name": "Python Scraper" }
+	],
+	"settings": {
+		"python.defaultInterpreterPath": "./scraper/.venv/bin/python",
+		"[php]": {
+			"editor.formatOnSave": true
+		},
+		"[python]": {
+			"editor.defaultFormatter": "ms-python.black-formatter"
+		}
+	},
+	"extensions": {
+		"recommendations": [
+			"bmewburn.vscode-intelephense-client",
+			"ms-python.python",
+			"ms-python.black-formatter",
+			"ms-azuretools.vscode-docker",
+			"rangav.vscode-thunder-client"
+		]
+	}
+}

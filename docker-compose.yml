@@ -1,0 +1,96 @@
+services:
+
+  # Nginx reverse proxy
+  nginx:
+    build:
+      context: ./docker/nginx
+    ports:
+      - "${NGINX_PORT:-8080}:80"
+    volumes:
+      - ./app/public:/var/www/html/public:ro
+    depends_on:
+      - php
+    networks:
+      - shipinfo
+
+  # PHP-FPM (Symfony)
+  php:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    volumes:
+      - ./app:/var/www/html
+      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini:ro
+    environment:
+      APP_ENV: "${APP_ENV:-dev}"
+      DATABASE_URL: "mysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}?serverVersion=8.0&charset=utf8mb4"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - shipinfo
+
+  # MySQL 8
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD}"
+      MYSQL_DATABASE: "${DB_NAME}"
+      MYSQL_USER: "${DB_USER}"
+      MYSQL_PASSWORD: "${DB_PASSWORD}"
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shipinfo
+
+  # Python scraper
+  scraper:
+    build:
+      context: .
+      dockerfile: docker/python/Dockerfile
+    volumes:
+      - ./scraper:/app
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: "${DB_NAME}"
+      DB_USER: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      SCRAPER_INTERVAL_MINUTES: "${SCRAPER_INTERVAL_MINUTES:-30}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - shipinfo
+    restart: unless-stopped
+
+  # phpMyAdmin (optional, dev only - start with: docker compose --profile tools up)
+  phpmyadmin:
+    image: phpmyadmin:5
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: "${DB_USER}"
+      PMA_PASSWORD: "${DB_PASSWORD}"
+    ports:
+      - "${PMA_PORT:-8081}:80"
+    depends_on:
+      - mysql
+    networks:
+      - shipinfo
+    profiles:
+      - tools
+
+volumes:
+  mysql_data:
+
+networks:
+  shipinfo:
+    driver: bridge
