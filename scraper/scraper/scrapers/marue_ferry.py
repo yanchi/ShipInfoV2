@@ -111,6 +111,8 @@ class MarueFerry(BaseScraper):
             detail = excerpt_div.get_text(strip=True) if excerpt_div else None
             if not detail:
                 detail = None
+            if status == OperationStatusEnum.operating:
+                detail = None
             ship_statuses.append((status, detail))
 
         if not ship_statuses:

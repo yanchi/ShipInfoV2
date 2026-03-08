@@ -140,6 +140,8 @@ def test_operating_applies_to_both_routes(db_session, marue_ferry_company):
 
     assert rec_down is not None and rec_down["status"] == OperationStatusEnum.operating
     assert rec_up is not None and rec_up["status"] == OperationStatusEnum.operating
+    assert rec_down["status_detail"] is None
+    assert rec_up["status_detail"] is None
 
 
 @resp_mock.activate
