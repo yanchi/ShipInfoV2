@@ -60,7 +60,7 @@
 ### Implementation for User Story 2
 
 - [X] T008 [US2] `scraper/scraper/scrapers/marue_ferry.py` に `_parse_status_text(text: str) -> OperationStatusEnum | None` メソッドを実装する。引数テキストに `欠航` → `cancelled`、`条件付` → `delayed`、`遅延` / `スケジュール変更` → `delayed`、`運休` → `suspended`、`通常` → `operating` を順に判定して返す。いずれも一致しない場合は `None` を返す
-- [X] T009 [US2] `scraper/scraper/scrapers/marue_ferry.py` の `parse()` メソッドの `else` ブロック（`has_service=True` 時）に鹿児島ページ解析ロジックを実装する。`BeautifulSoup` で `h3` タグを全て取得し、各 `h3` の次の兄弟 `p` タグのテキストを `_parse_status_text()` に渡してステータスを取得する。ステータスが `None`（判定不能）の場合は `self._log.warning("kagoshima_status_unknown", ship=h3.get_text())` を記録してスキップする
+- [X] T009 [US2] `scraper/scraper/scrapers/marue_ferry.py` の `parse()` メソッドの `else` ブロック（`has_service=True` 時）に鹿児島ページ解析ロジックを実装する。`BeautifulSoup` で鹿児島ページの各便ブロックを表す `div.ferry-name` 要素を基点に、同一ブロック内の `div.tag-list > span` からステータステキストを取得して `_parse_status_text()` に渡し、運航ステータスを判定する。必要に応じて同一ブロック内の `div.situation-excerpt` テキストをステータス詳細として利用できるようにする。ステータスが `None`（判定不能）の場合は `self._log.warning("kagoshima_status_unknown", ship=ferry_name_div.get_text())` を記録してスキップする
 - [X] T010 [US2] T009 の解析結果を `_load_routes()` の上り・下り両ルートに適用するレコード生成ロジックを `parse()` に追加する。`route_id=down_route.id` と `route_id=up_route.id` それぞれに同一の `status` / `status_detail` / `valid_date=self._valid_date` / `source_url=KAGOSHIMA_URL` を持つ辞書を生成してリストに追加する
 - [X] T011 [US2] `scraper/scraper/scrapers/marue_ferry.py` から不要になった旧ヘルパーメソッド（`_parse_direction()`・`_parse_date()`・`_parse_status()`）を削除する。`_load_routes()` は再利用するため残す
 
