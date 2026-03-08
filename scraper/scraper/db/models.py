@@ -30,6 +30,7 @@ class OperationStatusEnum(str, enum.Enum):
     delayed = "delayed"
     suspended = "suspended"
     unknown = "unknown"
+    no_service = "no_service"
 
 
 class ScraperStatusEnum(str, enum.Enum):

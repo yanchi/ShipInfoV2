@@ -11,8 +11,8 @@
 
 **⚠️ CRITICAL**: この Phase が完了するまで US1・US2 の実装を開始しないこと。
 
-- [ ] T001 [P] Python `OperationStatusEnum` に `no_service = "no_service"` を追加する (`scraper/scraper/db/models.py` の `OperationStatusEnum` クラス末尾に追記)
-- [ ] T002 [P] PHP `OperationStatusEnum` に `case NoService = 'no_service';` を追加する (`app/src/Enum/OperationStatusEnum.php`)
+- [X] T001 [P] Python `OperationStatusEnum` に `no_service = "no_service"` を追加する (`scraper/scraper/db/models.py` の `OperationStatusEnum` クラス末尾に追記)
+- [X] T002 [P] PHP `OperationStatusEnum` に `case NoService = 'no_service';` を追加する (`app/src/Enum/OperationStatusEnum.php`)
 
 **Checkpoint**: T001・T002 完了後、`make test-scraper` が引き続き全件パスすること（既存テストへの影響がないことを確認）
 
@@ -26,14 +26,14 @@
 
 ### Implementation for User Story 1 + 2 (MarueFerry)
 
-- [ ] T003 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `parse()` メソッドの no-service パスで `OperationStatusEnum.cancelled` を `OperationStatusEnum.no_service` に変更し、コメントも「cancelled → no_service」に更新する（`if not getattr(self, "_has_service", True):` ブロック内）
-- [ ] T004 [US1] `scraper/tests/test_marue_ferry.py` の `test_no_service_records_cancelled_for_both_routes` を更新する: テスト名を `test_no_service_records_no_service_for_both_routes` に変更し、アサーションを `OperationStatusEnum.no_service` に変更する
+- [X] T003 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `parse()` メソッドの no-service パスで `OperationStatusEnum.cancelled` を `OperationStatusEnum.no_service` に変更し、コメントも「cancelled → no_service」に更新する（`if not getattr(self, "_has_service", True):` ブロック内）
+- [X] T004 [US1] `scraper/tests/test_marue_ferry.py` の `test_no_service_records_cancelled_for_both_routes` を更新する: テスト名を `test_no_service_records_no_service_for_both_routes` に変更し、アサーションを `OperationStatusEnum.no_service` に変更する
 
 ### Implementation for User Story 1 + 2 (MarixLine)
 
-- [ ] T005 [US2] `scraper/scraper/scrapers/marix_line.py` の `parse()` メソッドの末尾（既存ループの後、`self._log.info` の前）に以下のロジックを追加する: `today = date.today()` を取得し、`[down_route, up_route]` の各 route（`None` 除く）について `(route.id, today) not in seen` なら `no_service` レコードを追加する（`status_detail=None`、`valid_date=today`、`source_url=SOURCE_URL`）
-- [ ] T006 [US2] `scraper/tests/test_marix_line.py` の既存テスト全件を `unittest.mock.patch` で `scraper.scrapers.marix_line.date` をモックし、`date.today()` が HTML 内の日付と一致するよう固定する（`test_normal_down_delayed_up` は `date(2026, 3, 7)`、`test_both_cancelled` は `date(2026, 3, 8)`、`test_irrelevant_divs_ignored` は `date(2026, 3, 7)`、`test_date_parsed_from_info2` は `date(2026, 3, 7)`、`test_conditional_alert_is_delayed_not_cancelled` は `date(2026, 3, 7)` をモック値として使用）
-- [ ] T007 [US2] `scraper/tests/test_marix_line.py` に以下の2テストを追加する:
+- [X] T005 [US2] `scraper/scraper/scrapers/marix_line.py` の `parse()` メソッドの末尾（既存ループの後、`self._log.info` の前）に以下のロジックを追加する: `today = date.today()` を取得し、`[down_route, up_route]` の各 route（`None` 除く）について `(route.id, today) not in seen` なら `no_service` レコードを追加する（`status_detail=None`、`valid_date=today`、`source_url=SOURCE_URL`）
+- [X] T006 [US2] `scraper/tests/test_marix_line.py` の既存テスト全件を `unittest.mock.patch` で `scraper.scrapers.marix_line.date` をモックし、`date.today()` が HTML 内の日付と一致するよう固定する（`test_normal_down_delayed_up` は `date(2026, 3, 7)`、`test_both_cancelled` は `date(2026, 3, 8)`、`test_irrelevant_divs_ignored` は `date(2026, 3, 7)`、`test_date_parsed_from_info2` は `date(2026, 3, 7)`、`test_conditional_alert_is_delayed_not_cancelled` は `date(2026, 3, 7)` をモック値として使用）
+- [X] T007 [US2] `scraper/tests/test_marix_line.py` に以下の2テストを追加する:
   - `test_no_service_when_no_block_for_today`: 今日の便ブロックが HTML に存在しない場合（HTML には別日のブロックのみ）、下り・上り両方のルートに `no_service`（`valid_date=today`、`status_detail=None`）が記録されることを確認する。`date.today()` を HTML 内の日付と異なる日にモックする
   - `test_no_service_only_for_missing_direction`: 今日の日付で下りブロックのみ存在し上りブロックがない場合、上りルートのみ `no_service` が追加されることを確認する
 
@@ -47,7 +47,7 @@
 
 **Independent Test**: `make test-scraper` 全件（17件以上）パス
 
-- [ ] T008 [US3] `make test-scraper` を実行し、全テストがパスすることを確認する。失敗があれば原因を修正する（Phase 2 のモック漏れ等）
+- [X] T008 [US3] `make test-scraper` を実行し、全テストがパスすることを確認する。失敗があれば原因を修正する（Phase 2 のモック漏れ等）
 
 **Checkpoint**: 全件パス確認
 
@@ -55,7 +55,7 @@
 
 ## Phase 4: Polish
 
-- [ ] T009 `scraper/scraper/scrapers/marue_ferry.py` のモジュール docstring（ファイル先頭）の `raw_html_hash` / `valid_date` に関する説明を `no_service` 対応を反映した内容に更新する
+- [X] T009 `scraper/scraper/scrapers/marue_ferry.py` のモジュール docstring（ファイル先頭）の `raw_html_hash` / `valid_date` に関する説明を `no_service` 対応を反映した内容に更新する
 
 ---
 

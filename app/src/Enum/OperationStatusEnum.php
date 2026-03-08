@@ -9,4 +9,5 @@ enum OperationStatusEnum: string
     case Delayed   = 'delayed';
     case Suspended = 'suspended';
     case Unknown   = 'unknown';
+    case NoService = 'no_service';
 }

@@ -110,6 +110,19 @@ class MarixLine(BaseScraper):
                 "source_url": SOURCE_URL,
             })
 
+        # 今日の便が存在しないルートに no_service を記録
+        today = date.today()
+        for route in [r for r in [down_route, up_route] if r]:
+            if (route.id, today) not in seen:
+                records.append({
+                    "route_id": route.id,
+                    "status": OperationStatusEnum.no_service,
+                    "status_detail": None,
+                    "valid_date": today,
+                    "scraped_at": datetime.now(),
+                    "source_url": SOURCE_URL,
+                })
+
         self._log.info("parsed", records=len(records))
         return records
 

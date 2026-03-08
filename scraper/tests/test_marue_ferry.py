@@ -145,8 +145,8 @@ def test_operating_applies_to_both_routes(db_session, marue_ferry_company):
 
 
 @resp_mock.activate
-def test_no_service_records_cancelled_for_both_routes(db_session, marue_ferry_company):
-    """本日便なし時、上り・下り両ルートに cancelled が記録される。"""
+def test_no_service_records_no_service_for_both_routes(db_session, marue_ferry_company):
+    """本日便なし時、上り・下り両ルートに no_service が記録される。"""
     resp_mock.add(resp_mock.POST, SEARCH_URL, body=HTML_SEARCH_NO_SERVICE, status=200)
 
     scraper = MarueFerry(db_session, marue_ferry_company.id)
@@ -161,10 +161,12 @@ def test_no_service_records_cancelled_for_both_routes(db_session, marue_ferry_co
     rec_down = next((r for r in records if r["route_id"] == down.id), None)
     rec_up = next((r for r in records if r["route_id"] == up.id), None)
 
-    assert rec_down is not None and rec_down["status"] == OperationStatusEnum.cancelled
-    assert rec_up is not None and rec_up["status"] == OperationStatusEnum.cancelled
+    assert rec_down is not None and rec_down["status"] == OperationStatusEnum.no_service
+    assert rec_up is not None and rec_up["status"] == OperationStatusEnum.no_service
     assert rec_down["valid_date"] == date.today()
     assert rec_up["valid_date"] == date.today()
+    assert rec_down["status_detail"] is None
+    assert rec_up["status_detail"] is None
 
 
 @resp_mock.activate
