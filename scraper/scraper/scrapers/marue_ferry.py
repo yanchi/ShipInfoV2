@@ -37,6 +37,11 @@ KAGOSHIMA_URL = "https://www.aline-ferry.com/kagoshima/"
 
 
 class MarueFerry(BaseScraper):
+    def __init__(self, session, company_id: int) -> None:
+        # Step 1 POSTs are read-only search queries (no side effects),
+        # so enable POST retries on 429/5xx.
+        super().__init__(session, company_id, retry_post=True)
+
     def fetch(self) -> str:
         self._has_service = True
         self._valid_date = date.today()
