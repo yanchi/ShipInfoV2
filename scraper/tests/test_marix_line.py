@@ -204,6 +204,24 @@ def test_irrelevant_divs_ignored(db_session, marix_line_company):
     operating_recs = [r for r in records if r["status"] == OperationStatusEnum.operating]
     assert len(operating_recs) == 1
 
+    # 上りルートが no_service になっていることを明示的に検証する
+    routes = (
+        db_session.execute(
+            select(Route).where(Route.ferry_company_id == marix_line_company.id)
+        )
+        .scalars()
+        .all()
+    )
+    up_route = next(r for r in routes if r.origin_port == "那覇")
+
+    up_no_service_recs = [
+        r
+        for r in records
+        if r["route_id"] == up_route.id and r["status"] == OperationStatusEnum.no_service
+    ]
+    assert len(up_no_service_recs) == 1
+    assert up_no_service_recs[0]["valid_date"] == date(2026, 3, 7)
+
 
 @resp_mock.activate
 def test_date_parsed_from_info2(db_session, marix_line_company):
