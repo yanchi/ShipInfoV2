@@ -32,4 +32,4 @@
 ## Notes
 
 - マリックスラインの便無し判定方法は Assumptions に「plan フェーズで確定」と明記。spec 上は実装詳細を含まない
-- Web 表示側（Twig）の対応は Out of Scope として明示的に除外
+- Web 表示側（Twig）の表示対応も本 PR / spec のスコープ（in-scope）に含めることを明示
