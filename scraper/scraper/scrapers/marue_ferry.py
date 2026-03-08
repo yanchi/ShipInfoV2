@@ -21,8 +21,9 @@ HTML構造（鹿児島ページ、確認済み 2026-03-08）:
       <div class="situation-excerpt">通常運航致しております。</div>
     </a>
 
-raw_html_hash: 鹿児島ページの HTML で計算（便なし時は空文字列）
+raw_html_hash: 鹿児島ページの HTML で計算（便なし時は空文字列 → SHA-256("")）
 valid_date: 常に date.today()（POST の startDate と同値）
+便なし時: OperationStatusEnum.no_service を記録（cancelled とは別。便が設定されていない日）
 """
 from datetime import date, datetime
 
@@ -79,11 +80,11 @@ class MarueFerry(BaseScraper):
         records: list[dict] = []
 
         if not getattr(self, "_has_service", True):
-            # 本日便なし → 上り・下り両ルートを cancelled で記録
+            # 本日便なし → 上り・下り両ルートを no_service で記録
             for route in routes:
                 records.append({
                     "route_id": route.id,
-                    "status": OperationStatusEnum.cancelled,
+                    "status": OperationStatusEnum.no_service,
                     "status_detail": None,
                     "valid_date": valid_date,
                     "scraped_at": datetime.now(),
@@ -125,6 +126,7 @@ class MarueFerry(BaseScraper):
             raise RuntimeError("MarueFerry.parse: no ship statuses parsed (possible site structure change)")
 
         # 複数船で異なるステータスがある場合は最も深刻なものを採用して warning
+        # NOTE: no_service は has_service=True のパス（Step 2）では出現しないため含まない
         _SEVERITY = {
             OperationStatusEnum.cancelled: 4,
             OperationStatusEnum.suspended: 3,

@@ -39,6 +39,10 @@
                                 <span class="badge bg-danger">✗ 欠航</span>
                             {% elseif status.status.value == 'suspended' %}
                                 <span class="badge bg-secondary">- 運休</span>
+                            {% elseif status.status.value == 'no_service' %}
+                                <span class="badge bg-light text-dark border">— 便なし</span>
+                            {% elseif status.status.value == 'unknown' %}
+                                <span class="badge bg-secondary">? 不明</span>
                             {% else %}
                                 <span class="badge bg-secondary">? 情報なし</span>
                             {% endif %}
