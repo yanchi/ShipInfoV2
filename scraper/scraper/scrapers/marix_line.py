@@ -110,14 +110,28 @@ class MarixLine(BaseScraper):
                 "source_url": SOURCE_URL,
             })
 
-        # 今日の便が存在しないルートに no_service を記録
+        # 今日の便が存在しないルートに no_service / unknown を記録
         today = date.today()
+        today_text = f"{today.year}年{today.month}月{today.day}日"
+        # 出発日として今日の日付が含まれるブロックが存在するか確認
+        # (到着日としてのみ存在する場合は has_today_block=False とする)
+        has_today_block = bool(re.search(rf"{re.escape(today_text)}\s+\S*発", html))
         now = datetime.now()
         for route in [r for r in [down_route, up_route] if r]:
             if (route.id, today) not in seen:
+                if has_today_block:
+                    # 今日のブロックはあるが seen に入っていない = パース不具合の可能性
+                    self._log.warning(
+                        "today_block_present_but_not_seen",
+                        route_id=route.id,
+                        today=str(today),
+                    )
+                    status = OperationStatusEnum.unknown
+                else:
+                    status = OperationStatusEnum.no_service
                 records.append({
                     "route_id": route.id,
-                    "status": OperationStatusEnum.no_service,
+                    "status": status,
                     "status_detail": None,
                     "valid_date": today,
                     "scraped_at": now,
