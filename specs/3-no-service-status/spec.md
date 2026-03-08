@@ -72,8 +72,8 @@
 ### Functional Requirements
 
 - **FR-001**: システムは「当日便が存在しない」状態を表す `no_service` ステータス値をサポートしなければならない
-- **FR-002**: マルエーフェリースクレイパーは、便なし（検索エンドポイントで便が見つからない）時に `no_service` を記録しなければならない
-- **FR-003**: マリックスラインスクレイパーは、便なし状態を検出した時に `no_service` を記録しなければならない
+- **FR-002**: マルエーフェリースクレイパーは、便なし（検索エンドポイントで便が見つからない）時に `no_service`・`status_detail = null` で記録しなければならない
+- **FR-003**: マリックスラインスクレイパーは、便なし状態を検出した時に `no_service`・`status_detail = null` で記録しなければならない
 - **FR-004**: `no_service` は `cancelled`（欠航）とは別のステータス値でなければならない
 - **FR-005**: `no_service` 追加後も既存ステータス（`operating`, `cancelled`, `delayed`, `suspended`）の動作は変わらないこと
 - **FR-006**: `no_service` ステータス値は、DB・バックエンドアプリ・スクレイパーの全レイヤーで整合していなければならない
@@ -90,10 +90,18 @@
 
 ### Measurable Outcomes
 
-- **SC-001**: 便無し日にスクレイパーを実行すると `no_service` が DB に記録される（`cancelled` は使われない）
+- **SC-001**: 便無し日にスクレイパーを実行すると `no_service`・`status_detail = null` が DB に記録される（`cancelled` は使われない）
 - **SC-002**: 欠航日にスクレイパーを実行すると `cancelled` が DB に記録される（`no_service` は使われない）
 - **SC-003**: 既存のユニットテスト全件（マルエーフェリー・マリックスライン・BaseScraper）が変更後もパスする
 - **SC-004**: 2社のスクレイパーテストに「便無し → `no_service`」シナリオが追加され、パスする
+
+---
+
+## Clarifications
+
+### Session 2026-03-08
+
+- Q: `no_service` 時の `status_detail` の値は何を格納すべきか → A: 常に `null`（`no_service` は状態そのものを表すため追加テキスト不要）
 
 ---
 
