@@ -199,12 +199,12 @@ def test_irrelevant_divs_ignored(db_session, marix_line_company):
     with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 3, 7))):
         records = scraper.parse(scraper.fetch())
 
-    # 下り: operating（2026-03-07）、上り: unknown（today=2026-03-07 のブロックがあるが上り未解析）
+    # 下り: operating（2026-03-07）、上り: no_service（today=2026-03-07 の上りブロックが存在しない）
     assert len(records) == 2
     operating_recs = [r for r in records if r["status"] == OperationStatusEnum.operating]
     assert len(operating_recs) == 1
 
-    # 上りルートが unknown になっていることを明示的に検証する（今日のブロックはHTMLに存在するがパース不可）
+    # 上りルートが no_service になっていることを明示的に検証する（今日の上り出発ブロックがHTMLに存在しない）
     routes = (
         db_session.execute(
             select(Route).where(Route.ferry_company_id == marix_line_company.id)
@@ -214,13 +214,13 @@ def test_irrelevant_divs_ignored(db_session, marix_line_company):
     )
     up_route = next(r for r in routes if r.origin_port == "那覇")
 
-    up_unknown_recs = [
+    up_no_service_recs = [
         r
         for r in records
-        if r["route_id"] == up_route.id and r["status"] == OperationStatusEnum.unknown
+        if r["route_id"] == up_route.id and r["status"] == OperationStatusEnum.no_service
     ]
-    assert len(up_unknown_recs) == 1
-    assert up_unknown_recs[0]["valid_date"] == date(2026, 3, 7)
+    assert len(up_no_service_recs) == 1
+    assert up_no_service_recs[0]["valid_date"] == date(2026, 3, 7)
 
 
 @resp_mock.activate
@@ -266,7 +266,7 @@ def test_no_service_when_no_block_for_today(db_session, marix_line_company):
 
 @resp_mock.activate
 def test_no_service_only_for_missing_direction(db_session, marix_line_company):
-    """今日の下りブロックのみ存在し上りがない場合、上りのみ unknown が追加される（パース不具合の可能性）。"""
+    """今日の下りブロックのみ存在し上りがない場合、上りのみ no_service が追加される。"""
     resp_mock.add(resp_mock.GET, SOURCE_URL, body=HTML_ONLY_DOWN_TODAY, status=200)
 
     scraper = MarixLine(db_session, marix_line_company.id)
@@ -283,6 +283,6 @@ def test_no_service_only_for_missing_direction(db_session, marix_line_company):
     rec_up = next((r for r in records if r["route_id"] == up.id), None)
 
     assert rec_down is not None and rec_down["status"] == OperationStatusEnum.operating
-    assert rec_up is not None and rec_up["status"] == OperationStatusEnum.unknown
+    assert rec_up is not None and rec_up["status"] == OperationStatusEnum.no_service
     assert rec_up["valid_date"] == date(2026, 3, 8)
     assert rec_up["status_detail"] is None
