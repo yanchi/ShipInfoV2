@@ -8,12 +8,20 @@ DBは SQLite in-memory を使用（conftest.py の db_session / marue_ferry_comp
 import pytest
 import responses as resp_mock
 from datetime import date
+from unittest.mock import patch, MagicMock
 
 from bs4 import BeautifulSoup
 from sqlalchemy import select
 
 from scraper.scrapers.marue_ferry import MarueFerry, SEARCH_URL, KAGOSHIMA_URL
 from scraper.db.models import OperationStatusEnum, Route
+
+
+def _make_date_mock(today: date):
+    """date.today() を today に固定しつつ date() コンストラクタも通すモックを作成。"""
+    mock = MagicMock(wraps=date)
+    mock.today.return_value = today
+    return mock
 
 
 # ---------------------------------------------------------------------------
@@ -149,8 +157,10 @@ def test_no_service_records_no_service_for_both_routes(db_session, marue_ferry_c
     """本日便なし時、上り・下り両ルートに no_service が記録される。"""
     resp_mock.add(resp_mock.POST, SEARCH_URL, body=HTML_SEARCH_NO_SERVICE, status=200)
 
+    today = date(2026, 3, 8)
     scraper = MarueFerry(db_session, marue_ferry_company.id)
-    records = scraper.parse(scraper.fetch())
+    with patch("scraper.scrapers.marue_ferry.date", _make_date_mock(today)):
+        records = scraper.parse(scraper.fetch())
 
     routes = db_session.execute(
         select(Route).where(Route.ferry_company_id == marue_ferry_company.id)
@@ -163,8 +173,8 @@ def test_no_service_records_no_service_for_both_routes(db_session, marue_ferry_c
 
     assert rec_down is not None and rec_down["status"] == OperationStatusEnum.no_service
     assert rec_up is not None and rec_up["status"] == OperationStatusEnum.no_service
-    assert rec_down["valid_date"] == date.today()
-    assert rec_up["valid_date"] == date.today()
+    assert rec_down["valid_date"] == today
+    assert rec_up["valid_date"] == today
     assert rec_down["status_detail"] is None
     assert rec_up["status_detail"] is None
 
@@ -238,11 +248,13 @@ def test_valid_date_is_today(db_session, marue_ferry_company):
     resp_mock.add(resp_mock.POST, SEARCH_URL, body=HTML_SEARCH_HAS_SERVICE, status=200)
     resp_mock.add(resp_mock.GET, KAGOSHIMA_URL, body=HTML_KAGOSHIMA_OPERATING, status=200)
 
+    today = date(2026, 3, 8)
     scraper = MarueFerry(db_session, marue_ferry_company.id)
-    records = scraper.parse(scraper.fetch())
+    with patch("scraper.scrapers.marue_ferry.date", _make_date_mock(today)):
+        records = scraper.parse(scraper.fetch())
 
     for rec in records:
-        assert rec["valid_date"] == date.today()
+        assert rec["valid_date"] == today
 
 
 def test_check_service_returns_true_when_no_result_table(db_session, marue_ferry_company):

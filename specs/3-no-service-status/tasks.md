@@ -59,6 +59,30 @@
 
 ---
 
+## Phase 5: Web 表示対応（Twig）
+
+**Goal**: Symfony/Twig 側で `no_service` を適切に表示する
+
+- [X] T010 [P] `app/templates/status/index.html.twig` のステータスバッジ分岐に `no_service`（`— 便なし`、`bg-light text-dark border`）と `unknown`（`? 不明`、`bg-secondary`）を追加する
+- [X] T011 [P] `app/templates/status/company.html.twig` に同様のバッジ分岐を追加する（index と同一ロジック）
+
+**Checkpoint**: Web ページで `— 便なし` バッジが表示されること
+
+---
+
+## Phase 6: Code Review Fixes
+
+**Goal**: コードレビューで検出された問題を修正する
+
+- [X] T012 [P] `scraper/tests/test_marue_ferry.py` に `_make_date_mock()` ヘルパーを追加し、`test_no_service_records_no_service_for_both_routes` と `test_valid_date_is_today` に `patch("scraper.scrapers.marue_ferry.date")` を適用して日付フレイキネスを解消する（固定日付: `date(2026, 3, 8)`）
+- [X] T013 `scraper/scraper/scrapers/marue_ferry.py` の `_SEVERITY` 辞書直前に「`no_service` は `has_service=True` のパスでは出現しないため含まない」というコメントを追記する
+- [X] T014 [P] `scraper/scraper/scrapers/marix_line.py` の no_service ループ前で `now = datetime.now()` を抽出し、各レコードの `scraped_at` に統一値を使用する
+- [X] T015 [P] `app/templates/status/index.html.twig` と `app/templates/status/company.html.twig` に `unknown` 専用 `elseif` ブランチを追加し、`else` を真のフォールバックにする（T010・T011 と同一コミット）
+
+**Checkpoint**: `make test-scraper` 22件全パス
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -95,5 +119,7 @@
 ## Notes
 
 - DBマイグレーション不要（`operation_statuses.status` は既に VARCHAR(255)）
-- T006 の `date` モックには `unittest.mock.patch("scraper.scrapers.marix_line.date")` を使用し、`mock_date.today.return_value = date(2026, 3, X)` のパターンで固定する。`mock_date.side_effect = lambda *a, **kw: date(*a, **kw)` で `date(year, month, day)` の呼び出しも通すこと
-- 実装の主要変更は `scraper/scraper/scrapers/marue_ferry.py` と `scraper/scraper/scrapers/marix_line.py`（テストは `scraper/tests/test_marue_ferry.py` と `scraper/tests/test_marix_line.py` も更新）
+- `date` モックは `MagicMock(wraps=date)` + `mock.today.return_value = date(...)` パターンを使用（`_make_date_mock()` ヘルパーとして両テストファイルに定義）。`wraps=date` により `date(year, month, day)` コンストラクタ呼び出しも通る
+- `patch("scraper.scrapers.marix_line.date")` および `patch("scraper.scrapers.marue_ferry.date")` でモジュール内の `date` 名をそれぞれ差し替える
+- 実装の主要変更: `scraper/scraper/scrapers/marue_ferry.py`・`marix_line.py`・`app/templates/status/index.html.twig`・`app/templates/status/company.html.twig`（テスト: `scraper/tests/test_marue_ferry.py`・`test_marix_line.py`）
+- `_SEVERITY` 辞書（MarueFerry）に `no_service` は含まない。`has_service=True` パスでのみ参照されるため出現し得ない

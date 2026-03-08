@@ -112,6 +112,7 @@ class MarixLine(BaseScraper):
 
         # 今日の便が存在しないルートに no_service を記録
         today = date.today()
+        now = datetime.now()
         for route in [r for r in [down_route, up_route] if r]:
             if (route.id, today) not in seen:
                 records.append({
@@ -119,7 +120,7 @@ class MarixLine(BaseScraper):
                     "status": OperationStatusEnum.no_service,
                     "status_detail": None,
                     "valid_date": today,
-                    "scraped_at": datetime.now(),
+                    "scraped_at": now,
                     "source_url": SOURCE_URL,
                 })
 

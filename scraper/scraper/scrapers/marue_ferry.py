@@ -126,6 +126,7 @@ class MarueFerry(BaseScraper):
             raise RuntimeError("MarueFerry.parse: no ship statuses parsed (possible site structure change)")
 
         # 複数船で異なるステータスがある場合は最も深刻なものを採用して warning
+        # NOTE: no_service は has_service=True のパス（Step 2）では出現しないため含まない
         _SEVERITY = {
             OperationStatusEnum.cancelled: 4,
             OperationStatusEnum.suspended: 3,
