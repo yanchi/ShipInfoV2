@@ -108,14 +108,13 @@
 ## Assumptions
 
 - マリックスラインの「便無し」判定方法は実装調査フェーズ（plan）で確定する（スクレイパー実装から判断）
-- DB の ENUM 変更はマイグレーションで対応（既存データは変更なし）
-- Web 表示側（Symfony/Twig）での `no_service` の見せ方は本 spec のスコープ外（別 spec で対応）
+- DB カラム `operation_statuses.status` は VARCHAR のため、スキーママイグレーションは不要（既存データも変更なし）
+- Web 表示側（Symfony/Twig）での `no_service` の見せ方は本 spec／本 PR のスコープ内とし、同一 PR で実装・テストまで行う
 - `raw_html_hash` の重複防止ロジックは既存のまま流用
 
 ---
 
 ## Out of Scope
 
-- `no_service` のフロントエンド表示（別機能として別途対応）
 - 過去データの `cancelled` → `no_service` への遡及修正
 - 3社目以降のスクレイパーへの対応
