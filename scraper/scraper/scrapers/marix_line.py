@@ -113,22 +113,16 @@ class MarixLine(BaseScraper):
         # 今日の便が存在しないルートに no_service / unknown を記録
         today = date.today()
         today_text = f"{today.year}年{today.month}月{today.day}日"
-        # 方向別に出発日として今日の日付が含まれるブロックが存在するか確認
-        # (到着日としてのみ存在する場合は has_today_*_block=False とする)
-        has_today_down_block = bool(
-            re.search(rf"{re.escape(today_text)}\s+鹿児島\S*発", html)
-        )
-        has_today_up_block = bool(
-            re.search(rf"{re.escape(today_text)}\s+那覇\S*発", html)
-        )
-        direction_has_today = {
-            down_route: has_today_down_block,
-            up_route: has_today_up_block,
-        }
         now = datetime.now()
+        # ルートごとに出発港名から today の出発ブロック有無を確認
+        # (到着日としてのみ存在する場合は has_today=False とする)
         for route in [r for r in [down_route, up_route] if r]:
             if (route.id, today) not in seen:
-                if direction_has_today[route]:
+                direction_pat = rf"{re.escape(route.origin_port)}\S*発"
+                has_today = bool(
+                    re.search(rf"{re.escape(today_text)}\s+{direction_pat}", html)
+                )
+                if has_today:
                     # 今日のブロックはあるが seen に入っていない = パース不具合の可能性
                     self._log.warning(
                         "today_block_present_but_not_seen",

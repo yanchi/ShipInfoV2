@@ -199,12 +199,12 @@ def test_irrelevant_divs_ignored(db_session, marix_line_company):
     with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 3, 7))):
         records = scraper.parse(scraper.fetch())
 
-    # 下り: operating（2026-03-07）、上り: no_service（今日の上りブロックがHTMLに存在しない）
+    # 下り: operating（2026-03-07）、上り: no_service（today=2026-03-07 の上りブロックが存在しない）
     assert len(records) == 2
     operating_recs = [r for r in records if r["status"] == OperationStatusEnum.operating]
     assert len(operating_recs) == 1
 
-    # 上りルートが no_service になっていることを明示的に検証する（今日の上りブロックがHTML未存在）
+    # 上りルートが no_service になっていることを明示的に検証する（今日の上り出発ブロックがHTMLに存在しない）
     routes = (
         db_session.execute(
             select(Route).where(Route.ferry_company_id == marix_line_company.id)
@@ -266,7 +266,7 @@ def test_no_service_when_no_block_for_today(db_session, marix_line_company):
 
 @resp_mock.activate
 def test_no_service_only_for_missing_direction(db_session, marix_line_company):
-    """今日の下りブロックのみ存在し上りがない場合、上りは no_service として記録される（その方向の運航なし）。"""
+    """今日の下りブロックのみ存在し上りがない場合、上りのみ no_service が追加される。"""
     resp_mock.add(resp_mock.GET, SOURCE_URL, body=HTML_ONLY_DOWN_TODAY, status=200)
 
     scraper = MarixLine(db_session, marix_line_company.id)
