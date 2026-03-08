@@ -83,7 +83,8 @@ scraper/scraper/db/models.py         # OperationStatusEnum・Route（変更な�
   - `欠航` → `cancelled`
   - `運休` → `suspended`
   - `遅延` / `スケジュール変更` → `delayed`
-- **方向**: 上り・下り両方のルートに同じステータスを適用
+- **複数船ステータス集約**: 鹿児島航路ページには複数船が掲載されるため、ステータスが混在する場合は最も深刻なものを採用する（優先度: `cancelled`=4 > `suspended`=3 > `delayed`=2 > `operating`=1）。混在時は warning ログを記録する
+- **方向**: 上り・下り両方のルートに集約後のステータス（および詳細テキスト）を適用
 - **当日分なし**: warning ログを記録してスキップ（保存しない）
 
 ### Step 3: DB保存
