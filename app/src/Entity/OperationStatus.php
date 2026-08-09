@@ -10,6 +10,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: 'operation_statuses')]
 #[ORM\Index(columns: ['route_id', 'valid_date'], name: 'idx_route_date')]
 #[ORM\Index(columns: ['valid_date', 'status'], name: 'idx_date_status')]
+#[ORM\HasLifecycleCallbacks]
 class OperationStatus
 {
     #[ORM\Id]
