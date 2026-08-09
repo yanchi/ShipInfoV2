@@ -20,6 +20,11 @@ class OperationStatusRepository extends ServiceEntityRepository
     /**
      * トップページ用: 本日の全社・全航路の最新ステータスを返す。
      *
+     * 有効な航路を1本も持たない会社も結果に含める（`routes` が空配列になる）。
+     * トップページ側で「航路情報がありません。」を表示し、設定漏れを黙って隠さないため。
+     * 航路の絞り込みは WHERE ではなく JOIN の WITH 句で行う必要がある
+     * （WHERE に置くと LEFT JOIN で NULL になった行が除外され INNER JOIN と同じ挙動になる）。
+     *
      * @return array<int, array{company: \App\Entity\FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: OperationStatus|null}>}>
      */
     public function findTodayByAllCompanies(): array
@@ -29,9 +34,8 @@ class OperationStatusRepository extends ServiceEntityRepository
         $qb = $this->getEntityManager()->createQueryBuilder();
         $qb->select('fc', 'r')
             ->from(\App\Entity\FerryCompany::class, 'fc')
-            ->join('fc.routes', 'r')
+            ->leftJoin('fc.routes', 'r', 'WITH', 'r.active = :active')
             ->where('fc.active = :active')
-            ->andWhere('r.active = :active')
             ->setParameter('active', true)
             ->orderBy('fc.id', 'ASC')
             ->addOrderBy('r.id', 'ASC');

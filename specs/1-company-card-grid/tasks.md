@@ -165,7 +165,7 @@ T003 → T004 → T009 の3タスクで見た目は完成する。テストと�
 
 ## 実装中に判明した事項（スコープ外・別途対応が必要）
 
-実装の過程で以下が判明した。1・2 は本機能のテストを成立させるために already 対応済み、3・4 は未対応。
+実装の過程で以下が判明した。**4件とも対応済み**（1・2 は本機能のテストを成立させるために必要だったため同一コミット、3・4 は後続コミットで修正）。
 
 1. **`AppFixtures` が空スタブだった** — `doctrine:fixtures:load` は実行前に全テーブルを purge するため、
    `make fixtures` を叩くと「DBを空にするだけ」のコマンドになっていた（実際に本作業中に dev DB のデータが消えた）。
@@ -179,10 +179,14 @@ T003 → T004 → T009 の3タスクで見た目は完成する。テストと�
 3. **`docker/mysql/init/02_seed.sql` が現行スキーマで実行できない** — Doctrine マイグレーション後の
    `ferry_companies` / `routes` は `created_at` / `updated_at` に DEFAULT を持たないため、
    seed の INSERT が `Field 'created_at' doesn't have a default value` で失敗する。
-   MySQL ボリューム初回作成時にしか実行されないため通常は表面化しないが、修正が必要。**未対応**。
+   MySQL ボリューム初回作成時にしか実行されないため通常は表面化しないが、修正が必要だった。
+   **対応済み**: 両 INSERT に `created_at` / `updated_at` を明示指定し、`ON DUPLICATE KEY UPDATE` にも `updated_at = NOW()` を追加。
 
 4. **航路0件の会社はトップページに表示されない** — spec の Edge Cases は「`航路情報がありません。` が表示される」と
    記述しているが、[OperationStatusRepository::findTodayByAllCompanies()](../../app/src/Repository/OperationStatusRepository.php) は
    `join('fc.routes', 'r')` = INNER JOIN のため、航路を持たない会社はそもそも結果に含まれない。
-   Twig 側の `{% else %} 航路情報がありません。` 分岐は index ページでは到達不能なデッドコード。
-   本機能では既存動作を維持しており挙動の変更はないが、spec の記述と実装が食い違っている。**未対応**。
+   Twig 側の `{% else %} 航路情報がありません。` 分岐は index ページでは到達不能なデッドコードだった。
+   **対応済み**: `leftJoin('fc.routes', 'r', 'WITH', 'r.active = :active')` に変更し spec の記述どおりの挙動にした。
+   航路の絞り込みは WHERE ではなく WITH 句に置く必要がある（WHERE のままだと LEFT JOIN で NULL になった行が
+   除外され INNER JOIN と同じ挙動に戻る）。回帰テスト2件を `OperationStatusRepositoryTest` に追加済み
+   （INNER JOIN に戻すと両方 fail することを確認済み）。
