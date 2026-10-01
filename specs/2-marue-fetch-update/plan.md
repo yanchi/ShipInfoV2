@@ -70,7 +70,7 @@ scraper/scraper/db/models.py         # OperationStatusEnum・Route（変更な�
 - **判定**: `table.s-result tbody tr` が1行以上あれば「運航あり」、なければ「運航なし」
 - **`valid_date`**: `date.today()`（POSTパラメータの `startDate` と同値。レスポンスHTMLのパース不要）
 - **注意**: 結果の「会社名」がマリックスラインでも「便あり」と判定する（共同運航のため）
-- **便なし時**: 上り・下り両ルートを `cancelled` で記録して処理終了
+- **便なし時**: 上り・下り両ルートを `no_service` で記録して処理終了（当初は `cancelled`。3-no-service-status で変更）
 
 ### Step 2: 鹿児島航路ページ解析（ステータス詳細取得）
 
