@@ -76,8 +76,8 @@
 
 ### Tests for User Story 1
 
-- [ ] T013 [P] [US1] `app/tests/View/PortFilterTest.php` を作り、`PortFilter` をテストする：`none()` は `isActive()` が false、港だけ・方向だけ・両方で `matches()` が正しい、`toQuery()` が `['port' => 5, 'dir' => 'down']` の形（null のキーは出さない）
-- [ ] T014 [P] [US1] `app/tests/Service/PortFilterResolverTest.php` を作り、contracts/http-routes.md の表の全行をテストする（Request を直接作って渡す）
+- [X] T013 [P] [US1] `app/tests/View/PortFilterTest.php` を作り、`PortFilter` をテストする：`none()` は `isActive()` が false、港だけ・方向だけ・両方で `matches()` が正しい、`toQuery()` が `['port' => 5, 'dir' => 'down']` の形（null のキーは出さない）
+- [X] T014 [P] [US1] `app/tests/Service/PortFilterResolverTest.php` を作り、contracts/http-routes.md の表の全行をテストする（Request を直接作って渡す）
   - パラメータ無し・Cookie 無し → `none()`、保存の指示なし
   - パラメータ無し・Cookie あり → Cookie の条件
   - `port=5&dir=down`・Cookie `port=3` → 港5・下り、Cookie は変えない、`hasSaved` は true
@@ -88,34 +88,34 @@
   - `port=999&dir=down`（save なし）→ 全港・下り、Cookie は変えない
   - Cookie の値が不正（存在しない港・`dir=xxx`）→ `none()`、Cookie を消す指示
   - `resolveFromCookie()`：`port=5&save=1` のクエリがあっても `redirectTo` は null で、Cookie の条件を返す。Cookie が不正なら消す指示
-- [ ] T015 [P] [US1] `app/tests/View/PortBoardTest.php` に `filter()` のテストを足す：港だけ → 各方向でその港の行だけ、方向だけ → その方向だけ、両方 → 1行、`none()` → 元と同じ。日付は常に全部残る
+- [X] T015 [P] [US1] `app/tests/View/PortBoardTest.php` に `filter()` のテストを足す：港だけ → 各方向でその港の行だけ、方向だけ → その方向だけ、両方 → 1行、`none()` → 元と同じ。日付は常に全部残る
 
 ### Implementation for User Story 1
 
-- [ ] T016 [P] [US1] `app/src/View/PortFilter.php` を作る（`final readonly class`、data-model.md の `PortFilter`）。`portId`・`direction`・`hasSaved`、`isActive()`・`matches(RouteDirectionEnum, Port)`・`toQuery()`・`static none()`
-- [ ] T017 [US1] `app/src/View/PortBoard.php` に `filter(PortFilter $filter): PortBoard` を追加する（research R5）。`PortBoardDay`・`PortBoardDirection` を作り直して、条件に合う方向・行だけを残す。条件に合う行が無い方向は落とす。日付は全部残す
-- [ ] T018 [US1] `app/src/Service/PortFilterResolver.php` を作る（data-model.md の「作り方」「保存」「検証」）
+- [X] T016 [P] [US1] `app/src/View/PortFilter.php` を作る（`final readonly class`、data-model.md の `PortFilter`）。`portId`・`direction`・`hasSaved`、`isActive()`・`matches(RouteDirectionEnum, Port)`・`toQuery()`・`static none()`
+- [X] T017 [US1] `app/src/View/PortBoard.php` に `filter(PortFilter $filter): PortBoard` を追加する（research R5）。`PortBoardDay`・`PortBoardDirection` を作り直して、条件に合う方向・行だけを残す。条件に合う行が無い方向は落とす。日付は全部残す
+- [X] T018 [US1] `app/src/Service/PortFilterResolver.php` を作る（data-model.md の「作り方」「保存」「検証」）
   - `resolve(Request $request, list<array{direction, departurePorts, arrivalPort}> $boardStops): PortFilterResolution`
   - 戻り値の `PortFilterResolution`（同じファイルか `app/src/View/` に置く）は `filter: PortFilter`、`redirectTo: ?string`、`cookie: ?Cookie`（書くときは値入り、消すときは `Cookie::create('port_filter')->withExpires(1)`、変えないときは null）
   - `resolveFromCookie(Request $request, list<…> $boardStops): PortFilterResolution` も作る（トップ用）。クエリ（`port`・`dir`・`save`・`clear`）は見ず、Cookie だけを読む。`redirectTo` は常に null。Cookie の値が不正なら、港別ページと同じく Cookie を消す指示（`cookie`）を返す
   - 港 ID の検証は `$boardStops` の `departurePorts` の ID で行う
   - Cookie は `port_filter`、値は `http_build_query($filter->toQuery())`、有効期限 1 年、`Path=/`、`SameSite=Lax`、`HttpOnly`（data-model.md の Cookie）
-- [ ] T019 [US1] `app/src/Controller/StatusController.php` の `ports()` を変える
+- [X] T019 [US1] `app/src/Controller/StatusController.php` の `ports()` を変える
   - `Request` を受け取り、`findBoardStops()` の結果を `PortFilterResolver::resolve()` に渡す
   - `redirectTo` があれば `RedirectResponse` を返し、`cookie` があればそれに付ける
   - 全港のボードを作ったあと `filter()` した結果を `board` として、`fullBoard`（全港）と `filter`・`boardStops` もテンプレートに渡す（`fullBoard` は Phase 4 で使う）
   - 表示のレスポンスにも `cookie`（不正な Cookie を消すとき）を付ける
   - レスポンスに `Cache-Control: private` と `Vary: Cookie` を付ける（research R15）
-- [ ] T020 [US1] `app/templates/status/ports.html.twig` の上部に絞り込みフォームを置く（`method="get"`、`action="/ports"`）
+- [X] T020 [US1] `app/templates/status/ports.html.twig` の上部に絞り込みフォームを置く（`method="get"`、`action="/ports"`）
   - 出発港の `<select name="port">`：「全港」（`all`）と、`boardStops` の出発港（下りの寄港順で重複なし）。今の `filter.portId` を選択済みにする
   - 方向の `<select name="dir">`：「両方向」（空）・「下り（那覇行き）」・「上り（鹿児島行き）」
   - ボタン2つ：「表示」（`save` なし）と「この港を保存」（`name="save" value="1"`）
   - JS は使わない（`onchange` での自動送信もしない。JS 無しで全機能が動くこと）
-- [ ] T021 [US1] `app/templates/status/ports.html.twig` に、絞り込み中の表示を置く（FR-004）
+- [X] T021 [US1] `app/templates/status/ports.html.twig` に、絞り込み中の表示を置く（FR-004）
   - `filter.isActive()` のとき「{港名}発のみ表示中」「下りのみ表示中」などと、「全港に戻す」（`/ports?port=all`）のリンク
   - `filter.hasSaved` のとき「保存を解除」（`/ports?clear=1`）のリンク
   - 絞り込みで行が無くなった**方向**は見出しも出さない。日付の `section` は常に全部出す（T034 の日付ボタンの飛び先を残すため）
-- [ ] T022 [US1] `app/tests/Controller/StatusControllerTest.php` に機能テストを足す
+- [X] T022 [US1] `app/tests/Controller/StatusControllerTest.php` に機能テストを足す
   - `/ports?port={港ID}&dir=down` → 各日付で、その港の下りの行だけ（`li.port-row` が日数分）
   - `/ports?port={港ID}&dir=down&save=1` → 302、`Location` に `save` が無い、`Set-Cookie: port_filter=...`。続けて `/ports` → 同じ絞り込み
   - `/ports?port=all`（Cookie あり）→ 全港表示、`Set-Cookie` が無い

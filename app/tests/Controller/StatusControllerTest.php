@@ -12,6 +12,7 @@ use App\Enum\OperationStatusEnum;
 use App\Enum\RouteDirectionEnum;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Component\BrowserKit\Cookie as BrowserCookie;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\DomCrawler\Crawler;
 
@@ -227,6 +228,93 @@ class StatusControllerTest extends WebTestCase
         $this->assertStringNotContainsString('港別テスト丸', $this->findPortRow($crawler, 1, '名瀬')->text());
     }
 
+    // ------------------------------------------------------------------
+    // /ports の絞り込み（US1）
+    // ------------------------------------------------------------------
+
+    public function testPortsFilterByPortAndDirection(): void
+    {
+        $this->createPortBoardData();
+        $naze = $this->portId('名瀬');
+
+        $crawler = $this->client->request('GET', "/ports?port={$naze}&dir=down");
+
+        $this->assertResponseIsSuccessful();
+        $rows = $crawler->filter('li.port-row');
+        $this->assertCount(4, $rows);
+        foreach ($rows as $row) {
+            $this->assertStringStartsWith('名瀬発', trim((new Crawler($row))->filter('.fw-bold')->text()));
+        }
+        $this->assertCount(4, $crawler->filter('section[id^="d-"]'));
+        $this->assertStringContainsString('名瀬発・下りのみ表示中', $crawler->filter('.filter-status')->text());
+        $this->assertCount(1, $crawler->filter('a[href="/ports?port=all"]'));
+        $this->assertCount(0, $crawler->filter('a[href="/ports?clear=1"]'));
+        $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+    }
+
+    public function testPortsSaveWritesCookieAndRedirects(): void
+    {
+        $this->createPortBoardData();
+        $naze = $this->portId('名瀬');
+
+        $this->client->request('GET', "/ports?port={$naze}&dir=down&save=1");
+
+        $this->assertResponseStatusCodeSame(302);
+        $response = $this->client->getResponse();
+        $this->assertSame("/ports?port={$naze}&dir=down", $response->headers->get('Location'));
+        $cookies = $response->headers->getCookies();
+        $this->assertCount(1, $cookies);
+        $this->assertSame('port_filter', $cookies[0]->getName());
+        $this->assertSame("port={$naze}&dir=down", $cookies[0]->getValue());
+
+        // 次に /ports を開くと保存した条件
+        $crawler = $this->client->request('GET', '/ports');
+        $this->assertCount(4, $crawler->filter('li.port-row'));
+        $this->assertCount(1, $crawler->filter('a[href="/ports?clear=1"]'));
+    }
+
+    public function testPortsAllKeepsSavedCookie(): void
+    {
+        $this->createPortBoardData();
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('名瀬')));
+
+        $crawler = $this->client->request('GET', '/ports?port=all');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertGreaterThan(4, $crawler->filter('li.port-row')->count());
+        $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+        $this->assertCount(1, $crawler->filter('a[href="/ports?clear=1"]'));
+    }
+
+    public function testPortsClearRemovesCookie(): void
+    {
+        $this->client->request('GET', '/ports?clear=1');
+
+        $this->assertResponseStatusCodeSame(302);
+        $this->assertSame('/ports', $this->client->getResponse()->headers->get('Location'));
+        $cookies = $this->client->getResponse()->headers->getCookies();
+        $this->assertCount(1, $cookies);
+        $this->assertSame('port_filter', $cookies[0]->getName());
+        $this->assertTrue($cookies[0]->isCleared());
+    }
+
+    public function testPortsInvalidParamsReturn200(): void
+    {
+        foreach (['/ports?port=999', '/ports?dir=xxx'] as $url) {
+            $this->client->request('GET', $url);
+            $this->assertResponseIsSuccessful($url);
+        }
+    }
+
+    public function testPortsIsPrivateAndVariesByCookie(): void
+    {
+        $this->client->request('GET', '/ports');
+
+        $headers = $this->client->getResponse()->headers;
+        $this->assertTrue($headers->hasCacheControlDirective('private'));
+        $this->assertContains('Cookie', $this->client->getResponse()->getVary());
+    }
+
     public function testIndexLinksToPorts(): void
     {
         $crawler = $this->client->request('GET', '/');
@@ -275,6 +363,11 @@ class StatusControllerTest extends WebTestCase
         $em->persist($other);
         $this->persistCompany($operator);
         $this->createdCompanyIds[] = $other->getId();
+    }
+
+    private function portId(string $name): int
+    {
+        return $this->entityManager()->getRepository(Port::class)->findOneBy(['name' => $name])->getId();
     }
 
     private function makeDeparture(Route $route, Port $port, \DateTime $date, string $ship, ?OperationStatusEnum $status, ?\DateTime $departureAt): DepartureStatus
