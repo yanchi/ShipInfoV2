@@ -58,7 +58,7 @@
 |---|---|---|---|
 | id | BigInteger | PK, AUTO_INCREMENT | |
 | route_id | Integer | FK(routes.id), NOT NULL | |
-| status | Enum | NOT NULL, DEFAULT unknown | operating / cancelled / delayed / suspended / unknown |
+| status | Enum | NOT NULL, DEFAULT unknown | operating / cancelled / delayed / suspended / unknown / no_service |
 | status_detail | Text | NULLABLE | 詳細テキスト（欠航理由等） |
 | valid_date | Date | NOT NULL | 対象日付 |
 | departure_time | DateTime | NULLABLE | 出発時刻（未実装、将来用） |
@@ -77,6 +77,7 @@
 - `delayed` — 条件付き/遅延
 - `suspended` — 運休
 - `unknown` — 不明
+- `no_service` — 便なし（当日便が設定されていない。`cancelled` とは区別。[3-no-service-status](../3-no-service-status/spec.md)）
 
 ---
 
@@ -111,6 +112,6 @@ FerryCompany 1──n ScraperLog
 ## State Transitions (OperationStatus)
 
 ```
-なし（新規） → operating | cancelled | delayed | suspended
+なし（新規） → operating | cancelled | delayed | suspended | unknown | no_service
 既存レコード → raw_html_hash 変化時のみ更新
 ```

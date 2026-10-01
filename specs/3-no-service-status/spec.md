@@ -2,7 +2,7 @@
 
 **Feature Branch**: `3-no-service-status`
 **Created**: 2026-03-08
-**Status**: Draft
+**Status**: Implemented
 
 ## 概要
 

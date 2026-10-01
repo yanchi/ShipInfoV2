@@ -2,7 +2,7 @@
 
 **Feature Branch**: `1-company-card-grid`
 **Created**: 2026-03-08
-**Status**: Draft
+**Status**: Implemented
 **Input**: User description: "トップページ（index.html.twig）のレイアウトを縦並びカードから横並びグリッドに変更する。現在は会社ごとのカードが縦に並んでいるが、横並びにすることで会社間の順番による優劣感をなくす。"
 
 ## User Scenarios & Testing *(mandatory)*

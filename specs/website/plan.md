@@ -119,7 +119,8 @@ app/
 | `delayed` | 条件付・遅延 | `bg-warning` | ● |
 | `cancelled` | 欠航 | `bg-danger` | ✗ |
 | `suspended` | 運休 | `bg-secondary` | - |
-| `unknown` | 情報なし | `bg-secondary` | ? |
+| `no_service` | 便なし | `bg-light text-dark border` | — |
+| `unknown` | 不明 | `bg-secondary` | ? |
 
 ### contracts/
 

@@ -17,7 +17,7 @@
 |---|---|---|
 | `id` | INT PK | 自動採番 |
 | `route_id` | INT FK | `routes.id`（上り・下り別） |
-| `status` | ENUM | `operating` / `delayed` / `cancelled` / `suspended` |
+| `status` | ENUM | `operating` / `delayed` / `cancelled` / `suspended` / `unknown` / `no_service`（本機能が記録するのは `unknown` 以外） |
 | `status_detail` | TEXT NULL | 詳細テキスト（条件付き運航の詳細等） |
 | `valid_date` | DATE | 運航日付（本機能では常に `date.today()`） |
 | `scraped_at` | DATETIME | スクレイプ実行日時 |
@@ -38,7 +38,7 @@
 ```
 POST /search/result.php
   ↓
-[便あり?]  No → route_id=1,2 両方 cancelled, valid_date=today → 保存して終了
+[便あり?]  No → route_id=1,2 両方 no_service, valid_date=today → 保存して終了
   ↓ Yes
 valid_date = date.today()  # POSTパラメータと同値、レスポンスパース不要
 

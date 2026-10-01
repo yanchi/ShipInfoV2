@@ -89,7 +89,8 @@ OperationStatus (operation_statuses)
 | `delayed` | 条件付・遅延 | 黄 (`warning`) | ● |
 | `cancelled` | 欠航 | 赤 (`danger`) | ✗ |
 | `suspended` | 運休 | グレー (`secondary`) | - |
-| `unknown` | 情報なし | グレー (`secondary`) | ? |
+| `no_service` | 便なし | 白枠 (`light` + `border`) | — |
+| `unknown` | 不明 | グレー (`secondary`) | ? |
 
 ---
 

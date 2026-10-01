@@ -26,7 +26,7 @@ open http://localhost:8080/
 - 「ShipInfo - フェリー運航情報」ヘッダーが表示される
 - 本日の日付タイトルが表示される
 - マルエーフェリー・マリックスラインの運航状況が一覧表示される
-- DBに当日データがない場合は「現在情報がありません」が表示され、500にならない
+- DBに当日データがない場合は各航路に「情報なし」バッジが表示され、500にならない（会社が0件の場合は「現在情報がありません。」）
 
 ---
 
@@ -69,6 +69,7 @@ Chromeデベロッパーツール → デバイスモード（iPhone SE等）で
 | cancelled | 赤（Bootstrap `text-danger` or `badge bg-danger`） |
 | delayed | 黄（Bootstrap `text-warning` or `badge bg-warning`） |
 | suspended | グレー（Bootstrap `text-secondary`） |
+| no_service | 白枠（Bootstrap `badge bg-light text-dark border`） |
 | unknown | グレー（Bootstrap `text-secondary`） |
 
 ---

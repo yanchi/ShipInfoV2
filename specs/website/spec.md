@@ -2,7 +2,7 @@
 
 **Feature**: `website`
 **Created**: 2026-03-07
-**Status**: Draft
+**Status**: Implemented（US1・US2。US3 航路別詳細ページは未着手）
 
 ---
 
@@ -35,8 +35,9 @@
 **Acceptance Scenarios**:
 
 1. **Given** DBに本日の運航状況データがある場合、**When** トップページにアクセス、**Then** 全社・全航路の運航状況が表示される
-2. **Given** DBに本日データがない場合（スクレイピング未実施）、**When** トップページにアクセス、**Then** 「情報を取得中です」などのメッセージが表示される
-3. **Given** 欠航の便がある場合、**When** トップページにアクセス、**Then** 欠航が視覚的に強調表示される（赤色等）
+2. **Given** 会社は登録済みだがDBに本日データがない場合（スクレイピング未実施）、**When** トップページにアクセス、**Then** 各航路に「情報なし」バッジが表示され、500エラーにならない
+3. **Given** 会社が1件も登録されていない場合、**When** トップページにアクセス、**Then** 「現在情報がありません。」が表示される
+4. **Given** 欠航の便がある場合、**When** トップページにアクセス、**Then** 欠航が視覚的に強調表示される（赤色等）
 
 ---
 
@@ -98,7 +99,8 @@
 
 ### Edge Cases
 
-- データが0件: 「現在情報がありません」を表示
+- 会社が0件: 「現在情報がありません。」を表示
+- 会社はあるが本日の運航状況が0件: 各航路を「情報なし」バッジで表示
 - 文字化け対策: UTF-8を明示的に設定
 - モバイル対応: レスポンシブデザイン（Bootstrap等のCSSフレームワーク使用）
 
@@ -119,18 +121,22 @@
 
 | DB値 | 表示ラベル | 色 |
 |---|---|---|
-| `operating` | 通常運航 | 緑 |
-| `delayed` | 条件付・遅延 | 黄 |
-| `cancelled` | 欠航 | 赤 |
-| `suspended` | 運休 | グレー |
-| `unknown` | 情報なし | グレー |
+| `operating` | ✓ 通常運航 | 緑（`bg-success`） |
+| `delayed` | ● 条件付・遅延 | 黄（`bg-warning`） |
+| `cancelled` | ✗ 欠航 | 赤（`bg-danger`） |
+| `suspended` | - 運休 | グレー（`bg-secondary`） |
+| `no_service` | — 便なし | 白枠（`bg-light` + `border`） |
+| `unknown` | ? 不明 | グレー（`bg-secondary`） |
+| （レコードなし） | 情報なし | グレー（`bg-secondary`） |
+
+`no_service` は「その日は便が設定されていない」状態で、`cancelled`（欠航）とは区別して表示する（[3-no-service-status](../3-no-service-status/spec.md)）。
 
 ### 技術要件
 
 - **Controller**: `App\Controller\StatusController`
 - **テンプレート**: `templates/status/`
 - **CSSフレームワーク**: Bootstrap 5（CDN経由）
-- **DBアクセス**: `OperationStatusRepository` 経由（生SQLは使わない）
+- **DBアクセス**: `OperationStatusRepository` 経由（Controller / Twig からクエリを直接書かない）。基本は DQL / QueryBuilder を使い、DQL で表現しにくい集約（最新レコード取得の `MAX(scraped_at)` サブクエリ等）に限り Repository 内で raw SQL を許容する。raw SQL ではプレースホルダによるパラメータバインドを必須とする
 
 ---
 
