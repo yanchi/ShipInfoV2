@@ -315,6 +315,44 @@ class StatusControllerTest extends WebTestCase
         $this->assertContains('Cookie', $this->client->getResponse()->getVary());
     }
 
+    // ------------------------------------------------------------------
+    // /ports の異常の要約（US2）
+    // ------------------------------------------------------------------
+
+    public function testPortsAlertSummaryLinksToRow(): void
+    {
+        $this->createPortBoardData(OperationStatusEnum::Cancelled);
+        $anchor = sprintf('r-%s-down-%d', (new \DateTimeImmutable('tomorrow'))->format('Y-m-d'), $this->portId('名瀬'));
+
+        $crawler = $this->client->request('GET', '/ports');
+
+        $this->assertResponseIsSuccessful();
+        $link = $crawler->filter(".alert-summary a[href=\"#{$anchor}\"]");
+        $this->assertCount(1, $link);
+        $this->assertStringContainsString('名瀬発→', $link->text());
+        $this->assertStringContainsString('✗ 欠航', $link->text());
+        $this->assertCount(1, $crawler->filter("li#{$anchor} .port-entry.port-entry--alert.port-entry--cancelled"));
+    }
+
+    public function testPortsAlertSummaryShowsHiddenCountWhenFiltered(): void
+    {
+        $this->createPortBoardData(OperationStatusEnum::Cancelled);
+
+        $crawler = $this->client->request('GET', '/ports?port=' . $this->portId('鹿児島') . '&dir=down');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertMatchesRegularExpression('/他の港にも欠航・条件付などがあります（[1-9]\d*件）/u', $crawler->filter('.alert-summary')->text());
+    }
+
+    public function testPortsAlertSummaryWithoutAlerts(): void
+    {
+        $this->createPortBoardData();
+
+        $crawler = $this->client->request('GET', '/ports');
+
+        $this->assertStringContainsString('表示期間内に欠航・条件付の便はありません', $crawler->filter('.alert-summary')->text());
+    }
+
     public function testIndexLinksToPorts(): void
     {
         $crawler = $this->client->request('GET', '/');
@@ -327,8 +365,9 @@ class StatusControllerTest extends WebTestCase
      * 下りの寄港順（鹿児島→名瀬→那覇）を持つ2社と、名瀬発の港別ステータスを作る。
      * - 今日: 運航会社が船あり・通常運航（05:50発・翌08:00着）、非運航会社が no_service
      * - 3日先: 運航会社が status null（運航予定）
+     * - $tomorrowStatus を渡すと、明日の名瀬発に運航会社のその status の行を足す
      */
-    private function createPortBoardData(): void
+    private function createPortBoardData(?OperationStatusEnum $tomorrowStatus = null): void
     {
         $em    = $this->entityManager();
         $ports = [];
@@ -359,6 +398,9 @@ class StatusControllerTest extends WebTestCase
             ->setScheduledArrivalAt((clone $today)->modify('+1 day')->setTime(8, 0)));
         $em->persist($this->makeDeparture($routes[1], $ports['名瀬'], (clone $today), '', OperationStatusEnum::NoService, null));
         $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today)->modify('+3 days'), '港別テスト丸', null, (clone $today)->modify('+3 days')->setTime(5, 50)));
+        if ($tomorrowStatus !== null) {
+            $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today)->modify('+1 day'), '港別テスト丸', $tomorrowStatus, (clone $today)->modify('+1 day')->setTime(5, 50)));
+        }
 
         $em->persist($other);
         $this->persistCompany($operator);

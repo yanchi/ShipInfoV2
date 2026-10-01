@@ -137,7 +137,7 @@
 
 ### Tests for User Story 2
 
-- [ ] T023 [P] [US2] `app/tests/Service/PortAlertSummaryBuilderTest.php` を作る
+- [X] T023 [P] [US2] `app/tests/Service/PortAlertSummaryBuilderTest.php` を作る
   - Cancelled・Delayed・Suspended の行が `alerts` に入る。Operating・Scheduled・NoInfo・NoService は入らない
   - 並び順が日付 → 方向（下り → 上り）→ 寄港順
   - 絞り込み中は、条件に合うものが `alerts`、合わないものの件数が `hiddenCount`
@@ -146,17 +146,17 @@
 
 ### Implementation for User Story 2
 
-- [ ] T024 [P] [US2] `app/src/View/PortAlert.php` と `app/src/View/PortAlertSummary.php` を作る（data-model.md）。`PortAlert::anchor()` は T011 の行の `id` と同じ形式
-- [ ] T025 [US2] `app/src/Service/PortAlertSummaryBuilder.php` を作る。`build(PortBoard $fullBoard, PortFilter $filter): PortAlertSummary`。全港のボードを走査して `isAlert()` のエントリーを集め、`$filter->matches()` で `alerts` と `hiddenCount` に分ける（research R4）
-- [ ] T026 [US2] `app/templates/status/_alert_summary.html.twig` を新しく作る。引数は `summary` と `linkPrefix`（港別ページでは空文字、トップでは `/ports?port=all`）
+- [X] T024 [P] [US2] `app/src/View/PortAlert.php` と `app/src/View/PortAlertSummary.php` を作る（data-model.md）。`PortAlert::anchor()` は T011 の行の `id` と同じ形式
+- [X] T025 [US2] `app/src/Service/PortAlertSummaryBuilder.php` を作る。`build(PortBoard $fullBoard, PortFilter $filter): PortAlertSummary`。全港のボードを走査して `isAlert()` のエントリーを集め、`$filter->matches()` で `alerts` と `hiddenCount` に分ける（research R4）
+- [X] T026 [US2] `app/templates/status/_alert_summary.html.twig` を新しく作る。引数は `summary` と `linkPrefix`（港別ページでは空文字、トップでは `/ports?port=all`）
   - `alerts` があれば、各項目を「{n/j（曜）} {港}発→{到着港} {バッジ} {会社}」の1行のリンク（`href="{{ linkPrefix }}#{{ alert.anchor }}"`）にする
   - 4件以上なら最初の3件を出し、残りは `<details><summary>ほか N 件</summary>…</details>` にする（research R16）
   - `alerts` が空で `hasData` が true → 「表示期間内に欠航・条件付の便はありません」
   - `hasData` が false → 何も出さない（FR-011）
   - `hiddenCount > 0` → 「他の港にも欠航・条件付などがあります（N件）」と `/ports?port=all` へのリンク
-- [ ] T027 [US2] `StatusController::ports()` で `PortAlertSummaryBuilder` を呼び、`summary` をテンプレートに渡す。`ports.html.twig` の絞り込みフォームの下に `_alert_summary` を `include` する（`linkPrefix: ''`）
-- [ ] T028 [US2] 異常の行を目立たせる（FR-014、contracts/ui-status.md「異常の行」）。`_port_entry.html.twig` で `entry.isAlert()` のとき、行に `port-entry--alert` と status ごとのクラス（`--cancelled` / `--delayed` / `--suspended`）を付け、ステータスを太字にする。`base.html.twig` の `<style>` に、左の太い線（4px）と薄い背景（`--bs-danger-bg-subtle` など）を定義する
-- [ ] T029 [US2] `app/tests/Controller/StatusControllerTest.php` に機能テストを足す：明日の1行を `cancelled` にして `/ports` → 要約にその港名と `href="#r-…"` のリンク、行に `port-entry--alert`。その港以外に絞り込む → 「他の港にも」と件数。異常なし → 「表示期間内に欠航・条件付の便はありません」
+- [X] T027 [US2] `StatusController::ports()` で `PortAlertSummaryBuilder` を呼び、`summary` をテンプレートに渡す。`ports.html.twig` の絞り込みフォームの下に `_alert_summary` を `include` する（`linkPrefix: ''`）
+- [X] T028 [US2] 異常の行を目立たせる（FR-014、contracts/ui-status.md「異常の行」）。`_port_entry.html.twig` で `entry.isAlert()` のとき、行に `port-entry--alert` と status ごとのクラス（`--cancelled` / `--delayed` / `--suspended`）を付け、ステータスを太字にする。`base.html.twig` の `<style>` に、左の太い線（4px）と薄い背景（`--bs-danger-bg-subtle` など）を定義する
+- [X] T029 [US2] `app/tests/Controller/StatusControllerTest.php` に機能テストを足す：明日の1行を `cancelled` にして `/ports` → 要約にその港名と `href="#r-…"` のリンク、行に `port-entry--alert`。その港以外に絞り込む → 「他の港にも」と件数。異常なし → 「表示期間内に欠航・条件付の便はありません」
 
 **Checkpoint**: US2 の Independent Test が通る。`make test-php` が全部通る → コミット
 

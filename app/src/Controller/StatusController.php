@@ -6,6 +6,7 @@ use App\Repository\DepartureStatusRepository;
 use App\Repository\FerryCompanyRepository;
 use App\Repository\OperationStatusRepository;
 use App\Repository\RouteStopRepository;
+use App\Service\PortAlertSummaryBuilder;
 use App\Service\PortBoardBuilder;
 use App\Service\PortFilterResolver;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -53,6 +54,7 @@ class StatusController extends AbstractController
         DepartureStatusRepository $departureStatusRepository,
         PortBoardBuilder $portBoardBuilder,
         PortFilterResolver $portFilterResolver,
+        PortAlertSummaryBuilder $portAlertSummaryBuilder,
     ): Response {
         $boardStops = $routeStopRepository->findBoardStops();
         $resolution = $portFilterResolver->resolve($request, $boardStops);
@@ -72,6 +74,7 @@ class StatusController extends AbstractController
                 'board'       => $fullBoard->filter($resolution->filter),
                 'fullBoard'   => $fullBoard,
                 'filter'      => $resolution->filter,
+                'summary'     => $portAlertSummaryBuilder->build($fullBoard, $resolution->filter),
                 'portOptions' => $portFilterResolver->departurePorts($boardStops),
                 'today'       => $today,
                 'now'         => new \DateTimeImmutable(),

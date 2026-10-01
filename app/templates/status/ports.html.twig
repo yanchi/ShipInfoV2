@@ -43,6 +43,8 @@
         </div>
     {% endif %}
 
+    {{ include('status/_alert_summary.html.twig', {summary: summary, linkPrefix: ''}) }}
+
     {% if fullBoard.isEmpty %}
         <div class="alert alert-secondary">港別の情報がありません。</div>
     {% else %}

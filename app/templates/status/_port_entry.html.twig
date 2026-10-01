@@ -7,9 +7,10 @@
       now:             現在時刻（出港済みの判定）
       commonCheckedAt: 方向の見出しに出している確認時刻（null 可）
 #}
-<div class="port-entry mt-1">
+{%- set alertClass = entry.isAlert ? ' port-entry--alert port-entry--' ~ entry.status.value : '' -%}
+<div class="port-entry mt-1{{ alertClass }}">
     <div class="d-flex flex-wrap align-items-center gap-2">
-        {{ include('status/_status_badge.html.twig', {state: entry.state.value == 'status' ? null : entry.state, status: entry.status}) }}
+        <span class="{{ entry.isAlert ? 'fw-bold' }}">{{ include('status/_status_badge.html.twig', {state: entry.state.value == 'status' ? null : entry.state, status: entry.status}) }}</span>
         {% if entry.shipName or entry.companyName %}
             <span>{{ entry.shipName ? entry.shipName ~ '／' : '' }}{{ entry.companyName }}</span>
         {% endif %}
