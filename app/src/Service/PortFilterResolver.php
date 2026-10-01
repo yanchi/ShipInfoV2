@@ -10,19 +10,26 @@ use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * クエリ（port・dir・save・clear）と Cookie（port_filter）から絞り込み条件を作る
+ * クエリ（port・dir）・フォーム（POST /ports/filter）・Cookie（port_filter）から絞り込み条件を作る
  * （specs/5-ui-readability/contracts/http-routes.md）。
  *
  * - 表示はクエリ優先。クエリが無ければ Cookie
- * - Cookie を書くのは save=1、消すのは clear=1 と Cookie の値が不正なときだけ
+ * - Cookie を書くのはフォームの「保存」、消すのはフォームの「保存を解除」と Cookie の値が不正なときだけ。
+ *   保存・解除は POST で受け、CSRF トークンが正しいときだけ行う（リンクや他サイトから書き換えられないように）
  */
 class PortFilterResolver
 {
     public const COOKIE_NAME = 'port_filter';
 
+    public const ACTION_SHOW  = 'show';
+    public const ACTION_SAVE  = 'save';
+    public const ACTION_CLEAR = 'clear';
+
     private const PATH = '/ports';
 
     /**
+     * GET /ports。Cookie は読むだけで、書くのは不正な値を消すときだけ。
+     *
      * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
      */
     public function resolve(Request $request, array $boardStops): PortFilterResolution
@@ -31,10 +38,6 @@ class PortFilterResolver
         [$saved, $cookieInvalid] = $this->readCookie($request, $validPortIds);
         $clearCookie = $cookieInvalid ? $this->clearCookie() : null;
 
-        if ($request->query->get('clear') === '1') {
-            return new PortFilterResolution(PortFilter::none(), self::PATH, $this->clearCookie());
-        }
-
         if (!$request->query->has('port') && !$request->query->has('dir')) {
             return new PortFilterResolution($saved ?? PortFilter::none(), null, $clearCookie);
         }
@@ -42,13 +45,36 @@ class PortFilterResolver
         $port = $this->parsePort((string) $request->query->get('port', ''), $validPortIds);
         $dir  = $this->parseDirection((string) $request->query->get('dir', ''));
 
-        if ($request->query->get('save') !== '1') {
-            return new PortFilterResolution(new PortFilter($port['value'], $dir['value'], $saved !== null), null, $clearCookie);
+        return new PortFilterResolution(new PortFilter($port['value'], $dir['value'], $saved !== null), null, $clearCookie);
+    }
+
+    /**
+     * POST /ports/filter（絞り込みフォーム）。どの操作も GET /ports へリダイレクトする（PRG）。
+     *
+     * - show:  条件の URL へ。Cookie は変えない
+     * - save:  値が正しくトークンも正しければ Cookie を書く。それ以外は書かずに条件の URL へ
+     * - clear: トークンが正しければ Cookie を消す
+     *
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     * @param bool $tokenValid CSRF トークンが正しいか（Controller で確かめる）
+     */
+    public function submit(Request $request, array $boardStops, bool $tokenValid): PortFilterResolution
+    {
+        $validPortIds = $this->validPortIds($boardStops);
+        [, $cookieInvalid] = $this->readCookie($request, $validPortIds);
+        $clearCookie = $cookieInvalid ? $this->clearCookie() : null;
+        $action      = (string) $request->request->get('action', self::ACTION_SHOW);
+
+        if ($action === self::ACTION_CLEAR) {
+            return new PortFilterResolution(PortFilter::none(), self::PATH, $tokenValid ? $this->clearCookie() : $clearCookie);
         }
 
+        $port   = $this->parsePort((string) $request->request->get('port', ''), $validPortIds);
+        $dir    = $this->parseDirection((string) $request->request->get('dir', ''));
         $filter = new PortFilter($port['value'], $dir['value']);
-        if (!$port['valid'] || !$dir['valid']) {
-            // 不正な値は保存しない（もとの Cookie は残す）。正しい値だけを残して表示する
+
+        if ($action !== self::ACTION_SAVE || !$tokenValid || !$port['valid'] || !$dir['valid']) {
+            // 表示だけ、またはトークン・値が不正なら保存しない（もとの Cookie は残す）
             return new PortFilterResolution($filter, $this->url($filter), $clearCookie);
         }
         if (!$filter->isActive()) {
@@ -151,7 +177,7 @@ class PortFilterResolver
     }
 
     /**
-     * save を除いた URL。条件が空なら、Cookie の条件で表示されないよう port=all を付ける。
+     * 表示する GET の URL。条件が空なら、Cookie の条件で表示されないよう port=all を付ける。
      */
     private function url(PortFilter $filter): string
     {

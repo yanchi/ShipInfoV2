@@ -16,37 +16,34 @@
         </nav>
     {% endif %}
 
-    <form method="get" action="{{ path('app_status_ports') }}" class="port-filter mb-2">
+    <form method="post" action="{{ path('app_status_ports_filter') }}" class="port-filter mb-2">
+        <input type="hidden" name="_token" value="{{ csrf_token('port_filter') }}">
         <select name="port" class="form-select form-select-sm" aria-label="出発港">
             <option value="all">全港</option>
             {% for port in portOptions %}
-                <option value="{{ port.id }}"{{ filter.portId == port.id ? ' selected' }}>{{ port.name }}</option>
+                <option value="{{ port.id }}"{{ portFilter.portId == port.id ? ' selected' }}>{{ port.name }}</option>
             {% endfor %}
         </select>
         <select name="dir" class="form-select form-select-sm" aria-label="方向">
             <option value="">両方向</option>
-            <option value="down"{{ filter.direction and filter.direction.value == 'down' ? ' selected' }}>下り</option>
-            <option value="up"{{ filter.direction and filter.direction.value == 'up' ? ' selected' }}>上り</option>
+            <option value="down"{{ portFilter.direction and portFilter.direction.value == 'down' ? ' selected' }}>下り</option>
+            <option value="up"{{ portFilter.direction and portFilter.direction.value == 'up' ? ' selected' }}>上り</option>
         </select>
-        <button type="submit" class="btn btn-sm btn-primary">表示</button>
-        <button type="submit" name="save" value="1" class="btn btn-sm btn-outline-primary">この港を保存</button>
+        <button type="submit" name="action" value="show" class="btn btn-sm btn-primary">表示</button>
+        <button type="submit" name="action" value="save" class="btn btn-sm btn-outline-primary">この港を保存</button>
     </form>
 
-    {% if filter.isActive or filter.hasSaved %}
-        <div class="filter-status small mb-3">
-            {% if filter.isActive %}
-                {%- set labels = [] -%}
-                {%- for port in portOptions|filter(p => p.id == filter.portId) -%}
-                    {%- set labels = labels|merge([port.name ~ '発']) -%}
-                {%- endfor -%}
-                {%- if filter.direction -%}
-                    {%- set labels = labels|merge([filter.direction.value == 'down' ? '下り' : '上り']) -%}
-                {%- endif -%}
-                <span class="me-2">{{ labels|join('・') }}のみ表示中</span>
-                <a href="{{ path('app_status_ports', {port: 'all'}) }}" class="me-2">全港に戻す</a>
+    {% if portFilter.isActive or portFilter.hasSaved %}
+        <div class="filter-status d-flex flex-wrap align-items-center column-gap-2 small mb-3">
+            {% if portFilter.isActive %}
+                <span>{{ portFilter.label(portOptions) }}のみ表示中</span>
+                <a href="{{ path('app_status_ports', {port: 'all'}) }}">全港に戻す</a>
             {% endif %}
-            {% if filter.hasSaved %}
-                <a href="{{ path('app_status_ports', {clear: 1}) }}" class="text-secondary">保存を解除</a>
+            {% if portFilter.hasSaved %}
+                <form method="post" action="{{ path('app_status_ports_filter') }}" class="d-inline">
+                    <input type="hidden" name="_token" value="{{ csrf_token('port_filter') }}">
+                    <button type="submit" name="action" value="clear" class="btn btn-link btn-sm p-0 align-baseline text-secondary">保存を解除</button>
+                </form>
             {% endif %}
         </div>
     {% endif %}

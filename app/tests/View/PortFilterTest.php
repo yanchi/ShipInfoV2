@@ -50,9 +50,19 @@ class PortFilterTest extends TestCase
         $this->assertSame(['port' => 5, 'dir' => 'down'], $filter->toQuery());
     }
 
-    private function port(int $id): Port
+    public function testLabel(): void
     {
-        $port = new Port();
+        $ports = [$this->port(3, '名瀬'), $this->port(5, '和泊')];
+
+        $this->assertNull(PortFilter::none()->label($ports));
+        $this->assertSame('和泊発', (new PortFilter(5))->label($ports));
+        $this->assertSame('下り', (new PortFilter(direction: RouteDirectionEnum::Down))->label($ports));
+        $this->assertSame('和泊発・上り', (new PortFilter(5, RouteDirectionEnum::Up))->label($ports));
+    }
+
+    private function port(int $id, string $name = ''): Port
+    {
+        $port = (new Port())->setName($name);
         (new \ReflectionProperty($port, 'id'))->setValue($port, $id);
 
         return $port;

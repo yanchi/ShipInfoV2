@@ -12,11 +12,11 @@
 {%- if state is not null and state.value == 'scheduled' -%}
     <span class="badge badge-scheduled">○ 運航予定</span>
 {%- elseif state is not null and state.value == 'no_info' -%}
-    <span class="badge bg-secondary-subtle text-dark">？ 情報なし</span>
+    <span class="badge badge-muted">？ 情報なし</span>
 {%- elseif (state is not null and state.value == 'no_service') or (status is not null and status.value == 'no_service') -%}
     <span class="status-none text-secondary">— 便なし</span>
 {%- elseif status is null -%}
-    <span class="badge bg-secondary-subtle text-dark">？ 情報なし</span>
+    <span class="badge badge-muted">？ 情報なし</span>
 {%- elseif status.value == 'operating' -%}
     <span class="badge bg-success">✓ 通常運航</span>
 {%- elseif status.value == 'delayed' -%}
@@ -26,7 +26,7 @@
 {%- elseif status.value == 'suspended' -%}
     <span class="badge bg-secondary">■ 運休</span>
 {%- elseif status.value == 'unknown' -%}
-    <span class="badge bg-secondary-subtle text-dark">？ 不明</span>
+    <span class="badge badge-muted">？ 不明</span>
 {%- else -%}
-    <span class="badge bg-secondary-subtle text-dark">？ 情報なし</span>
+    <span class="badge badge-muted">？ 情報なし</span>
 {%- endif -%}

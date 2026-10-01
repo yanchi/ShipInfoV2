@@ -18,6 +18,9 @@ use Symfony\Component\DomCrawler\Crawler;
 
 class StatusControllerTest extends WebTestCase
 {
+    /** ブラウザが同じサイトのフォームから送るときに付けるヘッダー（stateless の CSRF トークンの確認に使われる） */
+    private const SAME_ORIGIN = ['HTTP_SEC_FETCH_SITE' => 'same-origin'];
+
     private KernelBrowser $client;
 
     /** @var int[] テスト内で作成した会社ID（tearDown で関連データごと削除する） */
@@ -254,6 +257,9 @@ class StatusControllerTest extends WebTestCase
         $details = $this->findPortRow($crawler, 0, '名瀬')->filter('details');
         $this->assertCount(1, $details);
         $this->assertSame(mb_substr($long, 0, 60) . '…', trim($details->filter('summary')->text()));
+        // 開いたときに先頭60文字が2回出ない
+        $this->assertSame(1, mb_substr_count($details->text(), mb_substr($long, 0, 60)));
+        $this->assertStringContainsString(mb_substr($long, 60), $details->text());
         $later = $this->findPortRow($crawler, 3, '名瀬');
         $this->assertCount(0, $later->filter('details'));
         $this->assertStringContainsString('└ ' . $short, $later->text());
@@ -308,18 +314,21 @@ class StatusControllerTest extends WebTestCase
         $this->assertCount(4, $crawler->filter('section[id^="d-"]'));
         $this->assertStringContainsString('名瀬発・下りのみ表示中', $crawler->filter('.filter-status')->text());
         $this->assertCount(1, $crawler->filter('a[href="/ports?port=all"]'));
-        $this->assertCount(0, $crawler->filter('a[href="/ports?clear=1"]'));
+        $this->assertCount(0, $crawler->selectButton('保存を解除'));
         $this->assertSame([], $this->client->getResponse()->headers->getCookies());
     }
 
+    /** フォームの「この港を保存」→ POST /ports/filter → Cookie を書いて GET にリダイレクト（PRG） */
     public function testPortsSaveWritesCookieAndRedirects(): void
     {
         $this->createPortBoardData();
         $naze = $this->portId('名瀬');
 
-        $this->client->request('GET', "/ports?port={$naze}&dir=down&save=1");
+        $crawler = $this->client->request('GET', '/ports');
+        $form    = $crawler->selectButton('この港を保存')->form(['port' => (string) $naze, 'dir' => 'down']);
+        $this->client->submit($form, [], self::SAME_ORIGIN);
 
-        $this->assertResponseStatusCodeSame(302);
+        $this->assertResponseStatusCodeSame(303);
         $response = $this->client->getResponse();
         $this->assertSame("/ports?port={$naze}&dir=down", $response->headers->get('Location'));
         $cookies = $response->headers->getCookies();
@@ -330,7 +339,48 @@ class StatusControllerTest extends WebTestCase
         // 次に /ports を開くと保存した条件
         $crawler = $this->client->request('GET', '/ports');
         $this->assertCount(4, $crawler->filter('li.port-row'));
-        $this->assertCount(1, $crawler->filter('a[href="/ports?clear=1"]'));
+        $this->assertCount(1, $crawler->selectButton('保存を解除'));
+    }
+
+    /** 「表示」は保存せず、条件の URL にリダイレクトするだけ */
+    public function testPortsShowRedirectsWithoutSaving(): void
+    {
+        $this->createPortBoardData();
+        $naze = $this->portId('名瀬');
+
+        $crawler = $this->client->request('GET', '/ports');
+        $this->client->submit($crawler->selectButton('表示')->form(['port' => (string) $naze, 'dir' => 'down']), [], self::SAME_ORIGIN);
+
+        $this->assertResponseStatusCodeSame(303);
+        $this->assertSame("/ports?port={$naze}&dir=down", $this->client->getResponse()->headers->get('Location'));
+        $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+    }
+
+    /** 他のサイトからの POST やトークンの無い POST では保存しない（CSRF） */
+    public function testPortsSaveFromOtherSiteIsIgnored(): void
+    {
+        $this->createPortBoardData();
+        $naze = $this->portId('名瀬');
+
+        $crawler = $this->client->request('GET', '/ports');
+        $form    = $crawler->selectButton('この港を保存')->form(['port' => (string) $naze, 'dir' => 'down']);
+        $this->client->submit($form, [], ['HTTP_SEC_FETCH_SITE' => 'cross-site']);
+        $this->assertResponseStatusCodeSame(303);
+        $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+
+        $this->client->request('POST', '/ports/filter', ['action' => 'save', 'port' => (string) $naze, 'dir' => 'down'], [], self::SAME_ORIGIN);
+        $this->assertResponseStatusCodeSame(303);
+        $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+    }
+
+    /** GET の save=1・clear=1 では Cookie を変えない（リンクで書き換えられないように） */
+    public function testPortsGetSaveAndClearAreIgnored(): void
+    {
+        foreach (['/ports?port=' . $this->portId('名瀬') . '&save=1', '/ports?clear=1'] as $url) {
+            $this->client->request('GET', $url);
+            $this->assertResponseIsSuccessful($url);
+            $this->assertSame([], $this->client->getResponse()->headers->getCookies(), $url);
+        }
     }
 
     public function testPortsAllKeepsSavedCookie(): void
@@ -343,14 +393,18 @@ class StatusControllerTest extends WebTestCase
         $this->assertResponseIsSuccessful();
         $this->assertGreaterThan(4, $crawler->filter('li.port-row')->count());
         $this->assertSame([], $this->client->getResponse()->headers->getCookies());
-        $this->assertCount(1, $crawler->filter('a[href="/ports?clear=1"]'));
+        $this->assertCount(1, $crawler->selectButton('保存を解除'));
     }
 
     public function testPortsClearRemovesCookie(): void
     {
-        $this->client->request('GET', '/ports?clear=1');
+        $this->createPortBoardData();
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('名瀬')));
 
-        $this->assertResponseStatusCodeSame(302);
+        $crawler = $this->client->request('GET', '/ports');
+        $this->client->submit($crawler->selectButton('保存を解除')->form(), [], self::SAME_ORIGIN);
+
+        $this->assertResponseStatusCodeSame(303);
         $this->assertSame('/ports', $this->client->getResponse()->headers->get('Location'));
         $cookies = $this->client->getResponse()->headers->getCookies();
         $this->assertCount(1, $cookies);
@@ -401,7 +455,7 @@ class StatusControllerTest extends WebTestCase
         $crawler = $this->client->request('GET', '/ports?port=' . $this->portId('鹿児島') . '&dir=down');
 
         $this->assertResponseIsSuccessful();
-        $this->assertMatchesRegularExpression('/他の港にも欠航・条件付などがあります（[1-9]\d*件）/u', $crawler->filter('.alert-summary')->text());
+        $this->assertMatchesRegularExpression('/絞り込みの外にも欠航・条件付などがあります（[1-9]\d*件）/u', $crawler->filter('.alert-summary')->text());
     }
 
     public function testPortsAlertSummaryWithoutAlerts(): void

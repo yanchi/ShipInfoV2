@@ -35,6 +35,27 @@ final readonly class PortFilter
     }
 
     /**
+     * 「和泊発・下り」のような絞り込み中の表示。絞り込んでいなければ null。
+     *
+     * @param list<Port> $ports 港 ID から港名を引くための一覧
+     */
+    public function label(array $ports): ?string
+    {
+        $parts = [];
+        foreach ($ports as $port) {
+            if ($port->getId() === $this->portId) {
+                $parts[] = $port->getName() . '発';
+                break;
+            }
+        }
+        if ($this->direction !== null) {
+            $parts[] = $this->direction === RouteDirectionEnum::Down ? '下り' : '上り';
+        }
+
+        return $parts !== [] ? implode('・', $parts) : null;
+    }
+
+    /**
      * URL・Cookie 用。null のキーは出さない。
      *
      * @return array{port?: int, dir?: string}

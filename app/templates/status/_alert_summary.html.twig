@@ -3,7 +3,7 @@
 
     引数:
       summary:    App\View\PortAlertSummary
-      linkPrefix: 行へのリンクの前に付ける URL（港別ページは ''、トップは '/ports?port=all'）
+      linkPrefix: 行へのリンクの前に付ける URL（港別ページは ''、トップは path('app_status_ports', {port: 'all'})）
 #}
 {%- macro item(alert, linkPrefix) -%}
     <a href="{{ linkPrefix }}#{{ alert.anchor }}" class="alert-item d-flex align-items-center gap-1 text-reset text-decoration-none py-1">
@@ -33,7 +33,7 @@
     {% endif %}
     {% if summary.hiddenCount > 0 %}
         <div class="small mt-1">
-            他の港にも欠航・条件付などがあります（{{ summary.hiddenCount }}件）
+            絞り込みの外にも欠航・条件付などがあります（{{ summary.hiddenCount }}件）
             <a href="{{ path('app_status_ports', {port: 'all'}) }}">全港を見る</a>
         </div>
     {% endif %}

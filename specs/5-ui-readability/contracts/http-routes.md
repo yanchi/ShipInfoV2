@@ -1,6 +1,6 @@
 # HTTP Routes: 運航情報画面の見やすさ改善
 
-ルートの追加・削除は無い。`/ports` にクエリパラメータが増え、3ページとも Cookie を読む。
+`POST /ports/filter`（絞り込みフォームの送信先）を追加する。`/ports` にクエリパラメータが増え、3ページとも Cookie を読む。
 
 ## GET /ports
 
@@ -8,10 +8,8 @@
 |---|---|---|
 | `port` | 港 ID / `all` | 出発港。`all` は全港 |
 | `dir` | `down` / `up` | 方向。省略で両方向 |
-| `save` | `1` | 絞り込みフォームの「この港を保存」。Cookie を書いてリダイレクト |
-| `clear` | `1` | 「保存を解除」。Cookie を消してリダイレクト |
 
-**Cookie を書くのは `save=1`、消すのは `clear=1` と値が不正なときだけ。** リンクや共有URLで渡した `port` / `dir` は表示だけを変える。
+**GET では Cookie を書かない**（消すのは Cookie の値が不正なときだけ）。リンクや共有URLで渡した `port` / `dir` は表示だけを変える。以前の `save=1`・`clear=1` は受け付けない（無視する）。
 
 | リクエスト | 表示 | Cookie |
 |---|---|---|
@@ -19,15 +17,37 @@
 | `/ports`（Cookie `port=5&dir=down`） | 港5・下り | 変更なし |
 | `/ports?port=5&dir=down`（Cookie `port=3`） | 港5・下り | 変更なし（港3のまま） |
 | `/ports?port=all`（Cookie `port=5`） | 全港・両方向 | 変更なし（港5のまま） |
-| `/ports?port=5&dir=down&save=1` | — | `port_filter=port=5&dir=down` を書き、`/ports?port=5&dir=down` へ 302 |
-| `/ports?port=999&dir=down&save=1` | — | 書かない（もとの Cookie は残す）。`/ports?dir=down` へ 302 |
-| `/ports?clear=1` | — | `port_filter` を消し、`/ports` へ 302 |
 | `/ports?port=999&dir=down`（存在しない港） | 全港・下り | 変更なし |
+| `/ports?port=5&save=1`・`/ports?clear=1` | `save`・`clear` は無視 | 変更なし |
 | Cookie の値が不正 | 全港・両方向 | `port_filter` を消す |
 
 - 不正な値でも 200 を返す（エラー画面にしない）
 - レスポンスに `Cache-Control: private` と `Vary: Cookie` を付ける
 - 日付へのアンカー：`#d-{Y-m-d}`。行へのアンカー：`#r-{Y-m-d}-{down|up}-{portId}`
+
+## POST /ports/filter
+
+絞り込みフォームの送信先（PR #33 レビュー）。どの操作も `GET /ports` へ **303** でリダイレクトする（PRG）。
+
+| フィールド | 値 | 説明 |
+|---|---|---|
+| `action` | `show` / `save` / `clear` | 「表示」「この港を保存」「保存を解除」のボタン |
+| `port` | 港 ID / `all` | 出発港 |
+| `dir` | `` / `down` / `up` | 方向 |
+| `_token` | CSRF トークン（ID `port_filter`） | `save`・`clear` のときだけ確かめる |
+
+| 送信 | リダイレクト先 | Cookie |
+|---|---|---|
+| `action=show&port=5&dir=down` | `/ports?port=5&dir=down` | 変更なし |
+| `action=show&port=all&dir=` | `/ports?port=all` | 変更なし |
+| `action=save&port=5&dir=down`（トークン正） | `/ports?port=5&dir=down` | `port_filter=port=5&dir=down` を書く |
+| `action=save&port=999&dir=down` | `/ports?dir=down` | 書かない（もとの Cookie は残す） |
+| `action=save&port=all&dir=`（トークン正） | `/ports` | `port_filter` を消す（「全港・両方向」を保存 = 保存を消す） |
+| `action=clear`（トークン正） | `/ports` | `port_filter` を消す |
+| `action=save` / `clear`（トークン不正・他サイトから） | 上と同じ | 変更なし |
+
+- CSRF トークンは Symfony の stateless トークン（`framework.csrf_protection.stateless_token_ids`）。セッションを使わず、`Sec-Fetch-Site`（無ければ `Origin` / `Referer`）が同じサイトかで確かめる。JS は要らない
+- リダイレクトにも `Cache-Control: private` と `Vary: Cookie` を付ける
 
 ## GET /
 

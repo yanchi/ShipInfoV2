@@ -15,6 +15,11 @@
 
 **Decision**: 表示はクエリパラメータ（`/ports?port={portId}&dir={down|up}`）で絞り込み、サーバー側で行を絞る。保存は **Cookie**（`port_filter`）で、**絞り込みフォームで「この港を保存」したときだけ**書く（PR #31 レビュー）。
 
+**更新（PR #33 レビュー）**: 保存・解除は GET（`save=1`・`clear=1`）をやめ、`POST /ports/filter` に CSRF トークンを付けて送る。保存後は GET にリダイレクトする（PRG）。GET のままだと、`/ports?port=3&save=1` のようなリンクを踏むだけで保存が書き換わり、SameSite=Lax でもページ遷移の GET は止められないため。フォームは「表示」も含めて POST 1本にまとめ、「表示」は条件の GET の URL へリダイレクトするだけにした（GET のフォームにトークンを入れると、共有する URL にトークンが載るため）。
+CSRF トークンは `symfony/security-csrf` の stateless トークンを使う。セッション方式だと `/ports` を開くたびにセッションの Cookie を発行することになるため。stateless トークンは `Sec-Fetch-Site`（無ければ `Origin` / `Referer`）で同じサイトからの送信かを確かめ、JS 無しで動く。POST にするだけでは、他サイトのフォームからの POST のレスポンスでも Set-Cookie は効いてしまうので、送信元の確認が要る。
+
+以下の箇条書きのうち `save=1`・`clear=1` の記述は、上の更新で `POST /ports/filter` の `action=save`・`action=clear` に置き換わった。
+
 - `/ports?port=..&dir=..`（リンク・共有URL）：表示だけを変える。Cookie は書き換えない
 - `/ports`（パラメータ無し）：Cookie があればその条件で表示する
 - URL の絞り込みで開いたときも Cookie は**読む**（「保存を解除」を出すか決めるため、data-model の `hasSaved`）。ただし表示には使わず、書き換えもしない（PR #31 再レビュー）
@@ -35,7 +40,8 @@
 - localStorage と JS での絞り込み：トップで保存した港を出すには JS での描画が必要になり、JS 無しの経路も別に要る
 - URL だけ（保存しない）：FR-003（次回も同じ港）を満たせない
 - パラメータ付きの GET のたびに Cookie を書く（最初の案）：上記のとおり保存が意図せず上書きされる
-- 保存を POST にする：フォームを GET と POST の2つに分けることになる。`save=1` の後にリダイレクトすれば、GET でも履歴や共有URLに `save` が残らない
+- 保存を POST にする：最初は「フォームを GET と POST の2つに分けることになる」として見送ったが、PR #33 レビューで採用した（上の「更新」）
+- POST にして `Origin` ヘッダーだけを自前で確かめる：ライブラリは要らないが、Symfony 標準の CSRF トークンのほうが確かめ方（`Sec-Fetch-Site` → `Origin` → `Referer`）が揃っていて、他のフォームにも使い回せる
 
 ## R2. 港の指定に使う値
 

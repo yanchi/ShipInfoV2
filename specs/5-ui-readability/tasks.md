@@ -74,6 +74,8 @@
 
 **Independent Test**: `/ports?port={和泊のID}&dir=down` で各日付に「和泊発→那覇」だけが出る。`save=1` で保存した後、`/ports` を開くと同じ絞り込みになる。`?port=all` では保存が残り、`?clear=1` で消える
 
+> **注**: 保存・解除は PR #33 のレビューで GET（`save=1`・`clear=1`）から `POST /ports/filter`（CSRF トークン・PRG）に変えた。下の T014・T018〜T022 の `save=1`・`clear=1` の記述は「PR1 レビュー対応」の T040a で置き換わっている
+
 ### Tests for User Story 1
 
 - [X] T013 [P] [US1] `app/tests/View/PortFilterTest.php` を作り、`PortFilter` をテストする：`none()` は `isActive()` が false、港だけ・方向だけ・両方で `matches()` が正しい、`toQuery()` が `['port' => 5, 'dir' => 'down']` の形（null のキーは出さない）
@@ -131,7 +133,7 @@
 
 **Goal**: 港別ページの上部に、表示期間内の欠航・条件付・遅延・運休をまとめて出す。異常の行は一覧の中でも目立たせる
 
-**Independent Test**: 明日の名瀬発→那覇を `delayed` にしたデータで `/ports` を開くと、上部の要約に「10/2 名瀬発→那覇 ▲ 条件付・遅延」が出て、押すとその行に移動する。和泊に絞り込むと「他の港にも欠航・条件付などがあります（1件）」が出る
+**Independent Test**: 明日の名瀬発→那覇を `delayed` にしたデータで `/ports` を開くと、上部の要約に「10/2 名瀬発→那覇 ▲ 条件付・遅延」が出て、押すとその行に移動する。和泊に絞り込むと「絞り込みの外にも欠航・条件付などがあります（1件）」が出る
 
 **依存**: US1（`PortFilter`・`fullBoard`）
 
@@ -153,10 +155,10 @@
   - 4件以上なら最初の3件を出し、残りは `<details><summary>ほか N 件</summary>…</details>` にする（research R16）
   - `alerts` が空で `hasData` が true → 「表示期間内に欠航・条件付の便はありません」
   - `hasData` が false → 何も出さない（FR-011）
-  - `hiddenCount > 0` → 「他の港にも欠航・条件付などがあります（N件）」と `/ports?port=all` へのリンク
+  - `hiddenCount > 0` → 「絞り込みの外にも欠航・条件付などがあります（N件）」と `/ports?port=all` へのリンク
 - [X] T027 [US2] `StatusController::ports()` で `PortAlertSummaryBuilder` を呼び、`summary` をテンプレートに渡す。`ports.html.twig` の絞り込みフォームの下に `_alert_summary` を `include` する（`linkPrefix: ''`）
 - [X] T028 [US2] 異常の行を目立たせる（FR-014、contracts/ui-status.md「異常の行」）。`_port_entry.html.twig` で `entry.isAlert()` のとき、行に `port-entry--alert` と status ごとのクラス（`--cancelled` / `--delayed` / `--suspended`）を付け、ステータスを太字にする。`base.html.twig` の `<style>` に、左の太い線（4px）と薄い背景（`--bs-danger-bg-subtle` など）を定義する
-- [X] T029 [US2] `app/tests/Controller/StatusControllerTest.php` に機能テストを足す：明日の1行を `cancelled` にして `/ports` → 要約にその港名と `href="#r-…"` のリンク、行に `port-entry--alert`。その港以外に絞り込む → 「他の港にも」と件数。異常なし → 「表示期間内に欠航・条件付の便はありません」
+- [X] T029 [US2] `app/tests/Controller/StatusControllerTest.php` に機能テストを足す：明日の1行を `cancelled` にして `/ports` → 要約にその港名と `href="#r-…"` のリンク、行に `port-entry--alert`。その港以外に絞り込む → 「絞り込みの外にも」と件数。異常なし → 「表示期間内に欠航・条件付の便はありません」
 
 **Checkpoint**: US2 の Independent Test が通る。`make test-php` が全部通る → コミット
 
@@ -194,6 +196,15 @@
 
 - [X] T039 quickstart.md の「PR1」の手順 1〜14 を全部実際に行う（ただし 13 の共通ヘッダーは PR3 なので無くてよい）
 - [X] T040 `5-ui-readability-ports` を push して PR を作る。説明に spec の US1〜3・FR-024〜026 との対応、ステータスの記号の変更（●→▲、-→■）、トップと会社別のバッジも同じ部品なので変わること、を書く
+
+## PR1 レビュー対応（PR #33）
+
+- [X] T040a (1) 保存・解除を `POST /ports/filter` にする。`symfony/security-csrf` を入れ、stateless の CSRF トークン（ID `port_filter`）で確かめる。どの操作も GET /ports へ 303（PRG）。GET の `save`・`clear` は無視する。`PortFilterResolver::submit()` を追加し、`resolve()` は GET だけを扱う。contracts/http-routes.md・research R1・data-model・plan・quickstart を更新
+- [X] T040b (2) 要約の「他の港にも〜」を「絞り込みの外にも〜」にする（方向だけで絞ったときにも合うように）。spec FR-013 なども合わせる
+- [X] T040c (3) 長い詳細文を開いたとき、本文は61文字目以降だけを出す（先頭60文字が2回出ないように）
+- [X] T040d (4) まだ使っていない `companyId`・`resolveFromCookie()`・`linkPrefix` を PR 本文に書く。`_alert_summary` の説明を `path('app_status_ports', {port: 'all'})` に直す
+- [X] T040e (5) 「〜のみ表示中」のラベルを `PortFilter::label()` に移す。テンプレートの変数名を `portFilter` にする
+- [X] T040f (6) 情報なし・不明のバッジを `.badge-muted`（CSS 変数）にする
 
 ---
 

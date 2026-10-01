@@ -21,6 +21,7 @@
 - `isActive(): bool` … どちらかが指定されていれば true
 - `matches(RouteDirectionEnum $direction, Port $port): bool`
 - `toQuery(): array` … `['port' => .., 'dir' => ..]`（URL・Cookie 用）
+- `label(list<Port> $ports): ?string` … 「和泊発・下り」のような絞り込み中の表示
 - `static none(): self`
 
 **作り方**（`PortFilterResolver`、Service）:
@@ -28,9 +29,11 @@
 2. 無ければ Cookie `port_filter` の値を使う
 3. どちらも無い → `none()`
 
-**保存**（`PortFilterResolver` が Controller に返す指示）:
-- `save=1` → 値が正しければ Cookie を書き、`save` を除いた URL にリダイレクトする。不正なら書かない（もとの Cookie は残す）
-- `clear=1` → Cookie を消し、`/ports` にリダイレクトする
+**保存**（`PortFilterResolver::submit()` が Controller に返す指示。`POST /ports/filter`、PR #33 レビュー）:
+- `action=save` → 値が正しく CSRF トークンも正しければ Cookie を書き、条件の GET の URL にリダイレクトする。どちらかが不正なら書かない（もとの Cookie は残す）
+- `action=clear` → CSRF トークンが正しければ Cookie を消し、`/ports` にリダイレクトする
+- `action=show` → Cookie は変えず、条件の GET の URL にリダイレクトする
+- GET の `save`・`clear` は受け付けない
 
 **検証**: 港 ID が港別ページの出発港（`findBoardStops()` に出る港）に無い、または `dir` が `down` / `up` 以外なら、その値は `null` 扱いにする。Cookie 由来で不正なら Cookie を消す。
 
@@ -119,4 +122,4 @@
 
 | 名前 | 値 | 属性 |
 |---|---|---|
-| `port_filter` | `port={id}&dir={down|up}`（クエリ文字列の形） | 有効期限 1 年、`Path=/`、`SameSite=Lax`、`HttpOnly`（JS から読まない）。書くのは `save=1` のときだけ、消すのは `clear=1` と値が不正なときだけ |
+| `port_filter` | `port={id}&dir={down|up}`（クエリ文字列の形） | 有効期限 1 年、`Path=/`、`SameSite=Lax`、`HttpOnly`（JS から読まない）。書くのはフォームの「保存」（POST・CSRF トークンあり）のときだけ、消すのはフォームの「保存を解除」（同）と値が不正なときだけ |

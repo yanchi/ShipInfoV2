@@ -74,9 +74,37 @@ class PortFilterResolverTest extends TestCase
         $this->assertNull($r->cookie);
     }
 
-    public function testSaveWritesCookieAndRedirects(): void
+    public function testGetIgnoresSaveAndClear(): void
     {
-        $r = $this->resolve(['port' => '5', 'dir' => 'down', 'save' => '1']);
+        $r = $this->resolve(['port' => '5', 'dir' => 'down', 'save' => '1', 'clear' => '1'], 'port=3');
+
+        $this->assertSame(['port' => 5, 'dir' => 'down'], $r->filter->toQuery());
+        $this->assertNull($r->redirectTo);
+        $this->assertNull($r->cookie);
+    }
+
+    // ------------------------------------------------------------------
+    // POST /ports/filter
+
+    public function testSubmitShowRedirectsWithoutChangingCookie(): void
+    {
+        $r = $this->submit(['action' => 'show', 'port' => '5', 'dir' => 'down'], 'port=3');
+
+        $this->assertSame('/ports?port=5&dir=down', $r->redirectTo);
+        $this->assertNull($r->cookie);
+    }
+
+    public function testSubmitShowAllRedirectsToPortAll(): void
+    {
+        $r = $this->submit(['action' => 'show', 'port' => 'all', 'dir' => ''], 'port=3');
+
+        $this->assertSame('/ports?port=all', $r->redirectTo);
+        $this->assertNull($r->cookie);
+    }
+
+    public function testSubmitSaveWritesCookieAndRedirects(): void
+    {
+        $r = $this->submit(['action' => 'save', 'port' => '5', 'dir' => 'down']);
 
         $this->assertSame('/ports?port=5&dir=down', $r->redirectTo);
         $this->assertNotNull($r->cookie);
@@ -89,23 +117,49 @@ class PortFilterResolverTest extends TestCase
         $this->assertGreaterThan(time() + 364 * 86400, $r->cookie->getExpiresTime());
     }
 
-    public function testSaveWithInvalidPortDoesNotWrite(): void
+    public function testSubmitSaveWithInvalidTokenDoesNotWrite(): void
     {
-        $r = $this->resolve(['port' => '999', 'dir' => 'down', 'save' => '1'], 'port=3');
+        $r = $this->submit(['action' => 'save', 'port' => '5', 'dir' => 'down'], 'port=3', tokenValid: false);
+
+        $this->assertSame('/ports?port=5&dir=down', $r->redirectTo);
+        $this->assertNull($r->cookie);
+    }
+
+    public function testSubmitSaveWithInvalidPortDoesNotWrite(): void
+    {
+        $r = $this->submit(['action' => 'save', 'port' => '999', 'dir' => 'down'], 'port=3');
 
         $this->assertSame('/ports?dir=down', $r->redirectTo);
         $this->assertNull($r->cookie);
     }
 
-    public function testClearRemovesCookieAndRedirects(): void
+    public function testSubmitSaveAllClearsCookie(): void
     {
-        $r = $this->resolve(['clear' => '1'], 'port=5');
+        $r = $this->submit(['action' => 'save', 'port' => 'all', 'dir' => ''], 'port=3');
+
+        $this->assertSame('/ports', $r->redirectTo);
+        $this->assertTrue($r->cookie?->isCleared());
+    }
+
+    public function testSubmitClearRemovesCookieAndRedirects(): void
+    {
+        $r = $this->submit(['action' => 'clear'], 'port=5');
 
         $this->assertSame('/ports', $r->redirectTo);
         $this->assertNotNull($r->cookie);
         $this->assertSame('port_filter', $r->cookie->getName());
         $this->assertTrue($r->cookie->isCleared());
     }
+
+    public function testSubmitClearWithInvalidTokenKeepsCookie(): void
+    {
+        $r = $this->submit(['action' => 'clear'], 'port=5', tokenValid: false);
+
+        $this->assertSame('/ports', $r->redirectTo);
+        $this->assertNull($r->cookie);
+    }
+
+    // ------------------------------------------------------------------
 
     public function testInvalidPortInQueryShowsAllPorts(): void
     {
@@ -154,6 +208,14 @@ class PortFilterResolverTest extends TestCase
         $names = array_map(static fn (Port $p) => $p->getName(), $this->resolver->departurePorts($this->boardStops));
 
         $this->assertSame(['鹿児島', '名瀬', '和泊', '那覇'], $names);
+    }
+
+    /** @param array<string, string> $body */
+    private function submit(array $body, ?string $cookie = null, bool $tokenValid = true): PortFilterResolution
+    {
+        $request = new Request([], $body, [], $cookie !== null ? ['port_filter' => $cookie] : []);
+
+        return $this->resolver->submit($request, $this->boardStops, $tokenValid);
     }
 
     /** @param array<string, string> $query */

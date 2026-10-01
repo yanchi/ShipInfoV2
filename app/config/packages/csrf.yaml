@@ -1,0 +1,7 @@
+# CSRF トークン。港別ページの絞り込みの保存・解除（POST /ports/filter）で使う。
+# stateless にして、セッションを使わず Sec-Fetch-Site / Origin で同じサイトからの送信かを確かめる
+# （/ports を開くたびにセッションの Cookie を発行しないため）
+framework:
+    csrf_protection:
+        stateless_token_ids:
+            - port_filter

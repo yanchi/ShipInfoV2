@@ -43,8 +43,9 @@
     {% if entry.detail %}
         {% if entry.detail|length > 60 %}
             <details class="small text-muted mt-1">
+                {#- 開いたら summary の続き（61文字目以降）だけを出して、先頭が2回出ないようにする -#}
                 <summary>{{ entry.detail|slice(0, 60) }}…</summary>
-                {{ entry.detail }}
+                …{{ entry.detail|slice(60) }}
             </details>
         {% else %}
             <div class="small text-muted mt-1">└ {{ entry.detail }}</div>
