@@ -12,6 +12,17 @@
 Bootstrap 5 の `row-cols-*` ユーティリティのみで実装する。カスタムCSS・新規ファイル・
 DB変更・Controller変更はいずれも不要で、**変更するのは Twig 1ファイルとテスト1ファイルのみ**。
 
+> **訂正（PR #16 レビュー）**: グリッド化そのものは上記のとおり Twig だけで完結した。ただし実装中に見つかった既存不具合を同じ PR で直したので、
+> 実際の変更範囲は次のとおり広い（詳細は [tasks.md](tasks.md) の「実装中に判明した事項」と [data-model.md](data-model.md) を参照）。
+>
+> - `app/src/Repository/OperationStatusRepository.php`: INNER JOIN → LEFT JOIN（航路0件の会社が消える問題）
+> - `app/src/Entity/OperationStatus.php`: `#[ORM\HasLifecycleCallbacks]` の追加（PrePersist が呼ばれない問題）
+> - `app/src/DataFixtures/AppFixtures.php`: 空のスタブを、実データを投入する実装に置き換え
+> - `docker/mysql/init/02_seed.sql`: `created_at` / `updated_at` の明示指定（seed が失敗する問題）
+> - `app/tests/Repository/OperationStatusRepositoryTest.php`: 回帰テストを追加
+>
+> DB スキーマ・マイグレーション・Controller・スクレイパーは変更していない。
+
 ---
 
 ## Technical Context
@@ -77,12 +88,15 @@ app/
 │       └── index.html.twig          # ★変更: グリッドラッパー追加
 └── tests/
     └── Controller/
-        └── StatusControllerTest.php # ★変更: グリッド構造テスト3件追加
+        └── StatusControllerTest.php # ★変更: グリッド構造テスト4件追加
 ```
 
 **Structure Decision**: 既存の Symfony 標準構成（`app/templates/` + `app/tests/`）をそのまま使う。
 本機能はプレゼンテーション層のみの変更のため、`app/src/` 配下・`scraper/` 配下・`app/migrations/` は
 1ファイルも触らない。
+
+> **訂正（PR #16 レビュー）**: グリッド化では `app/src/` を触っていないが、既存不具合の修正で `app/src/`（Repository / Entity / DataFixtures）と
+> `docker/mysql/init/02_seed.sql` を変更した（上記 Summary の訂正を参照）。`scraper/` と `app/migrations/` は変更していない。
 
 ---
 
@@ -147,11 +161,15 @@ Success Criteria と [checklists/requirements.md](checklists/requirements.md) �
 
 既存4テストは変更せず、以下3件を追加する。
 
+> **訂正（PR #16 レビュー）**: 最終的には4件追加した（下表の4行目）。また、テスト用データを作るために `setUp` で client を共有する形にしたので、
+> 既存4テストも `static::createClient()` → `$this->client` に書き換えている（アサーションは変えていない）。
+
 | テストメソッド | アサーション |
 |---|---|
 | `testIndexRendersCompanyGrid` | `.row.row-cols-1.row-cols-md-2.row-cols-lg-3` が存在 |
 | `testCompanyCardsAreGridColumns` | `.row > .col > .card.h-100` が存在 |
 | `testIndexKeepsCardContent` | `.card .card-header` と `.card .list-group` が存在（FR-005 のデグレード検知） |
+| `testIndexShowsNoRouteMessageForCompanyWithoutRoutes` | 航路0件の会社のカードに `航路情報がありません。` が表示される（spec Edge Cases）※レビュー対応で追加 |
 
 > **注意**: テスト DB に会社データが無い場合、カード自体が描画されない。
 > ~~データ有無に依存しない書き方（0件なら `markTestSkipped`）にする。~~

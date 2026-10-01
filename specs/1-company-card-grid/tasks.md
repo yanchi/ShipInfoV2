@@ -18,6 +18,10 @@
 Web application（Symfony MVP）構成。変更対象は `app/templates/` と `app/tests/` のみ。
 `app/src/`・`scraper/`・`app/migrations/` は本機能で一切変更しない。
 
+> **訂正（PR #16 レビュー）**: T001〜T017 のグリッド化タスクは上記の範囲で完結した。ただし末尾の「実装中に判明した事項」の既存不具合を
+> 同じ PR で直したので、PR 全体では `app/src/DataFixtures`・`app/src/Entity`・`app/src/Repository`・`docker/mysql/init` も変更している。
+> `scraper/`・`app/migrations/` は変更していない。
+
 ---
 
 ## Phase 1: Setup（環境準備）
@@ -91,7 +95,7 @@ Web application（Symfony MVP）構成。変更対象は `app/templates/` と `a
 
 ### Tests for User Story 3
 
-- [X] T012 [P] [US3] `app/tests/Controller/StatusControllerTest.php` に `testIndexKeepsCardContent()` を追加する: `GET /` して `.card .card-header` と `.card .list-group` の存在を検証する。会社データが0件の場合は `markTestSkipped` とする（FR-005 のデグレード検知）
+- [X] T012 [P] [US3] `app/tests/Controller/StatusControllerTest.php` に `testIndexKeepsCardContent()` を追加する: `GET /` して `.card .card-header` と `.card .list-group` の存在を検証する。会社データが0件の場合は `markTestSkipped` とする（FR-005 のデグレード検知）。**訂正（PR #16 レビュー）**: skip 方式はやめて、テスト内で会社データを作成・削除する方式に変更した
 - [X] T013 [P] [US3] ブラウザで以下を目視確認する: 会社名リンクをクリックして `/company/{id}` に遷移する / 公式サイトリンクが別タブ（`target="_blank"`）で開く / 運航状況バッジ6種（通常運航・条件付遅延・欠航・運休・便なし・不明）の色とテキストが変更前と同一（FR-005）
 
 ### Edge Case Verification for User Story 3
@@ -104,7 +108,7 @@ Web application（Symfony MVP）構成。変更対象は `app/templates/` と `a
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [X] T015 `make test-php` を実行し、既存4テスト + 新規3テストの全件がパスすることを確認する
+- [X] T015 `make test-php` を実行し、既存4テスト + 新規3テストの全件がパスすることを確認する。**訂正（PR #16 レビュー）**: レビュー対応で `testIndexShowsNoRouteMessageForCompanyWithoutRoutes` を追加したので、StatusControllerTest は既存4 + 新規4 = 8件になった。`make test-php` 全体（Repository テストを含む13件）が skip 0件でパスすることを確認済み
 - [X] T016 `git diff app/templates/status/index.html.twig` を確認し、差分がグリッドラッパー（`row` / `col` / `h-100` / `mb-4`削除）に限定されていることをレビューする。カード内部の分岐ロジックに差分が出ていたら戻す（FR-005）
 - [X] T017 ブラウザで変更前後の縦スクロール量を比較し、削減されていることを確認する（SC-001）。同一行のカード高さが揃っていること（航路数が違ってもカード下端が一直線）も併せて確認する（SC-004）
 
