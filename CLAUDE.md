@@ -92,3 +92,4 @@ ShipInfoV2/
 - `raw_html_hash` で重複スクレイピングを防止
 - phpmyadminは `make up-tools` でのみ起動（デフォルト除外）
 - REST APIはMVP以降のフェーズで検討
+- 時刻はすべて日本時間（PHP・スクレイパー・MySQL とも）。MySQL は `docker-compose.yml` の `--default-time-zone=+09:00`、CI は `.github/workflows/ci.yml` で設定している。本番（RDS など）を作るときもパラメータグループなどで `time_zone = '+09:00'` にすること（忘れると日本時間の 0:00〜9:00 に `CURDATE()` が前日になる）

@@ -33,6 +33,9 @@ services:
   # MySQL 8
   mysql:
     image: mysql:8.0
+    # PHP・スクレイパーと同じ日本時間にする（NOW()・CURDATE()・DEFAULT CURRENT_TIMESTAMP がずれないように）。
+    # 列は DATETIME なので、保存済みの値は変換されない
+    command: --default-time-zone=+09:00
     environment:
       MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD}"
       MYSQL_DATABASE: "${DB_NAME}"

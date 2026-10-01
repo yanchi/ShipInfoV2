@@ -41,6 +41,8 @@ jobs:
           php-version: '8.3'
           extensions: pdo_mysql, intl
           coverage: none
+          # ローカル（docker/php/php.ini）と同じ日本時間にする。setup-php の初期値は UTC
+          ini-values: date.timezone=Asia/Tokyo
 
       # .env は git 管理外だが bootEnv が読むので空で作っておく（値は上の env で渡す）
       - name: Create .env
@@ -50,6 +52,11 @@ jobs:
       - name: Install Composer dependencies
         working-directory: app
         run: composer install --no-interaction --prefer-dist
+
+      # ローカル（docker-compose.yml の --default-time-zone）と同じ日本時間にする。
+      # サービスコンテナは command を変えられないので、ここで設定する（以降の接続から効く）
+      - name: Set MySQL time zone
+        run: mysql -h127.0.0.1 -uroot -ppassword -e "SET GLOBAL time_zone = '+09:00';"
 
       # 最初のマイグレーションは 01_schema.sql のテーブルを ALTER するので、先にスキーマを流す（Makefile の init-test-db と同じ）
       - name: Load base schema
