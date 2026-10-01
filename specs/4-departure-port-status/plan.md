@@ -145,9 +145,10 @@ BaseScraper.run()
   html    = fetch()                    # 各社：必要なページを全部取って self に持たせる
   records = parse(html)                # 航路単位（今までどおり）→ _upsert()
   try:
-    deps  = parse_departures()         # 港別（デフォルトは []）
-    _upsert_departures(deps)           # content_hash / checked_at / 確定・削除のルール
-  except: scraper_logs.error_message に記録（航路単位の結果は保存する）
+    with session.begin_nested():       # SAVEPOINT。失敗してもここだけ戻す
+      deps = parse_departures()        # 港別（デフォルトは []）
+      _upsert_departures(deps)         # content_hash / checked_at / 確定・削除のルール
+  except: scraper_logs.error_message に記録（航路単位の結果と scraper_logs はコミットされる）
 ```
 
 `parse_departures()` が返す dict:

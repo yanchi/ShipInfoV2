@@ -55,21 +55,27 @@
 - [ ] T012 [P] `scraper/scraper/utils/ports.py` に `PortResolver` を作る。`PortResolver.from_session(session)` で ports を読み込んで、`resolve(text) -> Port | None` は別名の長い順にマッチ（「鹿児島新港」を「鹿児島」より先に）、`find_all(text) -> list[Port]` は文中の港を重複なしで出現順に返す。テストは `scraper/tests/test_ports.py`（表記揺れ全部、「鹿児島新港」の優先、未知の港名 → None）
 - [ ] T013 `scraper/scraper/scrapers/base.py` に港別の共通処理を足す
   - `parse_departures(self) -> list[dict]`：デフォルトは `[]`
-  - `_upsert_departures(records) -> tuple[int, int]`：data-model.md の更新ルール1〜5
+  - `_upsert_departures(records) -> tuple[int, int]`：data-model.md の更新ルール1〜5・7
     - `content_hash` は status・status_detail・ship_name・各日時・operated_by_company_id の SHA-256
     - ハッシュが同じなら `checked_at` だけ更新
-    - `freeze_after_departure=True` で既存行の `scheduled_departure_at < now` なら status と status_detail を更新しない
-    - `replace_scope` があれば、同じ (route_id, port_id, departure_date) で今回のレコードに無い ship_name の行を削除
-  - `run()`：`_upsert()` のあとに `parse_departures()` と `_upsert_departures()` を実行する。例外は捕まえて `scraper_log.error_message` に `departures: <msg>` を入れて、航路単位の結果は success のまま保存する
+    - `freeze_after_departure=True` で既存行の `scheduled_departure_at < now` なら status と status_detail を更新しない。**保存する値を先に決めて、その値から `content_hash` を計算する**（受け取った値では計算しない）
+    - `replace_scope` があれば、同じ (route_id, port_id, departure_date) で今回のレコードに無い ship_name の行を削除する。**ただし `scheduled_departure_at < now` の行は削除しない**
+  - `run()`：`_upsert()` のあとに、`with self.session.begin_nested():`（SAVEPOINT）の中で `parse_departures()` と `_upsert_departures()` を実行する。例外は SAVEPOINT の外で捕まえて、`scraper_log.error_message` に `departures: <msg>` を入れる。航路単位の結果は success のまま保存する（Session が失敗状態のまま残って、最後の commit が失敗しないこと）。SQLite のテストで SAVEPOINT が効くように、必要なら `scraper/tests/conftest.py` に pysqlite の SAVEPOINT 対応（SQLAlchemy ドキュメントの `do_begin` イベントのレシピ）を入れる
   - `fetch()` / `parse()` のシグネチャは変えない
 - [ ] T014 `scraper/tests/test_base_departures.py` を作る。T013 のルールを全部テストする
   - 新規 INSERT
   - 同じハッシュなら `checked_at` だけ進む（`scraped_at` は変わらない）
   - ハッシュが違えば両方進む
   - freeze で出港済みの行の status が変わらない
+  - freeze した行は、次の実行で同じデータを受け取ったとき「変更なし」（`checked_at` だけ進む）と判定される（保存値とハッシュが一致している）
   - replace_scope で古い ship_name の行が消える
+  - replace_scope でも、出港済みの行は消えない
+  - `_upsert_departures` で DB エラー（例：一意制約違反）が起きても、航路単位の `operation_statuses` と `scraper_logs`（`error_message` 入り）がコミットされる
   - parse_departures の例外で航路単位が保存されて error_message が入る
-- [ ] T015 [P] バッジを `app/templates/status/_status_badge.html.twig`（引数 `status`：`OperationStatus|null`）に切り出して、`app/templates/status/index.html.twig` と `app/templates/status/company.html.twig` から `include` する。表示される HTML は変えない
+- [ ] T015 [P] バッジを `app/templates/status/_status_badge.html.twig` に切り出して、`app/templates/status/index.html.twig` と `app/templates/status/company.html.twig` から `include` する。表示される HTML は変えない。パーシャルの引数は次の2つ（3画面で共通）
+  - `state`：`DepartureDisplayStateEnum|null`。null のときは `status` だけで判定する（既存2画面の呼び方）
+  - `status`：`OperationStatusEnum|null`。`state` が null で `status` も null → 「情報なし」（既存の挙動）
+  - `state` が `Status` → `status` のバッジ、`Scheduled` → 「運航予定」、`NoInfo` → 「情報なし」、`NoService` → 「便なし」
 - [ ] T016 `make test-php`（`app/tests/`）と `make test-scraper`（`scraper/tests/`）で既存テストが全部通ることを確認する
 
 **Checkpoint**: マイグレーションが適用され、既存テストが全部通る → コミット
@@ -105,7 +111,7 @@
 - [ ] T023 [US1] `app/src/Controller/StatusController.php` に `#[Route('/ports', name: 'app_status_ports')] ports()` を足す。今日（`new \DateTimeImmutable('today')`）から4日分を Builder で組み立てて `status/ports.html.twig` に `board` と `today` を渡す
 - [ ] T024 [US1] `app/templates/status/ports.html.twig` を作る（contracts/http-routes.md の構成）
   - 日付セクション → 方向 → 出発港の行
-  - 各エントリ：バッジ（`_status_badge` を使う。`scheduled` は「運航予定」を緑系以外の中立の見た目で新しく追加）、「船名／会社名」、出港予定時刻と到着予定時刻（日付が違えば「翌H:i着」）、詳細テキスト、「n/j H:i時点」（checked_at）
+  - 各エントリ：バッジ（`_status_badge` に `state` と `status` を渡す。`Scheduled` の「運航予定」は緑系以外の中立の見た目で新しく追加）、「船名／会社名」、出港予定時刻と到着予定時刻（日付が違えば「翌H:i着」）、詳細テキスト、「n/j H:i時点」（checked_at）
   - データが無いときの表示と「← トップへ戻る」
 - [ ] T025 [US1] `app/templates/status/index.html.twig` の見出しの下に「港別に見る →」リンク（`path('app_status_ports')`）を足す。カードの構成は変えない
 - [ ] T026 [US1] `app/tests/Controller/StatusControllerTest.php` に `/ports` のテストを足す
@@ -255,7 +261,7 @@
   - `marix/downstream.html` で、名瀬以降の行の `departure_date` が始発日の翌日になる
   - 12/31 始発・1/1 出港の年またぎ（fixture の日付を書き換えて作る）
   - 一覧から消えた便の行が `departure_statuses` から消されない（FR-013、`_upsert_departures` を通して確認）
-- [ ] T043 [P] [US5] `scraper/tests/test_marue_ferry.py` に確定のテストを足す（US4 シナリオ9）。10/1 05:50 発の行が DB にある状態で、10/1 20:00 に船ステータスが `cancelled` に変わったデータで実行しても、その行の status は `operating` のままで、`checked_at` は更新される
+- [ ] T043 [P] [US5] `scraper/tests/test_marue_ferry.py` に確定のテストを足す（US4 シナリオ9）。10/1 05:50 発の行が DB にある状態で、10/1 20:00 に船ステータスが `cancelled` に変わったデータで実行しても、その行の status は `operating` のままで、`checked_at` は更新される。さらに、出港後の検索でその便が返らなくなっても（結果0件や別の船）、その行は削除されない
 - [ ] T044 [P] [US5] `app/tests/Controller/StatusControllerTest.php` に表示のテストを足す
   - `scheduled_departure_at` が前日始発の便でも、その日の日付セクションに出る
   - `checked_at` が「n/j H:i時点」で出る

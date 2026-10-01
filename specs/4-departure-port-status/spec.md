@@ -2,7 +2,7 @@
 
 **Feature Branch**: `4-departure-port-status`
 **Created**: 2026-10-01
-**Status**: Ready for Planning
+**Status**: Ready for Implementation
 **Input**: User description: "運航情報を出発港ごとに表示したい。到着港は固定：上り＝鹿児島着、下り＝那覇着。（例：下りなら「鹿児島発→那覇」「名瀬発→那覇」「与論発→那覇」…）"
 
 ## 概要

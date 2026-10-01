@@ -109,6 +109,8 @@ UNIQUE (`route_id`, `port_id`), UNIQUE (`route_id`, `stop_order`)
 | created_at / updated_at | DATETIME | NOT NULL | |
 
 UNIQUE (`route_id`, `port_id`, `departure_date`, `ship_name`)
+
+※ 1隻の船が同じ日に同じ港を同じ方向で2回出ることは、この航路の運航形態（1往復に2日以上かかる）では起きないので、便の識別には `ship_name` で十分とする。`scheduled_arrival_at` はフォールバックの行で NULL になるため、キーには含めない
 INDEX (`departure_date`, `port_id`)
 
 **状態の意味**:
@@ -125,9 +127,12 @@ INDEX (`departure_date`, `port_id`)
 1. 同じキーの行が無い → INSERT（`scraped_at` = `checked_at` = 今）
 2. 行があって `content_hash` が同じ → `checked_at` だけ更新する
 3. 行があって `content_hash` が違う → 内容と `scraped_at`・`checked_at` を更新する
-4. **マルエーの出港済みの行**（`scheduled_departure_at` < 今）は、`status` / `status_detail` を更新しない（FR-020）。時刻と `checked_at` は更新する
+4. **マルエーの出港済みの行**（`freeze_after_departure` かつ既存行の `scheduled_departure_at` < 今）は、`status` / `status_detail` を更新しない（FR-020）。時刻と `checked_at` は更新する
+   - **順番**：先に「保存する値」を決める（status・status_detail は既存の値、ほかは受け取った値）→ その保存する値から `content_hash` を計算する → 既存のハッシュと比べて 2 か 3 を適用する。受け取った値でハッシュを計算すると、保存した値とハッシュが合わなくなって、毎回「変更あり」と判定されてしまうため
 5. **マルエーの検索の取り直し**：同じ (route, port, departure_date) で今回の検索結果に無い `ship_name` の行は削除する。検索結果が正なので、船の入れ替えや「※下記参照」から船名への変化で古い行が残らないようにする
+   - **ただし出港済みの行（`scheduled_departure_at` < 今）は削除しない**。出港後の検索で便が返らなくなっても、ルール4で確定した行を残すため（FR-020）
 6. マリックスは、一覧から消えた便の行を消さない（FR-013：最後のステータスを出し続ける）
+7. **トランザクション**：港別の処理（`parse_departures()` と `_upsert_departures()`）は SAVEPOINT（`session.begin_nested()`）の中で行う。失敗したら SAVEPOINT だけロールバックして、航路単位の更新と `scraper_logs` はそのままコミットされるようにする
 
 ---
 
