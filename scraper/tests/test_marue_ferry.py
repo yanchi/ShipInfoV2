@@ -531,3 +531,147 @@ def test_run_writes_route_and_departures(db_session, marue_with_ports):
     rows = db_session.execute(select(DepartureStatus)).scalars().all()
     assert len(rows) == 48
     assert all(r.checked_at == NOW for r in rows)
+
+
+# ---------------------------------------------------------------------------
+# 港別情報の反映（US3 シナリオ1〜3、US4 シナリオ3〜5）
+# ---------------------------------------------------------------------------
+
+DOWN_ARR = "2026年10月2日 19:00"
+UP_ARR = "2026年10月2日 08:30"
+# あけぼの：10/1 鹿児島発の下り（途中港は 10/2）、波之上：10/1 那覇発の上り
+VOYAGE_SEARCHES = {
+    (KAGOSHIMA, NAHA, D1001): search_html([marue("フェリーあけぼの", "2026年10月1日 18:00", DOWN_ARR)]),
+    (NAZE, NAHA, D1002): search_html([marue("フェリーあけぼの", "2026年10月2日 05:50", DOWN_ARR)]),
+    (KAMETOKU, NAHA, D1002): search_html([marue("フェリーあけぼの", "2026年10月2日 09:40", DOWN_ARR)]),
+    (WADOMARI, NAHA, D1002): search_html([marue("フェリーあけぼの", "2026年10月2日 12:00", DOWN_ARR)]),
+    (YORON, NAHA, D1002): search_html([marue("フェリーあけぼの", "2026年10月2日 14:10", DOWN_ARR)]),
+    (MOTOBU, NAHA, D1002): search_html([marue("フェリーあけぼの", "2026年10月2日 17:10", DOWN_ARR)]),
+    (NAHA, KAGOSHIMA, D1001): search_html([marue("フェリー波之上", "2026年10月1日 07:00", UP_ARR)]),
+    (MOTOBU, KAGOSHIMA, D1001): search_html([marue("フェリー波之上", "2026年10月1日 09:20", UP_ARR)]),
+    (YORON, KAGOSHIMA, D1001): search_html([marue("フェリー波之上", "2026年10月1日 12:10", UP_ARR)]),
+    (WADOMARI, KAGOSHIMA, D1001): search_html([marue("フェリー波之上", "2026年10月1日 14:40", UP_ARR)]),
+    (KAMETOKU, KAGOSHIMA, D1001): search_html([marue("フェリー波之上", "2026年10月1日 17:00", UP_ARR)]),
+    (NAZE, KAGOSHIMA, D1001): search_html([marue("フェリー波之上", "2026年10月1日 21:20", UP_ARR)]),
+}
+DOWN_PORTS = [("鹿児島", date(2026, 10, 1)), ("名瀬", date(2026, 10, 2)), ("亀徳", date(2026, 10, 2)),
+              ("和泊", date(2026, 10, 2)), ("与論", date(2026, 10, 2)), ("本部", date(2026, 10, 2))]
+UP_PORTS = ["那覇", "本部", "与論", "和泊", "亀徳", "名瀬"]
+
+
+def run_with_ships(db_session, company, akebono, naminoue=("通常運航", "通常運航致しております。")):
+    mock_search(VOYAGE_SEARCHES)
+    mock_kagoshima(kagoshima_html(akebono=akebono, naminoue=naminoue))
+    with structlog.testing.capture_logs() as logs:
+        _, _, departures = run_scraper(db_session, company.id)
+    return departures, logs
+
+
+def down_statuses(db_session, company, ports, departures):
+    down, _ = routes_of(db_session, company)
+    return {name: find(departures, down, ports[name], d) for name, d in DOWN_PORTS}
+
+
+def up_statuses(db_session, company, ports, departures):
+    _, up = routes_of(db_session, company)
+    return {name: find(departures, up, ports[name], date(2026, 10, 1)) for name in UP_PORTS}
+
+
+@resp_mock.activate
+def test_conditional_ports_only_are_delayed(db_session, marue_with_ports):
+    """条件付の船で和泊・与論の記載 → その方向の和泊・与論だけ delayed、他は operating（US3 シナリオ1・3）。"""
+    company, ports = marue_with_ports
+    departures, _ = run_with_ships(db_session, company, ("条件付運航", "気象荒天のため。条件付寄港地: 和泊港、与論港"))
+
+    rows = down_statuses(db_session, company, ports, departures)
+    assert rows["和泊"]["status"] == OperationStatusEnum.delayed
+    assert rows["与論"]["status"] == OperationStatusEnum.delayed
+    assert "条件付寄港地" in rows["与論"]["status_detail"]
+    for name in ["鹿児島", "名瀬", "亀徳", "本部"]:
+        assert rows[name]["status"] == OperationStatusEnum.operating
+        assert rows[name]["status_detail"] is None
+
+
+@resp_mock.activate
+def test_conditional_without_ports_is_delayed_everywhere(db_session, marue_with_ports):
+    """条件付で港の記載なし → 全港 delayed + port_notice_unmatched（US3 シナリオ2）。"""
+    company, ports = marue_with_ports
+    departures, logs = run_with_ships(db_session, company, ("条件付運航", "気象荒天のため条件付き運航となります。"))
+
+    rows = down_statuses(db_session, company, ports, departures)
+    assert all(r["status"] == OperationStatusEnum.delayed for r in rows.values())
+    assert all(r["status_detail"] == "気象荒天のため条件付き運航となります。" for r in rows.values())
+    unmatched = [log for log in logs if log["event"] == "port_notice_unmatched"]
+    assert len(unmatched) == 1 and unmatched[0]["ship"] == "フェリーあけぼの"
+
+
+@resp_mock.activate
+def test_cancelled_ship_ignores_port_notices(db_session, marue_with_ports):
+    """欠航の船 → 記載があっても全港 cancelled。"""
+    company, ports = marue_with_ports
+    departures, _ = run_with_ships(db_session, company, ("欠航", "台風接近のため欠航。与論港は条件付寄港。"))
+
+    rows = down_statuses(db_session, company, ports, departures)
+    assert all(r["status"] == OperationStatusEnum.cancelled for r in rows.values())
+
+
+@resp_mock.activate
+def test_skip_port_is_cancelled_only_there(db_session, marue_with_ports):
+    """抜港 → その港だけ cancelled、他は船ステータス（US4 シナリオ3）。"""
+    company, ports = marue_with_ports
+    departures, _ = run_with_ships(db_session, company, ("通常運航", "本日、与論港は抜港となります。"))
+
+    rows = down_statuses(db_session, company, ports, departures)
+    assert rows["与論"]["status"] == OperationStatusEnum.cancelled
+    assert "与論港は抜港" in rows["与論"]["status_detail"]
+    for name in ["鹿児島", "名瀬", "亀徳", "和泊", "本部"]:
+        assert rows[name]["status"] == OperationStatusEnum.operating
+
+
+@resp_mock.activate
+def test_port_change_is_delayed_with_destination(db_session, marue_with_ports):
+    """港変更 → delayed、詳細に変更先（US4 シナリオ4）。"""
+    company, ports = marue_with_ports
+    departures, _ = run_with_ships(db_session, company, ("条件付運航", "亀徳港から平土野港へ港変更となります。"))
+
+    rows = down_statuses(db_session, company, ports, departures)
+    assert rows["亀徳"]["status"] == OperationStatusEnum.delayed
+    assert "平土野港" in rows["亀徳"]["status_detail"]
+    assert rows["名瀬"]["status"] == OperationStatusEnum.operating
+
+
+@resp_mock.activate
+def test_other_direction_ship_is_not_mixed(db_session, marue_with_ports):
+    """下りの船の「与論港は抜港」は、上りの与論発には混ざらない（US4 シナリオ5）。"""
+    company, ports = marue_with_ports
+    departures, _ = run_with_ships(db_session, company, ("通常運航", "与論港は抜港となります。"))
+
+    assert down_statuses(db_session, company, ports, departures)["与論"]["status"] == OperationStatusEnum.cancelled
+    up = up_statuses(db_session, company, ports, departures)
+    assert all(r["status"] == OperationStatusEnum.operating for r in up.values())
+    assert up["与論"]["ship_name"] == "フェリー波之上"
+
+
+@resp_mock.activate
+def test_unmatched_conditional_text_keeps_ship_status(db_session, marue_with_ports):
+    """パターンに当てはまらない条件付のテキスト → 船ステータス + port_notice_unmatched。"""
+    company, ports = marue_with_ports
+    text = "与論港への寄港は天候次第で見合わせる場合があります。"
+    departures, logs = run_with_ships(db_session, company, ("条件付運航", text))
+
+    rows = down_statuses(db_session, company, ports, departures)
+    assert all(r["status"] == OperationStatusEnum.delayed for r in rows.values())
+    assert any(log["event"] == "port_notice_unmatched" for log in logs)
+
+
+@resp_mock.activate
+def test_route_level_parse_is_unchanged_by_port_notices(db_session, marue_with_ports):
+    """航路単位の parse は港別情報の影響を受けない（船ステータスのまま）。"""
+    company, _ = marue_with_ports
+    mock_search(VOYAGE_SEARCHES)
+    mock_kagoshima(kagoshima_html(akebono=("通常運航", "与論港は抜港となります。")))
+
+    _, records, _ = run_scraper(db_session, company.id)
+
+    down, _ = routes_of(db_session, company)
+    assert next(r for r in records if r["route_id"] == down.id)["status"] == OperationStatusEnum.operating

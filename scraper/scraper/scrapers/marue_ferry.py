@@ -31,6 +31,10 @@ MarueFerry (マルエーフェリー) scraper.
     - 他社運航 → no_service + operated_by_company_id（マリックスライン）
     - マルエーの船 → 便を (船名, 航路, 下船日時) で特定し、船ごとに「まだ着いていない一番早い便」の行に
       船ステータス（＋港別情報）を入れる。それより後の便は status=None（運航予定）
+    港別情報（FR-006、utils/port_notice.py）:
+    - 船ステータスが欠航・運休・便なし → 全港そのまま
+    - 抜粋と船別詳細ページの本文から、言及された港を 抜港 → cancelled、港変更・条件付 → delayed にする
+    - 船が条件付で港別情報がある → 言及の無い港は operating。港別情報が無い → 全港 delayed（port_notice_unmatched）
     すべて freeze_after_departure=True（出港済みの行は確定）、replace_scope=(route, port, date)
 
 raw_html_hash: 鹿児島航路ページの HTML ＋ 今日の始発港2つの検索結果を正規化した文字列
@@ -55,6 +59,8 @@ from scraper.db.models import (
     RouteStop,
 )
 from scraper.scrapers.base import BaseScraper
+from scraper.utils.port_notice import PortNotice, extract_notice_text, extract_port_notices
+from scraper.utils.ports import PortResolver
 
 SEARCH_URL = "https://www.aline-ferry.com/search/result.php"
 KAGOSHIMA_URL = "https://www.aline-ferry.com/kagoshima/"
@@ -313,6 +319,8 @@ class MarueFerry(BaseScraper):
         ships = getattr(self, "_ships", {})
         marix_id = self._marix_company_id()
         now = datetime.now()
+        self._resolver = PortResolver.from_session(self.session)
+        self._notices: dict[str, list[PortNotice]] = {}
 
         # 船ごとに「まだ着いていない一番早い便」(route_id, arrival_at) を決める（research R9）
         current_voyage: dict[str, tuple[int, datetime]] = {}
@@ -379,12 +387,41 @@ class MarueFerry(BaseScraper):
     def _current_voyage_status(
         self, ship_name: str, ships: dict[str, ShipInfo], route_id: int, port_id: int
     ) -> tuple[OperationStatusEnum, str | None]:
-        """今の便の行のステータス：船ステータス（船ブロックに無ければ unknown）。"""
+        """今の便の行のステータス：船ステータス（船ブロックに無ければ unknown）に港別情報を重ねる（FR-006）。"""
         ship = ships.get(ship_name)
         if ship is None or ship.status is None:
             self._log.warning("ship_not_found", ship=ship_name, route_id=route_id, port_id=port_id)
             return OperationStatusEnum.unknown, None
+
+        if ship.status in (
+            OperationStatusEnum.cancelled,
+            OperationStatusEnum.suspended,
+            OperationStatusEnum.no_service,
+        ):
+            return ship.status, self._ship_detail_text(ship)
+
+        notices = self._ship_notices(ship)
+        notice = next((n for n in notices if n.port_id == port_id), None)
+        if notice is not None:
+            status = OperationStatusEnum.cancelled if notice.kind == "skip" else OperationStatusEnum.delayed
+            detail = notice.sentence
+            if notice.change_to and notice.change_to not in detail:
+                detail += f"（変更先：{notice.change_to}）"
+            return status, detail
+        if ship.status == OperationStatusEnum.delayed and notices:
+            # 条件付の理由は言及された港にあるとみなす
+            return OperationStatusEnum.operating, None
         return ship.status, self._ship_detail_text(ship)
+
+    def _ship_notices(self, ship: ShipInfo) -> list[PortNotice]:
+        """船ごとの港別情報（1回の実行で1度だけ抜き出す）。"""
+        if ship.name not in self._notices:
+            text = extract_notice_text(ship.excerpt, getattr(self, "_ship_details", {}).get(ship.name))
+            notices = extract_port_notices(text, self._resolver)
+            if ship.status == OperationStatusEnum.delayed and not notices:
+                self._log.warning("port_notice_unmatched", ship=ship.name, text=text[:200])
+            self._notices[ship.name] = notices
+        return self._notices[ship.name]
 
     # ------------------------------------------------------------------
     # Helpers

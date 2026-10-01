@@ -224,7 +224,7 @@
 
 ### Tests for User Story 3
 
-- [ ] T038 [P] [US3] `scraper/tests/test_port_notice.py` を作る
+- [X] T038 [P] [US3] `scraper/tests/test_port_notice.py` を作る
   - `marue/ship_detail_normal.html`（定型の注意書きを含む全文）→ 港別情報0件（誤検出が無いこと）
   - 「条件付寄港地: 和泊港、与論港」→ 和泊・与論が条件付
   - 「和泊港・与論港は条件付寄港。」→ 同じ結果
@@ -233,7 +233,7 @@
   - 「港変更がある場合、亀徳港から平土野港になります」→ 0件（仮定の文）
   - 同じ港に条件付と抜港 → 抜港を採用
   - 航路に無い港名だけの文 → 0件
-- [ ] T039 [P] [US3] `scraper/tests/test_marue_ferry.py` に港別情報の反映テストを足す（US3 シナリオ1〜3、US4 シナリオ3〜5）
+- [X] T039 [P] [US3] `scraper/tests/test_marue_ferry.py` に港別情報の反映テストを足す（US3 シナリオ1〜3、US4 シナリオ3〜5）
   - 条件付の船で和泊・与論の記載 → その方向の和泊・与論だけ `delayed`、他は `operating`
   - 条件付で記載なし → 全港 `delayed`
   - 欠航の船 → 記載があっても全港 `cancelled`
@@ -244,10 +244,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T040 [US3] `scraper/scraper/utils/port_notice.py` を作る（research R4）
+- [X] T040 [US3] `scraper/scraper/utils/port_notice.py` を作る（research R4）
   - `extract_notice_text(excerpt, detail_html) -> str`：詳細ページの `div.status-archive` で、`h4` の後から「台風の影響や」を含む段落の手前までの本文と、抜粋をつなげる。区切りが見つからなければ抜粋だけ
   - `extract_port_notices(text, resolver) -> list[PortNotice]`：`PortNotice` は `port_id`、`kind`（`conditional` / `skip` / `change`）、`change_to`、`sentence`。文に分けて、「場合」「ことがあります」「可能性」を含む文は除外する。`抜港` → skip、`港変更`・`寄港地変更`・「〜港から〜港」→ change（後ろの港が変更先）、`条件付` → conditional。1つの港に複数あれば skip > change > conditional
-- [ ] T041 [US3] `scraper/scraper/scrapers/marue_ferry.py` の `parse_departures()` で、今の便の行に港別情報を当てはめる（FR-006）
+- [X] T041 [US3] `scraper/scraper/scrapers/marue_ferry.py` の `parse_departures()` で、今の便の行に港別情報を当てはめる（FR-006）
   - 船ステータスが `cancelled` / `suspended` / `no_service` → そのまま
   - そうでなければ、言及された港を skip → `cancelled`、change / conditional → `delayed`（詳細に元の文と変更先）にする
   - 船ステータスが `delayed` で港別情報が1件以上 → 言及の無い港は `operating`
