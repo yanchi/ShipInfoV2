@@ -5,7 +5,8 @@
 {% block body %}
 <div class="container py-4">
     <h1 class="h4 mb-1">ShipInfo - フェリー運航情報</h1>
-    <p class="text-muted mb-4">{{ today|date('Y年n月j日（') }}{{ ['日','月','火','水','木','金','土'][today|date('w')] }}）の運航状況</p>
+    <p class="text-muted mb-2">{{ today|date('Y年n月j日（') }}{{ ['日','月','火','水','木','金','土'][today|date('w')] }}）の運航状況</p>
+    <p class="mb-4"><a href="{{ path('app_status_ports') }}" class="text-decoration-none">港別に見る →</a></p>
 
     {% if companies is empty %}
         <div class="alert alert-secondary">現在情報がありません。</div>

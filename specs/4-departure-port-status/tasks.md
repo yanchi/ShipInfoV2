@@ -97,7 +97,7 @@
 
 ### Tests for User Story 1
 
-- [ ] T017 [P] [US1] `app/tests/Service/PortBoardBuilderTest.php` を作る。data-model.md の合成ルール1〜5 と US1 のシナリオを網羅する
+- [X] T017 [P] [US1] `app/tests/Service/PortBoardBuilderTest.php` を作る。data-model.md の合成ルール1〜5 と US1 のシナリオを網羅する
   - 運航会社の便だけ出て、他社の「便なし」は出ない
   - 2社とも `no_service` → 便なし
   - 2社とも便あり → 2エントリ
@@ -107,21 +107,21 @@
   - 行なし → 情報なし
   - 港の並びは stop_order 順で、終点は出ない
   - 日付は今日〜3日先だけ
-- [ ] T018 [P] [US1] `app/tests/Repository/DepartureStatusRepositoryTest.php` を作る。`findForBoard()` が期間内の行だけを route・port・company 付きで返すこと、過去の日付が含まれないこと
+- [X] T018 [P] [US1] `app/tests/Repository/DepartureStatusRepositoryTest.php` を作る。`findForBoard()` が期間内の行だけを route・port・company 付きで返すこと、過去の日付が含まれないこと
 
 ### Implementation for User Story 1
 
-- [ ] T019 [P] [US1] ビューモデルを `app/src/View/` に作る：`PortBoard`、`PortBoardDay`、`PortBoardDirection`、`PortBoardRow`、`PortBoardEntry`（readonly、data-model.md の「表示用」の構造）
-- [ ] T020 [P] [US1] `app/src/Repository/RouteStopRepository.php` に `findBoardStops(): array` を実装する。`direction` のある有効な航路について、方向ごとに「終点を除いた出発港（stop_order 順）」と「終点の港」を返す。2社で順番が同じ前提で、方向ごとに最初の航路の順を使う
-- [ ] T021 [P] [US1] `app/src/Repository/DepartureStatusRepository.php` に `findForBoard(\DateTimeImmutable $from, int $days): array` を実装する。期間内の `departure_statuses` を route（ferryCompany 込み）・port・operatedByCompany と JOIN して、クエリ1本で取る
-- [ ] T022 [US1] `app/src/Service/PortBoardBuilder.php` に `build(array $boardStops, array $statuses, \DateTimeImmutable $today, int $days): PortBoard` を実装する（data-model.md の合成ルール1〜5、FR-010・018・019・021）。DB に依存しないこと
-- [ ] T023 [US1] `app/src/Controller/StatusController.php` に `#[Route('/ports', name: 'app_status_ports')] ports()` を足す。今日（`new \DateTimeImmutable('today')`）から4日分を Builder で組み立てて `status/ports.html.twig` に `board` と `today` を渡す
-- [ ] T024 [US1] `app/templates/status/ports.html.twig` を作る（contracts/http-routes.md の構成）
+- [X] T019 [P] [US1] ビューモデルを `app/src/View/` に作る：`PortBoard`、`PortBoardDay`、`PortBoardDirection`、`PortBoardRow`、`PortBoardEntry`（readonly、data-model.md の「表示用」の構造）
+- [X] T020 [P] [US1] `app/src/Repository/RouteStopRepository.php` に `findBoardStops(): array` を実装する。`direction` のある有効な航路について、方向ごとに「終点を除いた出発港（stop_order 順）」と「終点の港」を返す。2社で順番が同じ前提で、方向ごとに最初の航路の順を使う
+- [X] T021 [P] [US1] `app/src/Repository/DepartureStatusRepository.php` に `findForBoard(\DateTimeImmutable $from, int $days): array` を実装する。期間内の `departure_statuses` を route（ferryCompany 込み）・port・operatedByCompany と JOIN して、クエリ1本で取る
+- [X] T022 [US1] `app/src/Service/PortBoardBuilder.php` に `build(array $boardStops, array $statuses, \DateTimeImmutable $today, int $days): PortBoard` を実装する（data-model.md の合成ルール1〜5、FR-010・018・019・021）。DB に依存しないこと
+- [X] T023 [US1] `app/src/Controller/StatusController.php` に `#[Route('/ports', name: 'app_status_ports')] ports()` を足す。今日（`new \DateTimeImmutable('today')`）から4日分を Builder で組み立てて `status/ports.html.twig` に `board` と `today` を渡す
+- [X] T024 [US1] `app/templates/status/ports.html.twig` を作る（contracts/http-routes.md の構成）
   - 日付セクション → 方向 → 出発港の行
   - 各エントリ：バッジ（`_status_badge` に `state` と `status` を渡す。`Scheduled` の「運航予定」は緑系以外の中立の見た目で新しく追加）、「船名／会社名」、出港予定時刻と到着予定時刻（日付が違えば「翌H:i着」）、詳細テキスト、「n/j H:i時点」（checked_at）
   - データが無いときの表示と「← トップへ戻る」
-- [ ] T025 [US1] `app/templates/status/index.html.twig` の見出しの下に「港別に見る →」リンク（`path('app_status_ports')`）を足す。カードの構成は変えない
-- [ ] T026 [US1] `app/tests/Controller/StatusControllerTest.php` に `/ports` のテストを足す
+- [X] T025 [US1] `app/templates/status/index.html.twig` の見出しの下に「港別に見る →」リンク（`path('app_status_ports')`）を足す。カードの構成は変えない
+- [X] T026 [US1] `app/tests/Controller/StatusControllerTest.php` に `/ports` のテストを足す
   - 200 が返る
   - 今日〜3日先の見出しが出て、昨日は出ない
   - 運航会社の便が出て、他社の「便なし」は出ない
@@ -129,7 +129,7 @@
   - 「時点」の表示
   - トップに `/ports` へのリンクがある
   - あわせて `tearDown()` を直して、`departure_statuses`・`route_stops` を routes より先に削除する
-- [ ] T027 [US1] `app/src/DataFixtures/AppFixtures.php` を更新する。T004 と同じ港・港コード・寄港順・direction を入れて、`/ports` の目視確認用に `departure_statuses` を作る（今日：マルエー運航・通常、マリックス `no_service` + `operated_by` なし／明日：マリックス運航・`operated_by` だけ分かってる行／3日先：マルエー `status` NULL）
+- [X] T027 [US1] `app/src/DataFixtures/AppFixtures.php` を更新する。T004 と同じ港・港コード・寄港順・direction を入れて、`/ports` の目視確認用に `departure_statuses` を作る（今日：マルエー運航・通常、マリックス `no_service` + `operated_by` なし／明日：マリックス運航・`operated_by` だけ分かってる行／3日先：マルエー `status` NULL）
 
 **Checkpoint**: `make test-php` が全部通る。`make fixtures` のあと `/ports` が目視で US1 のシナリオどおりになっている → コミット
 
