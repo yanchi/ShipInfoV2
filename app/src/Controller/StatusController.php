@@ -4,12 +4,12 @@ namespace App\Controller;
 
 use App\Entity\FerryCompany;
 use App\Entity\OperationStatus;
-use App\Enum\DepartureDisplayStateEnum;
 use App\Enum\OperationStatusEnum;
 use App\Repository\DepartureStatusRepository;
 use App\Repository\FerryCompanyRepository;
 use App\Repository\OperationStatusRepository;
 use App\Repository\RouteStopRepository;
+use App\Service\CompanyDaysBuilder;
 use App\Service\PortAlertSummaryBuilder;
 use App\Service\PortBoardBuilder;
 use App\Service\PortFilterResolver;
@@ -56,14 +56,15 @@ class StatusController extends AbstractController
 
         $response = $this->render('status/index.html.twig', [
             // 要約は常に全港・4日分（Cookie では絞り込まない）
-            'summary'       => $portAlertSummaryBuilder->build($fullBoard, PortFilter::none()),
-            'portFilter'    => $resolution->filter,
-            'portOptions'   => $portFilterResolver->departurePorts($boardStops),
-            'savedToday'    => $savedToday,
-            'companies'     => $companies,
-            'idleCompanies' => $idleCompanies,
-            'today'         => $today,
-            'now'           => new \DateTimeImmutable(),
+            'summary'               => $portAlertSummaryBuilder->build($fullBoard, PortFilter::none()),
+            'portFilter'            => $resolution->filter,
+            'portOptions'           => $portFilterResolver->departurePorts($boardStops),
+            'savedToday'            => $savedToday,
+            'companies'             => $companies,
+            'idleCompanies'         => $idleCompanies,
+            'routesDepartingMidway' => $this->routesDepartingMidway($companies, $fullBoard->days[0] ?? null),
+            'today'                 => $today,
+            'now'                   => new \DateTimeImmutable(),
         ]);
 
         if ($resolution->cookie !== null) {
@@ -84,17 +85,6 @@ class StatusController extends AbstractController
      */
     private function splitIdleCompanies(array $companies, ?PortBoardDay $today): array
     {
-        $companiesWithDepartures = [];
-        foreach ($today?->directions ?? [] as $direction) {
-            foreach ($direction->rows as $row) {
-                foreach ($row->entries as $entry) {
-                    if ($entry->companyId !== null && \in_array($entry->state, [DepartureDisplayStateEnum::Status, DepartureDisplayStateEnum::Scheduled], true)) {
-                        $companiesWithDepartures[$entry->companyId] = true;
-                    }
-                }
-            }
-        }
-
         $active = [];
         $idle   = [];
         foreach ($companies as $companyData) {
@@ -103,7 +93,7 @@ class StatusController extends AbstractController
                 $routes,
                 static fn (array $r) => $r['status']?->getStatus() !== OperationStatusEnum::NoService,
             );
-            if ($routes !== [] && $running === [] && !isset($companiesWithDepartures[$companyData['company']->getId()])) {
+            if ($routes !== [] && $running === [] && !$today?->hasDeparturesOf($companyData['company']->getId())) {
                 $idle[] = $companyData['company'];
             } else {
                 $active[] = $companyData;
@@ -113,19 +103,54 @@ class StatusController extends AbstractController
         return [$active, $idle];
     }
 
-    #[Route('/company/{id}', name: 'app_status_company')]
-    public function company(int $id, FerryCompanyRepository $ferryCompanyRepository, OperationStatusRepository $operationStatusRepository): Response
+    /**
+     * 航路単位では no_service でも、今日その方向の便が途中の港を出る航路（会社カードで「— 便なし」と出さない。tasks T054a）。
+     *
+     * @param list<array{company: FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: ?OperationStatus}>}> $companies
+     * @return array<int, true> [routeId => true]
+     */
+    private function routesDepartingMidway(array $companies, ?PortBoardDay $today): array
     {
+        $result = [];
+        foreach ($companies as $companyData) {
+            foreach ($companyData['routes'] as $routeId => $r) {
+                $direction = $r['route']->getDirection();
+                if ($r['status']?->getStatus() === OperationStatusEnum::NoService
+                    && $direction !== null
+                    && $today?->hasDeparturesOf($companyData['company']->getId(), $direction)) {
+                    $result[$routeId] = true;
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    #[Route('/company/{id}', name: 'app_status_company')]
+    public function company(
+        int $id,
+        FerryCompanyRepository $ferryCompanyRepository,
+        OperationStatusRepository $operationStatusRepository,
+        RouteStopRepository $routeStopRepository,
+        CompanyDaysBuilder $companyDaysBuilder,
+    ): Response {
         $company = $ferryCompanyRepository->find($id);
         if ($company === null) {
             throw $this->createNotFoundException("フェリー会社 ID:{$id} は存在しません。");
         }
 
-        $statuses = $operationStatusRepository->findRecentByCompany($company, 3);
+        $today    = new \DateTimeImmutable('today');
+        $statuses = $this->departureStatusRepository->findForBoard($today, self::PORT_BOARD_DAYS);
 
         return $this->render('status/company.html.twig', [
-            'company'  => $company,
-            'statuses' => $statuses,
+            'company' => $company,
+            'days'    => $companyDaysBuilder->build(
+                $company->getId(),
+                $this->buildFullBoard($routeStopRepository->findBoardStops(), $today, $statuses),
+                $statuses,
+                $operationStatusRepository->findUpcomingByCompany($company, self::PORT_BOARD_DAYS),
+            ),
+            'now'     => new \DateTimeImmutable(),
         ]);
     }
 
@@ -181,15 +206,16 @@ class StatusController extends AbstractController
     }
 
     /**
-     * 全港・今日〜3日先のボード。
+     * 全港・今日〜3日先のボード。$statuses を渡せばそれで作る（会社別ページは同じ行を日付の状態の判定にも使うため）。
      *
      * @param list<array{direction: \App\Enum\RouteDirectionEnum, departurePorts: list<\App\Entity\Port>, arrivalPort: \App\Entity\Port}> $boardStops
+     * @param list<\App\Entity\DepartureStatus>|null $statuses
      */
-    private function buildFullBoard(array $boardStops, \DateTimeImmutable $today): PortBoard
+    private function buildFullBoard(array $boardStops, \DateTimeImmutable $today, ?array $statuses = null): PortBoard
     {
         return $this->portBoardBuilder->build(
             $boardStops,
-            $this->departureStatusRepository->findForBoard($today, self::PORT_BOARD_DAYS),
+            $statuses ?? $this->departureStatusRepository->findForBoard($today, self::PORT_BOARD_DAYS),
             $today,
             self::PORT_BOARD_DAYS,
         );

@@ -49,6 +49,12 @@
 | `forCompany(int $companyId): PortBoard` | その会社の便（`state` が `status` / `scheduled`、`companyId` が一致）のエントリーだけを残す。エントリーが無くなった行・方向は落とす |
 | `lastCheckedAt(): ?DateTimeInterface` | ボード内の最大の確認時刻 |
 
+### PortBoardDay（変更）
+
+| 追加メソッド | 説明 |
+|---|---|
+| `hasDeparturesOf(int $companyId, ?RouteDirectionEnum $direction = null): bool` | その会社の便（`state` が `status` / `scheduled`）がこの日にあるか。トップの「本日運航なし」と、航路単位の `no_service` を出すかの判定に使う |
+
 ### PortBoardDirection（変更）
 
 | 追加メソッド | 説明 |
@@ -97,7 +103,7 @@
 |---|---|---|
 | `date` | `DateTimeImmutable` | 日付 |
 | `state` | `CompanyDayStateEnum` | `services`（便あり）/ `no_service`（便なし）/ `no_info`（情報なし） |
-| `routeSummaries` | `list<array{route: Route, status: OperationStatus}>` | 航路単位の要約行。情報がある航路だけ |
+| `routeSummaries` | `list<OperationStatus>` | 航路単位の要約行。情報がある航路だけ（航路は `OperationStatus::getRoute()`）。航路単位では `no_service` でも、その日その方向の便が途中の港を出るなら入れない（tasks T054a） |
 | `board` | `?PortBoardDay` | その会社の便の行。`state` が `services` のときだけ入る |
 
 **state の決め方**:
@@ -105,7 +111,7 @@
 - 行は無いが、その日その会社の `departure_statuses` に `no_service` の行がある → `no_service`
 - その日その会社の `departure_statuses` が1行も無い → `no_info`
 
-`CompanyDayStateEnum` は `app/src/Enum/` に置く（新規）。
+`CompanyDayStateEnum` は `app/src/Enum/` に置く（新規）。組み立ては `CompanyDaysBuilder`（Service、新規）で行う。
 
 ---
 

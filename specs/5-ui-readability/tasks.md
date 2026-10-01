@@ -261,28 +261,28 @@
 
 ### Tests for User Story 5
 
-- [ ] T047 [P] [US5] `app/tests/View/PortBoardTest.php` に `forCompany()` のテストを足す：その会社の Status・Scheduled のエントリーだけが残る、他社のエントリーと NoInfo・NoService のエントリーは落ちる、エントリーが無くなった行・方向は落ちる
-- [ ] T048 [P] [US5] `app/tests/Repository/OperationStatusRepositoryTest.php` に `findUpcomingByCompany()` のテストを足す（今日〜3日先だけ、昨日は入らない、無効な航路は入らない）。`findRecentByCompany` のテスト2件（`testFindRecentByCompanyReturnsArray`・`testFindRecentByCompanyReturnsAtMostNDays`）を削除する
+- [X] T047 [P] [US5] `app/tests/View/PortBoardTest.php` に `forCompany()` のテストを足す：その会社の Status・Scheduled のエントリーだけが残る、他社のエントリーと NoInfo・NoService のエントリーは落ちる、エントリーが無くなった行・方向は落ちる
+- [X] T048 [P] [US5] `app/tests/Repository/OperationStatusRepositoryTest.php` に `findUpcomingByCompany()` のテストを足す（今日〜3日先だけ、昨日は入らない、無効な航路は入らない）。`findRecentByCompany` のテスト2件（`testFindRecentByCompanyReturnsArray`・`testFindRecentByCompanyReturnsAtMostNDays`）を削除する
 
 ### Implementation for User Story 5
 
-- [ ] T049 [P] [US5] `app/src/Enum/CompanyDayStateEnum.php` を作る（`Services = 'services'`、`NoService = 'no_service'`、`NoInfo = 'no_info'`）
-- [ ] T050 [P] [US5] `app/src/View/CompanyDay.php` を作る（data-model.md の `CompanyDay`：`date`・`state`・`routeSummaries`・`board`）
-- [ ] T051 [US5] `app/src/View/PortBoard.php` に `forCompany(int $companyId): PortBoard` を追加する（research R13）。`state` が `Status` か `Scheduled` で `companyId` が一致するエントリーだけを残す。エントリーが無くなった行、行が無くなった方向は落とす。日付は残す
-- [ ] T052 [US5] `app/src/Repository/OperationStatusRepository.php` に `findUpcomingByCompany(FerryCompany $company, int $days): array` を追加する（`valid_date` が今日〜`$days-1` 日先、その会社の有効な航路。`[Y-m-d => list<OperationStatus>]`）。`findRecentByCompany()` を削除する
-- [ ] T053 [US5] `app/src/Controller/StatusController.php` の `company()` を変える
+- [X] T049 [P] [US5] `app/src/Enum/CompanyDayStateEnum.php` を作る（`Services = 'services'`、`NoService = 'no_service'`、`NoInfo = 'no_info'`）
+- [X] T050 [P] [US5] `app/src/View/CompanyDay.php` を作る（data-model.md の `CompanyDay`：`date`・`state`・`routeSummaries`・`board`）
+- [X] T051 [US5] `app/src/View/PortBoard.php` に `forCompany(int $companyId): PortBoard` を追加する（research R13）。`state` が `Status` か `Scheduled` で `companyId` が一致するエントリーだけを残す。エントリーが無くなった行、行が無くなった方向は落とす。日付は残す
+- [X] T052 [US5] `app/src/Repository/OperationStatusRepository.php` に `findUpcomingByCompany(FerryCompany $company, int $days): array` を追加する（`valid_date` が今日〜`$days-1` 日先、その会社の有効な航路。`[Y-m-d => list<OperationStatus>]`）。`findRecentByCompany()` を削除する
+- [X] T053 [US5] `app/src/Controller/StatusController.php` の `company()` を変える
   - 全港4日分のボードを作り、`forCompany($company->getId())` する
   - `findForBoard()` の結果（`DepartureStatus` の配列）から、日付ごとに「その会社の行があるか」「その会社の `no_service` の行があるか」を数える
   - 日付ごとに `CompanyDay` を作る：ボードの日付に行があれば `Services`、無くて `no_service` の行があれば `NoService`、その会社の行が1つも無ければ `NoInfo`（data-model.md の state の決め方）
   - `routeSummaries` は `findUpcomingByCompany()` のその日の行
   - `now` も渡す
-- [ ] T054 [US5] `app/templates/status/company.html.twig` を書き直す（FR-019〜021）
+- [X] T054 [US5] `app/templates/status/company.html.twig` を書き直す（FR-019〜021）
   - 日付ごとに見出し「n月j日（曜）」
   - `routeSummaries` があれば、航路ごとに「{航路名} {バッジ} {詳細文}」の1行（詳細文は T036 と同じく60文字で畳む）
   - `state` が `Services` → 方向ごとに `_port_entry` で各行（`li.port-row` と `.fw-bold` の「{港}発 → {到着港}」）
   - `NoService` → 「— 便なし」の1行、`NoInfo` → 「？ 情報なし」の1行
-- [ ] T054a [US5] **TODO（PR #34 レビュー）** トップの会社カードと会社別ページの航路の行は、航路単位の情報（`operation_statuses`）をそのまま出しているので、前日に始発港を出た便が今日途中の港を出る会社でも「— 便なし」になる（例：マリックスの航路単位の情報は `no_service` なのに、和泊を今日 12:00 に出る便がある）。カードは出ているのに中身が「便なし」で、矛盾して見える。航路単位の `no_service` の見せ方（「始発港発の便なし」と書く、港別ボードに便があれば出さない、など）を決めて直す。PR3 より前にリリースするなら、先にこれだけ直す
-- [ ] T055 [US5] `app/tests/Controller/StatusControllerTest.php` に足す：今日〜3日先の見出しが出て昨日が無い、便のある日に `li.port-row` が出る、`no_service` の行だけの日が「便なし」、行が無い日が「情報なし」、航路の要約行が出る日・出ない日。既存の `testCompanyPage*`（200・404）が通ること
+- [X] T054a [US5] **TODO（PR #34 レビュー）** トップの会社カードと会社別ページの航路の行は、航路単位の情報（`operation_statuses`）をそのまま出しているので、前日に始発港を出た便が今日途中の港を出る会社でも「— 便なし」になる（例：マリックスの航路単位の情報は `no_service` なのに、和泊を今日 12:00 に出る便がある）。カードは出ているのに中身が「便なし」で、矛盾して見える。航路単位の `no_service` の見せ方（「始発港発の便なし」と書く、港別ボードに便があれば出さない、など）を決めて直す。PR3 より前にリリースするなら、先にこれだけ直す
+- [X] T055 [US5] `app/tests/Controller/StatusControllerTest.php` に足す：今日〜3日先の見出しが出て昨日が無い、便のある日に `li.port-row` が出る、`no_service` の行だけの日が「便なし」、行が無い日が「情報なし」、航路の要約行が出る日・出ない日。既存の `testCompanyPage*`（200・404）が通ること
 
 **Checkpoint**: US5 の Independent Test が通る。`make test-php` が全部通る → コミット
 

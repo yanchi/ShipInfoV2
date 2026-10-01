@@ -107,76 +107,57 @@ class OperationStatusRepository extends ServiceEntityRepository
     }
 
     /**
-     * 会社別ページ用: 直近 $days 日分の運航状況を日付×航路で返す。
+     * 会社別ページ用: 今日〜$days-1 日先の、その会社の有効な航路の運航状況（航路・日付ごとに最新の1件）。
+     * 情報がある日・航路だけを返す。
      *
-     * @return array<string, array<int, array{route: \App\Entity\Route, status: OperationStatus|null}>>
+     * @return array<string, list<OperationStatus>> [Y-m-d => 航路 ID 順]
      */
-    public function findRecentByCompany(FerryCompany $company, int $days = 3): array
+    public function findUpcomingByCompany(FerryCompany $company, int $days): array
     {
         $today = new \DateTimeImmutable('today');
-        $from  = $today->modify(sprintf('-%d days', $days - 1));
-
-        $routes = [];
-        foreach ($company->getRoutes() as $route) {
-            if ($route->isActive()) {
-                $routes[$route->getId()] = $route;
-            }
-        }
-
-        if (empty($routes)) {
-            return [];
-        }
-
-        $result = [];
-        for ($i = 0; $i < $days; $i++) {
-            $date          = $today->modify("-{$i} days")->format('Y-m-d');
-            $result[$date] = [];
-            foreach ($routes as $routeId => $route) {
-                $result[$date][$routeId] = ['route' => $route, 'status' => null];
-            }
-        }
-
-        $routeIds     = array_keys($routes);
-        $placeholders = implode(',', array_fill(0, count($routeIds), '?'));
-        $conn         = $this->getEntityManager()->getConnection();
+        $to    = $today->modify(sprintf('+%d days', $days - 1));
 
         $sql = "
-            SELECT os.*
+            SELECT os.id
             FROM operation_statuses os
+            INNER JOIN routes r ON r.id = os.route_id
             INNER JOIN (
                 SELECT route_id, valid_date, MAX(scraped_at) AS latest_scraped_at
                 FROM operation_statuses
-                WHERE valid_date BETWEEN ? AND ?
-                  AND route_id IN ({$placeholders})
+                WHERE valid_date BETWEEN :from AND :to
+                  AND route_id IN (SELECT id FROM routes WHERE ferry_company_id = :company)
                 GROUP BY route_id, valid_date
             ) latest ON os.route_id   = latest.route_id
                     AND os.valid_date  = latest.valid_date
                     AND os.scraped_at  = latest.latest_scraped_at
-            WHERE os.valid_date BETWEEN ? AND ?
-              AND os.route_id IN ({$placeholders})
-            ORDER BY os.valid_date DESC
+            WHERE os.valid_date BETWEEN :from AND :to
+              AND r.ferry_company_id = :company
+              AND r.active = 1
         ";
+        $ids = $this->getEntityManager()->getConnection()->executeQuery($sql, [
+            'from'    => $today->format('Y-m-d'),
+            'to'      => $to->format('Y-m-d'),
+            'company' => $company->getId(),
+        ])->fetchFirstColumn();
 
-        $params = array_merge(
-            [$from->format('Y-m-d'), $today->format('Y-m-d')],
-            $routeIds,
-            [$from->format('Y-m-d'), $today->format('Y-m-d')],
-            $routeIds
-        );
+        if ($ids === []) {
+            return [];
+        }
 
-        $rows = $conn->executeQuery($sql, $params)->fetchAllAssociative();
+        /** @var list<OperationStatus> $statuses */
+        $statuses = $this->createQueryBuilder('os')
+            ->select('os', 'r')
+            ->join('os.route', 'r')
+            ->where('os.id IN (:ids)')
+            ->setParameter('ids', $ids)
+            ->orderBy('os.validDate', 'ASC')
+            ->addOrderBy('r.id', 'ASC')
+            ->getQuery()
+            ->getResult();
 
-        if (!empty($rows)) {
-            $ids      = array_map(static fn(array $row): int => (int) $row['id'], $rows);
-            $statuses = $this->findBy(['id' => $ids]);
-
-            foreach ($statuses as $status) {
-                $dateKey = $status->getValidDate()->format('Y-m-d');
-                $routeId = $status->getRoute()->getId();
-                if (isset($result[$dateKey][$routeId])) {
-                    $result[$dateKey][$routeId]['status'] = $status;
-                }
-            }
+        $result = [];
+        foreach ($statuses as $status) {
+            $result[$status->getValidDate()->format('Y-m-d')][] = $status;
         }
 
         return $result;

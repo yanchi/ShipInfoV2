@@ -2,6 +2,8 @@
 
 namespace App\View;
 
+use App\Enum\DepartureDisplayStateEnum;
+
 /**
  * 港別運航情報ページのビューモデル（今日〜n日先）。
  */
@@ -44,6 +46,37 @@ final readonly class PortBoard
                     $direction->rows,
                     static fn (PortBoardRow $row) => $filter->matches($direction->direction, $row->port),
                 ));
+                if ($rows !== []) {
+                    $directions[] = new PortBoardDirection($direction->direction, $direction->arrivalPortName, $rows);
+                }
+            }
+            $days[] = new PortBoardDay($day->date, $directions);
+        }
+
+        return new self($days);
+    }
+
+    /**
+     * その会社の便（発表済み・運航予定）のエントリーだけを残した新しいボード（research R13）。
+     * エントリーが無くなった行、行が無くなった方向は落とし、日付は全部残す。
+     */
+    public function forCompany(int $companyId): self
+    {
+        $days = [];
+        foreach ($this->days as $day) {
+            $directions = [];
+            foreach ($day->directions as $direction) {
+                $rows = [];
+                foreach ($direction->rows as $row) {
+                    $entries = array_values(array_filter(
+                        $row->entries,
+                        static fn (PortBoardEntry $e) => $e->companyId === $companyId
+                            && \in_array($e->state, [DepartureDisplayStateEnum::Status, DepartureDisplayStateEnum::Scheduled], true),
+                    ));
+                    if ($entries !== []) {
+                        $rows[] = new PortBoardRow($row->port, $entries);
+                    }
+                }
                 if ($rows !== []) {
                     $directions[] = new PortBoardDirection($direction->direction, $direction->arrivalPortName, $rows);
                 }

@@ -15,34 +15,65 @@
         {% endif %}
     </div>
 
-    {% if statuses is empty %}
-        <div class="alert alert-secondary">現在情報がありません。</div>
-    {% else %}
-        {% for date, routes in statuses %}
-            <h2 class="h6 text-muted mt-4 mb-2">
-                {{ date|date('n月j日（') }}{{ ['日','月','火','水','木','金','土'][date|date('w')] }}）
+    {# FR-019〜021: 今日〜3日先。日付ごとに航路の要約行と便の行。便あり・便なし・情報なしを区別する #}
+    {% for day in days %}
+        <section class="company-day mb-4" id="d-{{ day.date|date('Y-m-d') }}">
+            <h2 class="h5 border-bottom pb-1 mb-3">
+                {{ day.date|date('n月j日（') }}{{ ['日','月','火','水','木','金','土'][day.date|date('w')] }}）
             </h2>
-            <div class="card mb-3">
-                <ul class="list-group list-group-flush">
-                    {% for routeData in routes %}
-                        {% set route = routeData.route %}
-                        {% set status = routeData.status %}
-                        <li class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span>{{ route.name }}</span>
-                                {{ include('status/_status_badge.html.twig', {state: null, status: status ? status.status : null}) }}
+
+            {% if day.routeSummaries is not empty %}
+                <ul class="route-summaries list-unstyled mb-3">
+                    {% for summary in day.routeSummaries %}
+                        <li class="mb-1">
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                <span>{{ summary.route.name }}</span>
+                                {{ include('status/_status_badge.html.twig', {state: null, status: summary.status}) }}
                             </div>
-                            {% if status is not null and status.statusDetail %}
-                                <div class="text-muted small mt-1">└ {{ status.statusDetail }}</div>
+                            {% if summary.statusDetail %}
+                                {% if summary.statusDetail|length > 60 %}
+                                    <details class="small text-muted mt-1">
+                                        <summary>{{ summary.statusDetail|slice(0, 60) }}…</summary>
+                                        …{{ summary.statusDetail|slice(60) }}
+                                    </details>
+                                {% else %}
+                                    <div class="small text-muted mt-1">└ {{ summary.statusDetail }}</div>
+                                {% endif %}
                             {% endif %}
                         </li>
-                    {% else %}
-                        <li class="list-group-item text-muted">航路情報がありません。</li>
                     {% endfor %}
                 </ul>
-            </div>
-        {% endfor %}
-    {% endif %}
+            {% endif %}
+
+            {% if day.state.value == 'services' %}
+                {% for direction in day.board.directions %}
+                    {%- set commonCheckedAt = direction.commonCheckedAt -%}
+                    <h3 class="h6 text-muted mt-3 mb-2 d-flex flex-wrap column-gap-2">
+                        <span>{{ direction.direction.label }}</span>
+                        {% if commonCheckedAt %}
+                            <span class="checked-at small fw-normal ms-auto">{{ commonCheckedAt|date('n/j H:i') }}時点</span>
+                        {% endif %}
+                    </h3>
+                    <div class="card mb-3">
+                        <ul class="list-group list-group-flush">
+                            {% for row in direction.rows %}
+                                <li class="list-group-item port-row">
+                                    <div class="fw-bold">{{ row.port.name }}発 → {{ direction.arrivalPortName }}</div>
+                                    {% for entry in row.entries %}
+                                        {{ include('status/_port_entry.html.twig', {entry: entry, day: day.date, now: now, commonCheckedAt: commonCheckedAt}) }}
+                                    {% endfor %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endfor %}
+            {% elseif day.state.value == 'no_service' %}
+                <p class="company-day-state">{{ include('status/_status_badge.html.twig', {state: constant('App\\Enum\\DepartureDisplayStateEnum::NoService')}) }}</p>
+            {% else %}
+                <p class="company-day-state">{{ include('status/_status_badge.html.twig', {state: constant('App\\Enum\\DepartureDisplayStateEnum::NoInfo')}) }}</p>
+            {% endif %}
+        </section>
+    {% endfor %}
 
     <footer class="text-muted small mt-4">
         運航情報はスクレイピングにより収集しています。最新情報は各社公式サイトをご確認ください。
