@@ -143,7 +143,7 @@
 
 ### Tests for User Story 2
 
-- [ ] T028 [P] [US2] `scraper/tests/test_marix_line.py` に港別のテストを足す
+- [X] T028 [P] [US2] `scraper/tests/test_marix_line.py` に港別のテストを足す
   - `upstream_conditional.html` → 上りの出発港6行（那覇・本部・与論・和泊・亀徳・名瀬）、与論・和泊が `delayed`、他は `operating`（US3 シナリオ4・SC-008）
   - 各行の `scheduled_departure_at` が「出港」の日時、`scheduled_arrival_at` が終点の「入港」日時
   - 終点（鹿児島）の行は作られない
@@ -154,13 +154,13 @@
 
 ### Implementation for User Story 2
 
-- [ ] T029 [US2] `scraper/scraper/scrapers/marix_line.py` の `fetch()` を拡張する。一覧の各 `div.status_single_cover a.status_single[href]` の詳細ページを取得して `self._detail_pages: dict[str, str | None]`（失敗は None + warning）に持たせる。戻り値は今までどおり一覧の HTML（`raw_html_hash` の意味は変えない）
-- [ ] T030 [US2] `scraper/scraper/scrapers/marix_line.py` に `parse_departures()` を実装する（research R1）
+- [X] T029 [US2] `scraper/scraper/scrapers/marix_line.py` の `fetch()` を拡張する。一覧の各 `div.status_single_cover a.status_single[href]` の詳細ページを取得して `self._detail_pages: dict[str, str | None]`（失敗は None + warning）に持たせる。戻り値は今までどおり一覧の HTML（`raw_html_hash` の意味は変えない）
+- [X] T030 [US2] `scraper/scraper/scrapers/marix_line.py` に `parse_departures()` を実装する（research R1）
   - 一覧のブロックごとに、方向と始発日を今ある `_parse_direction` / `_parse_date` で決める
   - 詳細ページの `div.service > div.single` ごとに：`span.port_name` を `PortResolver` で港に直す → 状態は今ある `_parse_status_from_classes`（`div.single` の class）→ 説明は `div.exp`（operating のときは None）→「出港」と「入港」の `MM月DD日 HH:MM` を始発日の年で補う（始発日より前の月日なら翌年）
   - 寄港順のうち終点以外の港についてレコードを作る（`ship_name` は詳細ページから取れれば船名、無ければ空文字、`source_url` は詳細ページの URL、`freeze_after_departure=False`、`replace_scope=None`）
   - 詳細ページが無い便は予備ルートで作る
-- [ ] T031 [US2] `scraper/scraper/scrapers/marix_line.py` の docstring に、詳細ページの構造と港別処理の説明を足す
+- [X] T031 [US2] `scraper/scraper/scrapers/marix_line.py` の docstring に、詳細ページの構造と港別処理の説明を足す
 
 **Checkpoint**: `make test-scraper` が全部通る。`make scraper-run` のあと `departure_statuses` にマリックスの行が入る → コミット
 

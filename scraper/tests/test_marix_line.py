@@ -286,3 +286,162 @@ def test_no_service_only_for_missing_direction(db_session, marix_line_company):
     assert rec_up is not None and rec_up["status"] == OperationStatusEnum.no_service
     assert rec_up["valid_date"] == date(2026, 3, 8)
     assert rec_up["status_detail"] is None
+
+
+# ---------------------------------------------------------------------------
+# 港別（parse_departures）
+# ---------------------------------------------------------------------------
+
+from datetime import datetime  # noqa: E402
+
+import structlog  # noqa: E402
+
+from tests.conftest import read_fixture, setup_port_master  # noqa: E402
+
+UP_URL = "https://marixline.com/service/upstream20260930/"
+DOWN_URL = "https://marixline.com/service/downstream20260930/"
+
+
+def _mock_pages(list_html=None, up=None, down=None, up_status=200, down_status=200):
+    resp_mock.add(resp_mock.GET, SOURCE_URL, body=list_html or read_fixture("marix/list.html"), status=200)
+    resp_mock.add(resp_mock.GET, UP_URL, body=up if up is not None else read_fixture("marix/upstream_conditional.html"), status=up_status)
+    resp_mock.add(resp_mock.GET, DOWN_URL, body=down if down is not None else read_fixture("marix/downstream.html"), status=down_status)
+
+
+def _routes(db_session, company):
+    routes = db_session.execute(select(Route).where(Route.ferry_company_id == company.id)).scalars().all()
+    return next(r for r in routes if r.origin_port == "鹿児島"), next(r for r in routes if r.origin_port == "那覇")
+
+
+def _by_port(records, ports, route):
+    names = {p.id: name for name, p in ports.items()}
+    return {names[r["port_id"]]: r for r in records if r["route_id"] == route.id}
+
+
+@resp_mock.activate
+def test_departures_upstream_conditional_ports(db_session, marix_line_company):
+    """上り便：与論・和泊だけ条件付、他は通常運航（US3 シナリオ4・SC-008）。終点の鹿児島は行を作らない。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages()
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    records = scraper.parse_departures()
+
+    _, up = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, up)
+    assert list(rows) == ["那覇", "本部", "与論", "和泊", "亀徳", "名瀬"]
+    assert rows["与論"]["status"] == OperationStatusEnum.delayed
+    assert rows["和泊"]["status"] == OperationStatusEnum.delayed
+    for name in ["那覇", "本部", "亀徳", "名瀬"]:
+        assert rows[name]["status"] == OperationStatusEnum.operating
+        assert rows[name]["status_detail"] is None
+    assert "下記の詳細条件を確認してください" in rows["与論"]["status_detail"]
+    assert all(r["ship_name"] == "クイーンコーラルプラス" for r in rows.values())
+    assert all(r["source_url"] == UP_URL for r in rows.values())
+    assert all(r["freeze_after_departure"] is False for r in rows.values())
+
+
+@resp_mock.activate
+def test_departures_times_from_detail(db_session, marix_line_company):
+    """出港予定は各港の「出港」、到着予定は終点の「入港」。年は始発日から補う。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages()
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    records = scraper.parse_departures()
+
+    _, up = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, up)
+    assert rows["那覇"]["scheduled_departure_at"] == datetime(2026, 9, 30, 7, 0)
+    assert rows["与論"]["scheduled_departure_at"] == datetime(2026, 9, 30, 12, 10)
+    assert rows["名瀬"]["scheduled_departure_at"] == datetime(2026, 9, 30, 21, 20)
+    assert all(r["scheduled_arrival_at"] == datetime(2026, 10, 1, 8, 30) for r in rows.values())
+    assert all(r["departure_date"] == date(2026, 9, 30) for r in rows.values())
+
+
+@resp_mock.activate
+def test_departures_port_names_are_normalized(db_session, marix_line_company):
+    """「鹿児島新港」「名瀬港」が ports の港に直る。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages()
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    records = scraper.parse_departures()
+
+    down, _ = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, down)
+    assert list(rows) == ["鹿児島", "名瀬", "亀徳", "和泊", "与論", "本部"]
+    assert rows["鹿児島"]["scheduled_departure_at"] == datetime(2026, 9, 30, 18, 0)
+    assert rows["鹿児島"]["ship_name"] == "クイーンコーラルクロス"
+
+
+@resp_mock.activate
+def test_departures_fallback_when_detail_fails(db_session, marix_line_company):
+    """詳細ページが取れない便は、便ステータスを全出発港に当てはめ、日付は始発日 + day_offset、時刻は None。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages(up_status=404)
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with structlog.testing.capture_logs() as logs:
+        scraper.fetch()
+        records = scraper.parse_departures()
+
+    _, up = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, up)
+    assert list(rows) == ["那覇", "本部", "与論", "和泊", "亀徳", "名瀬"]
+    assert all(r["status"] == OperationStatusEnum.delayed for r in rows.values())
+    assert all(r["scheduled_departure_at"] is None for r in rows.values())
+    assert all(r["departure_date"] == date(2026, 9, 30) for r in rows.values())
+    assert all(r["ship_name"] == "" for r in rows.values())
+    assert any(log["event"] == "departure_fallback" for log in logs)
+
+
+@resp_mock.activate
+def test_departures_fallback_uses_day_offset(db_session, marix_line_company):
+    """下りの予備ルート：名瀬以降は始発日の翌日。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages(down_status=500)
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    records = scraper.parse_departures()
+
+    down, _ = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, down)
+    assert rows["鹿児島"]["departure_date"] == date(2026, 9, 30)
+    assert rows["名瀬"]["departure_date"] == date(2026, 10, 1)
+    assert rows["本部"]["departure_date"] == date(2026, 10, 1)
+
+
+@resp_mock.activate
+def test_departures_unknown_port_is_ignored(db_session, marix_line_company):
+    """寄港順に無い港（平土野）は無視して warning。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    up_html = read_fixture("marix/upstream_conditional.html").replace(
+        '<span class="port_name">和泊港</span>', '<span class="port_name">平土野港</span>'
+    )
+    assert "平土野港" in up_html
+    _mock_pages(up=up_html)
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with structlog.testing.capture_logs() as logs:
+        scraper.fetch()
+        records = scraper.parse_departures()
+
+    _, up = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, up)
+    assert "和泊" not in rows
+    assert len(rows) == 5
+    assert any(log["event"] == "detail_port_not_in_stops" for log in logs)
+
+
+@resp_mock.activate
+def test_route_level_parse_unchanged_with_real_list(db_session, marix_line_company):
+    """実際の一覧ページでも航路単位の parse は今までどおり（上り条件付・下り通常）。"""
+    setup_port_master(db_session, marix_line_company)
+    _mock_pages()
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 9, 30))):
+        records = scraper.parse(scraper.fetch())
+
+    down, up = _routes(db_session, marix_line_company)
+    by_route = {r["route_id"]: r for r in records}
+    assert by_route[down.id]["status"] == OperationStatusEnum.operating
+    assert by_route[up.id]["status"] == OperationStatusEnum.delayed

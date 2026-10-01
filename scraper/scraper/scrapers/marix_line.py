@@ -34,15 +34,39 @@ Direction (div.info2 の出発港で判定):
     "那覇"   + "発" → 上り（那覇 → 鹿児島）
 
 Date: div.info2 の最初の "YYYY年M月D日" を valid_date として使用
+
+港別（parse_departures、research R1）:
+    一覧の各便 a.status_single[href] が便別詳細ページ（例：/service/upstream20260930/）。
+    詳細ページの構造（確認済み 2026-10-01）:
+        <div class="inner_wrap">
+          <h1 class="heading1">2026年9月30日（水） 那覇港発 … 上り便【条件付運航】</h1>
+          <h4>クイーンコーラルプラス</h4>                      ← 船名（最初の h4）
+          <h4>海上荒天(台風)の影響による船舶動静</h4>          ← 理由（あれば）
+          <div class="service">
+            <div class="single conditional alert">             ← 港ごと。class は一覧と同じ語彙
+              <span class="port_name">与論港</span>
+              <div class="exp sub">下記の詳細条件を確認してください</div>
+              <div class="entry sub">…<span class="date">09月30日</span><span class="time">11:50</span></div>
+              <div class="departure sub">…<span class="date">09月30日</span><span class="time">12:10</span></div>
+            </div>
+            …（始発港は出港のみ、終点は入港のみ）
+          </div>
+        </div>
+    - 出入港日時に年が無いので、一覧の始発日の年で補う（始発日より前の月日なら翌年）
+    - 寄港順（route_stops）のうち終点以外の港について行を作る。到着予定は終点の入港日時
+    - 詳細ページが取れない便は、便全体のステータスを全出発港に当てはめ、出港日は始発日 + day_offset、
+      時刻は None にする（予備ルート）。ただし同じキーの行がすでにあれば、最後に詳細ページから取れた内容を残す
 """
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from urllib.parse import urljoin
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from sqlalchemy import select
 
-from scraper.db.models import OperationStatusEnum, Route
+from scraper.db.models import DepartureStatus, OperationStatusEnum, Route, RouteStop
 from scraper.scrapers.base import BaseScraper
+from scraper.utils.ports import PortResolver
 
 SOURCE_URL = "https://marixline.com/service/"
 
@@ -52,6 +76,25 @@ class MarixLine(BaseScraper):
         resp = self.http.get(SOURCE_URL, timeout=30)
         resp.raise_for_status()
         resp.encoding = resp.apparent_encoding
+        self._list_html = resp.text
+
+        # 便別詳細ページ（失敗しても続ける。港別は予備ルートになる）
+        self._detail_pages: dict[str, str | None] = {}
+        soup = BeautifulSoup(resp.text, "lxml")
+        for a in soup.select("div.status_single_cover a.status_single[href]"):
+            url = urljoin(SOURCE_URL, a["href"])
+            if url in self._detail_pages:
+                continue
+            try:
+                detail = self.http.get(url, timeout=30)
+                detail.raise_for_status()
+                detail.encoding = detail.apparent_encoding
+                self._detail_pages[url] = detail.text
+            except Exception as exc:
+                self._log.warning("detail_fetch_failed", url=url, error=str(exc))
+                self._detail_pages[url] = None
+
+        # 戻り値は今までどおり一覧の HTML（raw_html_hash の意味を変えない）
         return resp.text
 
     def parse(self, html: str) -> list[dict]:
@@ -143,6 +186,205 @@ class MarixLine(BaseScraper):
 
         self._log.info("parsed", records=len(records))
         return records
+
+    # ------------------------------------------------------------------
+    # 港別（departure_statuses）
+    # ------------------------------------------------------------------
+
+    def parse_departures(self) -> list[dict]:
+        list_html = getattr(self, "_list_html", None)
+        if not list_html:
+            return []
+        detail_pages = getattr(self, "_detail_pages", {})
+        resolver = PortResolver.from_session(self.session)
+        down_route, up_route = self._load_routes()
+        stops = self._load_stops([r for r in (down_route, up_route) if r])
+
+        soup = BeautifulSoup(list_html, "lxml")
+        records: list[dict] = []
+        for block in soup.select("div.status_single_cover"):
+            status = self._parse_status_from_classes(block.get("class", []))
+            info2 = block.find("div", class_="info2")
+            link = block.select_one("a.status_single[href]")
+            if status is None or info2 is None or link is None:
+                continue
+            info2_text = info2.get_text(separator=" ", strip=True)
+            start_date = self._parse_date(info2_text)
+            direction = self._parse_direction(info2_text)
+            route = {"down": down_route, "up": up_route}.get(direction or "")
+            if start_date is None or route is None or not stops.get(route.id):
+                self._log.warning("departure_block_skipped", info2=info2_text[:60])
+                continue
+
+            url = urljoin(SOURCE_URL, link["href"])
+            detail_html = detail_pages.get(url)
+            detail_records = (
+                self._departures_from_detail(detail_html, route, stops[route.id], start_date, url, resolver)
+                if detail_html
+                else None
+            )
+            if detail_records:
+                records.extend(detail_records)
+                continue
+
+            self._log.warning("departure_fallback", url=url, route_id=route.id)
+            exp = block.find("p", class_="exp")
+            detail = exp.get_text(strip=True) if exp and status != OperationStatusEnum.operating else None
+            records.extend(self._fallback_departures(route, stops[route.id], start_date, status, detail, url))
+
+        self._log.info("parsed_departures", records=len(records))
+        return records
+
+    def _departures_from_detail(
+        self,
+        html: str,
+        route: Route,
+        stops: list[RouteStop],
+        start_date: date,
+        url: str,
+        resolver: PortResolver,
+    ) -> list[dict] | None:
+        """便別詳細ページから、終点以外の寄港地の行を作る。解析できなければ None。"""
+        soup = BeautifulSoup(html, "lxml")
+        singles = soup.select("div.service > div.single")
+        if not singles:
+            self._log.warning("detail_structure_unknown", url=url)
+            return None
+
+        stop_port_ids = {s.port_id for s in stops}
+        terminal_port_id = stops[-1].port_id
+        by_port: dict[int, dict] = {}
+        for single in singles:
+            name_el = single.select_one("span.port_name")
+            name = name_el.get_text(strip=True) if name_el else ""
+            port = resolver.resolve(name)
+            if port is None or port.id not in stop_port_ids:
+                self._log.warning("detail_port_not_in_stops", url=url, port=name)
+                continue
+            status = self._parse_status_from_classes(single.get("class", []))
+            if status is None:
+                self._log.warning("detail_status_unknown", url=url, port=name, classes=single.get("class"))
+                status = OperationStatusEnum.unknown
+            exp = single.select_one("div.exp")
+            by_port[port.id] = {
+                "status": status,
+                "exp": exp.get_text(strip=True) if exp else None,
+                "entry_at": self._parse_detail_time(single.select_one("div.entry"), start_date),
+                "departure_at": self._parse_detail_time(single.select_one("div.departure"), start_date),
+            }
+
+        ship_name, reasons = self._parse_detail_heading(soup)
+        arrival_at = by_port.get(terminal_port_id, {}).get("entry_at")
+        records: list[dict] = []
+        for stop in stops[:-1]:
+            info = by_port.get(stop.port_id)
+            if info is None:
+                self._log.warning("detail_stop_missing", url=url, port_id=stop.port_id)
+                continue
+            departure_at = info["departure_at"]
+            departure_date = (
+                departure_at.date() if departure_at else start_date + timedelta(days=stop.day_offset)
+            )
+            detail = None
+            if info["status"] != OperationStatusEnum.operating:
+                detail = " ".join(t for t in [*reasons, info["exp"]] if t) or None
+            records.append({
+                "route_id": route.id,
+                "port_id": stop.port_id,
+                "departure_date": departure_date,
+                "ship_name": ship_name,
+                "status": info["status"],
+                "status_detail": detail,
+                "scheduled_departure_at": departure_at,
+                "scheduled_arrival_at": arrival_at,
+                "operated_by_company_id": None,
+                "source_url": url,
+                "freeze_after_departure": False,
+                # 予備ルートで作った行（船名なし）を、詳細ページが取れたときに消すため
+                "replace_scope": (route.id, stop.port_id, departure_date),
+            })
+        return records or None
+
+    def _fallback_departures(
+        self,
+        route: Route,
+        stops: list[RouteStop],
+        start_date: date,
+        status: OperationStatusEnum,
+        detail: str | None,
+        url: str,
+    ) -> list[dict]:
+        """詳細ページが取れない便：便全体のステータスを全出発港に当てはめる（FR-004）。"""
+        records: list[dict] = []
+        for stop in stops[:-1]:
+            departure_date = start_date + timedelta(days=stop.day_offset)
+            exists = self.session.execute(
+                select(DepartureStatus.id).where(
+                    DepartureStatus.route_id == route.id,
+                    DepartureStatus.port_id == stop.port_id,
+                    DepartureStatus.departure_date == departure_date,
+                ).limit(1)
+            ).first()
+            if exists:
+                continue  # 最後に詳細ページから取れた内容を残す（FR-013）
+            records.append({
+                "route_id": route.id,
+                "port_id": stop.port_id,
+                "departure_date": departure_date,
+                "ship_name": "",
+                "status": status,
+                "status_detail": detail,
+                "scheduled_departure_at": None,
+                "scheduled_arrival_at": None,
+                "operated_by_company_id": None,
+                "source_url": url,
+                "freeze_after_departure": False,
+                "replace_scope": None,
+            })
+        return records
+
+    def _parse_detail_heading(self, soup: BeautifulSoup) -> tuple[str, list[str]]:
+        """(船名, 理由の見出し) を返す。船名は h1.heading1 の後の最初の h4。"""
+        h1 = soup.select_one("h1.heading1")
+        container = h1.parent if h1 else soup
+        h4s = [h.get_text(strip=True) for h in container.find_all("h4", recursive=False)]
+        h4s = [t for t in h4s if t]
+        if not h4s:
+            return "", []
+        return h4s[0], h4s[1:]
+
+    def _parse_detail_time(self, el: Tag | None, start_date: date) -> datetime | None:
+        """「09月30日 07:00」を始発日の年で補って datetime にする（始発日より前の月日なら翌年）。"""
+        if el is None:
+            return None
+        text = el.get_text(" ", strip=True)
+        m = re.search(r"(\d{1,2})月(\d{1,2})日\s*(\d{1,2}):(\d{2})", text)
+        if not m:
+            self._log.warning("detail_time_parse_failed", text=text[:40])
+            return None
+        month, day, hour, minute = (int(g) for g in m.groups())
+        year = start_date.year
+        if (month, day) < (start_date.month, start_date.day):
+            year += 1
+        try:
+            return datetime(year, month, day, hour, minute)
+        except ValueError:
+            self._log.warning("detail_time_invalid", text=text[:40])
+            return None
+
+    def _load_stops(self, routes: list[Route]) -> dict[int, list[RouteStop]]:
+        """route_id → 寄港順（stop_order 昇順）。"""
+        if not routes:
+            return {}
+        rows = self.session.execute(
+            select(RouteStop)
+            .where(RouteStop.route_id.in_([r.id for r in routes]))
+            .order_by(RouteStop.route_id, RouteStop.stop_order)
+        ).scalars().all()
+        result: dict[int, list[RouteStop]] = {}
+        for row in rows:
+            result.setdefault(row.route_id, []).append(row)
+        return result
 
     # ------------------------------------------------------------------
     # Helpers
