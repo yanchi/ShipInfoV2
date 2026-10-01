@@ -8,7 +8,7 @@
 
 | 会社名 | 運航状況URL | スクレイパークラス名 |
 |---|---|---|
-| マルエーフェリー | https://www.aline-ferry.com/status/ | MarueFerry |
+| マルエーフェリー | https://www.aline-ferry.com/search/result.php（便有無）<br>https://www.aline-ferry.com/kagoshima/（詳細ステータス） | MarueFerry |
 | マリックスライン | https://marixline.com/service/ | MarixLine |
 
 ---
