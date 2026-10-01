@@ -53,7 +53,6 @@ make scraper-run   # 最新のデータを入れる
    ```
 
    - DB で1社分の `checked_at` だけを2時間以上前にする → もう1社が新しくても、全ページ上部に「情報が古い可能性があります」とその会社名が出る
-     （MySQL の `NOW()` は UTC、`checked_at` は日本時間で入っているので、下の SQL だと実際には12時間前になる。古い判定の確認には差し支えない）
 
      ```sql
      UPDATE departure_statuses d JOIN routes r ON r.id = d.route_id
