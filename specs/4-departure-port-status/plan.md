@@ -45,7 +45,7 @@
 |---|---|---|
 | I. スクレイパーは `BaseScraper` 継承・会社ごとに独立 | ✅ PASS | 港別の処理は各社のクラスに `parse_departures()` として実装する。共通の upsert と港名の正規化は Base とユーティリティに置く |
 | II. Twig + Controller、API なし、スクレイパーは DB に直接書く | ✅ PASS | `/ports` は Controller と Twig。スクレイパーが `departure_statuses` に直接書く |
-| III. `raw_html_hash` で重複防止・履歴は `operation_statuses`・ログは `scraper_logs` | ⚠️ 既存実装と同じ扱い（[#20](https://github.com/yanchi/ShipInfoV2/issues/20) で決める） | `operation_statuses` は今までどおり書く。`departure_statuses` は行ごとの `content_hash` で、変化が無ければ内容を書き換えない。港別の行は「その日の最新状態」で、変更履歴は持たない。今の `operation_statuses` も同じ日の行を上書きしていて、constitution の「変更履歴をすべて保持」と既存実装がもともとズレている。どちらに揃えるかは #20 で決めて、追記型の履歴にすることになったら別の feature で港別にも追加する。港別の取得に失敗したときは `scraper_logs.error_message` に記録して、航路単位の記録は成功扱いのまま続ける |
+| III. `raw_html_hash` で重複防止・キーごとの最新状態を保持・ログは `scraper_logs` | ✅ PASS（[#20](https://github.com/yanchi/ShipInfoV2/issues/20) で constitution v2.0.0 に改めた） | `operation_statuses` は今までどおり書く。`departure_statuses` は行ごとの `content_hash` で、変化が無ければ内容を書き換えない。港別の行は「その日の最新状態」で、変更履歴は持たない（constitution v2.0.0 の III どおり）。港別の取得に失敗したときは `scraper_logs.error_message` に記録して、航路単位の記録は成功扱いのまま続ける |
 | IV. Docker で完結 | ✅ PASS | TZ は `docker-compose.yml` の環境変数で設定する。マイグレーションは `make migrate` |
 | V. フェーズごとにコミット | ✅ PASS | 下の Phase A〜E を tasks.md のグループにして、グループごとにコミットする |
 | 技術スタック（変更禁止） | ✅ PASS | 新しいライブラリは入れない |
