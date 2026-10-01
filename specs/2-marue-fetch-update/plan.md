@@ -6,7 +6,7 @@
 ## Summary
 
 マルエーフェリーの運航情報取得を、`/status/` ページのh3/h4解析から2ステップ方式に変更する。
-まず検索エンドポイントへのPOSTで本日便の有無・日付を確認し、便がある場合は鹿児島航路ページから各船のステータスを取得して上り・下り両方のルートに適用する。
+まず検索エンドポイントへのPOSTで本日便の有無を確認し、便がある場合は鹿児島航路ページから各船のステータスを取得して上り・下り両方のルートに適用する。
 
 ## Technical Context
 
@@ -85,11 +85,11 @@ scraper/scraper/db/models.py         # OperationStatusEnum・Route（変更な�
   - `遅延` / `スケジュール変更` → `delayed`
 - **複数船ステータス集約**: 鹿児島航路ページには複数船が掲載されるため、ステータスが混在する場合は最も深刻なものを採用する（優先度: `cancelled`=4 > `suspended`=3 > `delayed`=2 > `operating`=1）。混在時は warning ログを記録する
 - **方向**: 上り・下り両方のルートに集約後のステータス（および詳細テキスト）を適用
-- **当日分なし**: warning ログを記録してスキップ（保存しない）
+- **ステータス解析不可**: その船は warning ログを記録してスキップ。全船解析不可ならサイト構造変更とみなし例外 → `scraper_logs` を `failed` で記録
 
 ### Step 3: DB保存
 
 - 既存の `BaseScraper.save()` / `upsert` ロジックを踏襲
 - `raw_html_hash`: 鹿児島ページの HTML の SHA-256
-- `valid_date`: Step 1 で取得した日付（または today フォールバック）
+- `valid_date`: 常に `date.today()`（POST の `startDate` と同値）
 - 重複キー `(route_id, valid_date)` は既存ロジックで防止

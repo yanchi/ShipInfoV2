@@ -38,7 +38,7 @@
 ```
 POST /search/result.php
   ↓
-[便あり?]  No → route_id=1,2 両方 cancelled, valid_date=today → 保存して終了
+[便あり?]  No → route_id=1,2 両方 no_service, valid_date=today → 保存して終了
   ↓ Yes
 valid_date = date.today()  # POSTパラメータと同値、レスポンスパース不要
 
