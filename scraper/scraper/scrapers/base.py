@@ -73,6 +73,7 @@ class BaseScraper(ABC):
             - source_url: str
             - freeze_after_departure: bool（出港済みの行を更新・作成しない）
             - replace_scope: (route_id, port_id, departure_date)（このキーで今回に無い船の行を消す）
+            - replace_source: (route_id, port_id, source_url)（同じ便の行のうち、今回書かなかった日付・船の行を消す）
         """
         return []
 
@@ -206,10 +207,14 @@ class BaseScraper(ABC):
         4. freeze_after_departure で出港済み → 既存行は一切更新しない。既存行が無ければ INSERT しない
            （出港済みかは今回の出港予定で判定する。遅延で後ろにずれた便は、まだ更新する）
         5. replace_scope があれば、そのキーで今回に無い ship_name の行を消す（出港済みの行は残す）
+        6. replace_source があれば、同じ航路・港・source_url（＝同じ便）で今回書かなかった
+           (departure_date, ship_name) の行を消す（出港済みの行は残す）。
+           遅延で出港日がずれたときに、前の日付の行を残さないため
         """
         now = datetime.now()
         created = updated = 0
         scopes: dict[tuple, set[str]] = {}
+        sources: dict[tuple, set[tuple]] = {}
         processed: set[tuple] = set()
 
         for rec in records:
@@ -218,6 +223,9 @@ class BaseScraper(ABC):
             scope = rec.get("replace_scope")
             if scope is not None:
                 scopes.setdefault(tuple(scope), set()).add(ship_name)
+            source = rec.get("replace_source")
+            if source is not None:
+                sources.setdefault(tuple(source), set()).add((key[2], ship_name))
             if key in processed:
                 self._log.warning("departure_duplicate_key", key=[str(k) for k in key])
                 continue
@@ -295,5 +303,21 @@ class BaseScraper(ABC):
                 )
                 .execution_options(synchronize_session="fetch")
             )
+
+        for (route_id, port_id, source_url), written in sources.items():
+            stale = self.session.execute(
+                select(DepartureStatus).where(
+                    DepartureStatus.route_id == route_id,
+                    DepartureStatus.port_id == port_id,
+                    DepartureStatus.source_url == source_url,
+                    or_(
+                        DepartureStatus.scheduled_departure_at.is_(None),
+                        DepartureStatus.scheduled_departure_at >= now,
+                    ),
+                )
+            ).scalars()
+            for row in stale:
+                if (row.departure_date, row.ship_name) not in written:
+                    self.session.delete(row)
 
         return created, updated

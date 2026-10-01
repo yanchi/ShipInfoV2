@@ -329,6 +329,9 @@ class MarixLine(BaseScraper):
                     "freeze_after_departure": False,
                     # 予備ルートで作った行（船名なし）を、詳細ページが取れたときに消すため
                     "replace_scope": (route.id, stop.port_id, departure_date),
+                    # 遅延で出港日がずれたとき、同じ便の前の日付の行（予備ルート・詳細ページとも）を消すため
+                    # （詳細ページの URL は便ごとに一つ：/service/downstream20260930/）
+                    "replace_source": (route.id, stop.port_id, url),
                 }
             )
         return records or None
@@ -346,12 +349,13 @@ class MarixLine(BaseScraper):
         records: list[dict] = []
         for stop in stops[:-1]:
             departure_date = start_date + timedelta(days=stop.day_offset)
+            # 同じ便の詳細ページの行があるか。出港日がずれていることがあるので日付では探さない
             exists = self.session.execute(
                 select(DepartureStatus.id)
                 .where(
                     DepartureStatus.route_id == route.id,
                     DepartureStatus.port_id == stop.port_id,
-                    DepartureStatus.departure_date == departure_date,
+                    DepartureStatus.source_url == url,
                     # 予備ルート自身が書いた行（船名なし）は更新したいので、詳細ページの行だけ見る
                     DepartureStatus.ship_name != "",
                 )

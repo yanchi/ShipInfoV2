@@ -6,6 +6,8 @@ HTTP リクエストは responses ライブラリでモック。
 DBは SQLite in-memory を使用（conftest.py の db_session / marix_line_company フィクスチャ）。
 """
 
+import re
+
 import responses as resp_mock
 from datetime import date
 from unittest.mock import patch, MagicMock
@@ -643,3 +645,86 @@ def test_fallback_does_not_overwrite_detail_rows(db_session, marix_line_company)
     assert all(r.ship_name == "クイーンコーラルプラス" for r in rows)
     yoron = next(r for r in rows if r.port_id == ports["与論"].id)
     assert yoron.status == "delayed"
+
+
+def _down_with_naze_delayed():
+    """下り便の名瀬の出港が 10/1 05:50 → 10/2 00:30 にずれた詳細ページ。"""
+    html, n = re.subn(
+        r"10月01日(\s*</span>\s*<span class=\"time\">\s*)05:50",
+        r"10月02日\g<1>00:30",
+        read_fixture("marix/downstream.html"),
+    )
+    assert n == 1
+    return html
+
+
+def _run_departures(db_session, company):
+    scraper = MarixLine(db_session, company.id)
+    scraper.fetch()
+    scraper._upsert_departures(scraper.parse_departures())
+    db_session.commit()
+
+
+def _naze_rows(db_session, company, ports):
+    down, _ = _routes(db_session, company)
+    return sorted(
+        (r.departure_date, r.ship_name)
+        for r in db_session.query(DepartureStatus).filter(
+            DepartureStatus.route_id == down.id,
+            DepartureStatus.port_id == ports["名瀬"].id,
+        )
+    )
+
+
+@resp_mock.activate
+def test_fallback_row_is_removed_when_detail_shifts_date(db_session, marix_line_company):
+    """予備ルートで作った行は、詳細ページで出港日がずれても残らない（#22）。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages(down_status=500)
+    _run_departures(db_session, marix_line_company)
+    assert _naze_rows(db_session, marix_line_company, ports) == [(date(2026, 10, 1), "")]
+
+    resp_mock.reset()
+    _mock_pages(down=_down_with_naze_delayed())
+    _run_departures(db_session, marix_line_company)
+
+    assert _naze_rows(db_session, marix_line_company, ports) == [
+        (date(2026, 10, 2), "クイーンコーラルクロス")
+    ]
+
+
+@resp_mock.activate
+def test_fallback_does_not_recreate_row_after_detail_shifted_date(
+    db_session, marix_line_company
+):
+    """詳細ページで出港日がずれた後に詳細ページが取れなくなっても、予備ルートの日付で行を作り直さない。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages(down=_down_with_naze_delayed())
+    _run_departures(db_session, marix_line_company)
+
+    resp_mock.reset()
+    _mock_pages(down_status=500)
+    _run_departures(db_session, marix_line_company)
+
+    assert _naze_rows(db_session, marix_line_company, ports) == [
+        (date(2026, 10, 2), "クイーンコーラルクロス")
+    ]
+
+
+@resp_mock.activate
+def test_detail_row_is_removed_when_detail_shifts_date(db_session, marix_line_company):
+    """詳細ページの行でも、遅延で出港日がずれたら前の日付の行は消える。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages()
+    with patch("scraper.scrapers.base.datetime") as dt:
+        # 10/1 05:50 の出港前に取得した、という状況にする
+        dt.now.return_value = datetime(2026, 10, 1, 0, 0)
+        _run_departures(db_session, marix_line_company)
+
+        resp_mock.reset()
+        _mock_pages(down=_down_with_naze_delayed())
+        _run_departures(db_session, marix_line_company)
+
+    assert _naze_rows(db_session, marix_line_company, ports) == [
+        (date(2026, 10, 2), "クイーンコーラルクロス")
+    ]
