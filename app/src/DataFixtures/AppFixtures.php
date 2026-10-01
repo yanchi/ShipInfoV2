@@ -15,6 +15,7 @@ use Doctrine\Persistence\ObjectManager;
  * 会社・航路のマスタは docker/mysql/init/02_seed.sql と同じ内容を投入する
  * （02_seed.sql は MySQL ボリューム初回作成時にしか実行されないため、
  *   既存ボリュームに対してはこちらで再投入する）。
+ * 加えて、表示確認用に航路0件のダミー会社を1社追加する（02_seed.sql には含めない）。
  *
  * 運航状況は当日分をステータス網羅的に作成し、Twig のバッジ分岐を目視・自動テストの
  * 両方で検証できるようにする。
@@ -34,8 +35,15 @@ class AppFixtures extends Fixture
         $marue = $this->makeCompany('マルエーフェリー', 'https://www.aline-ferry.com', 'MarueFerry');
         $marix = $this->makeCompany('マリックスライン', 'https://marixline.com', 'MarixLine');
 
+        // 航路0件の会社。トップページの3列表示と「航路情報がありません。」の目視確認用。
+        // scraper_class を持たないためスクレイパーの実行対象にはならない
+        $noRoutes = (new FerryCompany())
+            ->setName('サンプル汽船（航路未設定）')
+            ->setActive(true);
+
         $manager->persist($marue);
         $manager->persist($marix);
+        $manager->persist($noRoutes);
 
         // 下り = 鹿児島発 → 那覇着 / 上り = 那覇発 → 鹿児島着
         $routes = [

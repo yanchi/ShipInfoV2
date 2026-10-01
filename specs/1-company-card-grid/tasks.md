@@ -170,7 +170,10 @@ T003 → T004 → T009 の3タスクで見た目は完成する。テストと�
 1. **`AppFixtures` が空スタブだった** — `doctrine:fixtures:load` は実行前に全テーブルを purge するため、
    `make fixtures` を叩くと「DBを空にするだけ」のコマンドになっていた（実際に本作業中に dev DB のデータが消えた）。
    会社・航路・当日の運航状況を投入する実装に置き換えた（`app/src/DataFixtures/AppFixtures.php`）。
-   これによりテストDBにデータが入り、新規グリッドテストが skip されず実際にアサーションを実行するようになった。
+   ~~これによりテストDBにデータが入り、新規グリッドテストが skip されず実際にアサーションを実行するようになった。~~
+   **訂正（PR #16 レビュー）**: `make fixtures` が投入するのは dev DB で、PHPUnit は `APP_ENV=test`（`_test` DB）を使う。
+   そのためテスト DB が空だと新規グリッドテストは全件 skip されていた。
+   `StatusControllerTest` 側で会社・航路・ステータスを作成し、終わったら削除する形に変更して、テストが常に実行されるようにした。
 
 2. **`OperationStatus` に `#[ORM\HasLifecycleCallbacks]` が付いていなかった** — `#[ORM\PrePersist]` は定義されているが
    属性が無いため発火せず、PHP 側から永続化すると `created_at` が NOT NULL 違反で落ちる状態だった。

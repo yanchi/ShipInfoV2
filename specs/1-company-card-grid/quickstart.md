@@ -32,6 +32,9 @@ make test-php
 | `testIndexRendersCompanyGrid` | `.row.row-cols-1.row-cols-md-2.row-cols-lg-3` が存在する | FR-001〜004 |
 | `testCompanyCardsAreGridColumns` | `.row > .col > .card.h-100` の構造になっている | FR-001, SC-004 |
 | `testIndexKeepsCardContent` | カード内に会社名リンク・航路名・バッジが残っている | FR-005 |
+| `testIndexShowsNoRouteMessageForCompanyWithoutRoutes` | 航路0件の会社のカードに `航路情報がありません。` が表示される | Edge Cases |
+
+各テストは必要な会社データを自分で作成して、終わったら削除する。テスト DB が空でも skip されない。
 
 既存の4テスト（`testIndexReturns200` 等）もそのまま通ること。
 
@@ -73,10 +76,13 @@ Chrome DevTools → デバイスツールバー（`Cmd + Shift + M`）で幅を�
 
 ## 5. ロールバック
 
-Twig テンプレート1ファイルの変更のみなので、切り戻しは以下で完了する。
+この PR には Twig だけでなく Repository / Entity / Fixtures / seed SQL / テストの変更も含まれるので、切り戻すときは PR 全体を revert する。
 
 ```bash
-git checkout -- app/templates/status/index.html.twig
+# master にマージ済みの場合: マージコミットを revert する
+git revert -m 1 <マージコミットのSHA>
 ```
 
-DB マイグレーション・キャッシュクリア・アセットビルドはいずれも不要。
+DB マイグレーション・キャッシュクリア・アセットビルドはいずれも不要（スキーマは変更していない）。
+
+> ⚠️ revert すると、既存不具合の修正（航路0件の会社が消える問題、seed SQL が失敗する問題）も一緒に戻る。レイアウトだけを戻したい場合は、`app/templates/status/index.html.twig` とそのテストだけを戻す修正 PR を別に作ること。

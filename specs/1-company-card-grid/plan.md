@@ -150,12 +150,13 @@ Success Criteria と [checklists/requirements.md](checklists/requirements.md) �
 | テストメソッド | アサーション |
 |---|---|
 | `testIndexRendersCompanyGrid` | `.row.row-cols-1.row-cols-md-2.row-cols-lg-3` が存在 |
-| `testCompanyCardsAreGridColumns` | `.row > .col > .card.h-100` が存在（会社0件環境では skip 可能な形にする） |
+| `testCompanyCardsAreGridColumns` | `.row > .col > .card.h-100` が存在 |
 | `testIndexKeepsCardContent` | `.card .card-header` と `.card .list-group` が存在（FR-005 のデグレード検知） |
 
-> **注意**: テスト DB に会社データが無い場合、カード自体が描画されない。既存の
-> `testCompanyPageReturns200WhenCompanyExists` が「200 または 404 のどちらでも可」としているのと
-> 同様に、データ有無に依存しない書き方（0件なら `markTestSkipped`）にする。
+> **注意**: テスト DB に会社データが無い場合、カード自体が描画されない。
+> ~~データ有無に依存しない書き方（0件なら `markTestSkipped`）にする。~~
+> **訂正（PR #16 レビュー）**: skip 方式だと、空のテスト DB では検証が一度も走らないまま green になる。
+> 各テストで必要な会社データを作成し、tearDown で削除する方式に変更した。
 
 ### Step 5: 動作確認
 
@@ -188,7 +189,7 @@ T005: ブラウザで 375 / 800 / 1200px のレスポンシブ目視確認（qui
 |---|---|
 | `mb-4` の削除漏れで行間が二重に空く | quickstart のチェックリストに明記。目視確認項目に含める |
 | `</div>` の閉じタグ追加漏れで HTML が壊れる | `make test-php` の `assertResponseIsSuccessful` と DOM セレクタテストで検知 |
-| テスト DB が空でグリッドテストが常に skip される | `make fixtures` でデータ投入してから実行する手順を quickstart に記載 |
+| テスト DB が空でグリッドテストが常に skip される | テスト内で会社データを作成・削除し、DB の状態に依存しないようにする（`make fixtures` は dev DB にしか投入されないので対策にならない） |
 | カード内部を巻き込んで変更してしまう（FR-005 違反） | 差分をラッパー部分に限定。`testIndexKeepsCardContent` で検知 |
 | 会社1社のみのときカードが横に伸びきる | `row-cols-*` は列幅を固定するため発生しない（1/3幅で左寄せ）。quickstart で確認 |
 

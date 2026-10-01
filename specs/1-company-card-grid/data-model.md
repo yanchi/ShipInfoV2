@@ -6,16 +6,19 @@
 
 ## 結論: データモデル変更なし
 
-本機能は **プレゼンテーション層（Twig テンプレート）のみの変更** であり、以下はすべて変更しない。
+グリッド化そのものは **プレゼンテーション層（Twig テンプレート）だけの変更**。DB スキーマとビューモデルの形は変えない。
+
+ただし作業中に見つかった既存不具合を同じ PR で直したので、Entity と Repository にも実装上の変更がある（下表の「既存不具合の修正」）。
 
 | 対象 | 変更 |
 |---|---|
-| Doctrine Entity（`FerryCompany` / `Route` / `OperationStatus` / `ScraperLog`） | なし |
 | DB スキーマ・マイグレーション | なし |
 | `OperationStatusEnum` / `ScraperStatusEnum` | なし |
-| Repository のクエリ | なし |
 | Controller が Twig に渡す変数の形 | なし |
 | スクレイパー（Python 側） | なし |
+| `OperationStatus` Entity | **既存不具合の修正**: `#[ORM\HasLifecycleCallbacks]` を追加した。この属性がなかったため `#[ORM\PrePersist]` の `onPrePersist()` が呼ばれず、Doctrine 経由（fixtures 等）で保存すると `created_at` が NULL になって NOT NULL 違反で失敗していた |
+| `OperationStatusRepository::findTodayByAllCompanies()` | **既存不具合の修正**: `INNER JOIN` を `LEFT JOIN ... WITH r.active = :active` に変更した。有効な航路を持たない会社が結果から消え、「航路情報がありません。」の分岐に到達できなかったため。戻り値の形は変わらない（その会社の `routes` が空配列になるだけ） |
+| `docker/mysql/init/02_seed.sql` | **既存不具合の修正**: `created_at` / `updated_at` に値を明示的に入れるようにした（現行スキーマにはこの2カラムの DEFAULT がないため） |
 
 ---
 
