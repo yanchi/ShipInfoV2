@@ -1089,3 +1089,35 @@ def test_delayed_voyage_uses_searched_arrival_not_frozen_rows(
         row = find(departures, down, ports[port], date(2026, 10, 2))
         assert row["status"] == OperationStatusEnum.delayed
         assert row["status_detail"] == "荒天のため約2時間遅れて運航しております。"
+
+
+@resp_mock.activate
+def test_delayed_ship_keeps_delayed_on_unmentioned_ports(db_session, marue_with_ports):
+    """船が「遅延」（条件付ではない）で抜港の記載 → 与論だけ欠航、他の港は遅れたまま delayed（FR-006）。"""
+    company, ports = marue_with_ports
+    departures, logs = run_with_ships(
+        db_session,
+        company,
+        ("遅延", "荒天のため約2時間遅れて運航。与論港は抜港となります。"),
+    )
+
+    rows = down_statuses(db_session, company, ports, departures)
+    assert rows["与論"]["status"] == OperationStatusEnum.cancelled
+    for name in ["鹿児島", "名瀬", "亀徳", "和泊", "本部"]:
+        assert rows[name]["status"] == OperationStatusEnum.delayed
+        assert "約2時間遅れて" in rows[name]["status_detail"]
+
+
+@resp_mock.activate
+def test_delayed_ship_without_port_notice_has_no_unmatched_warning(
+    db_session, marue_with_ports
+):
+    """遅延の船は港の記載が無いのが普通なので port_notice_unmatched を出さない。"""
+    company, ports = marue_with_ports
+    departures, logs = run_with_ships(
+        db_session, company, ("遅延", "荒天のため約2時間遅れて運航しております。")
+    )
+
+    rows = down_statuses(db_session, company, ports, departures)
+    assert all(r["status"] == OperationStatusEnum.delayed for r in rows.values())
+    assert not any(log["event"] == "port_notice_unmatched" for log in logs)

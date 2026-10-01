@@ -34,7 +34,8 @@ MarueFerry (マルエーフェリー) scraper.
     港別情報（FR-006、utils/port_notice.py）:
     - 船ステータスが欠航・運休・便なし → 全港そのまま
     - 抜粋と船別詳細ページの本文から、言及された港を 抜港 → cancelled、港変更・条件付 → delayed にする
-    - 船が条件付で港別情報がある → 言及の無い港は operating。港別情報が無い → 全港 delayed（port_notice_unmatched）
+    - 船が条件付（タグが「条件付」）で港別情報がある → 言及の無い港は operating。
+      港別情報が無い → 全港 delayed（port_notice_unmatched）。遅延・スケジュール変更の船は言及の無い港もそのまま
     すべて freeze_after_departure=True（出港済みの行は確定）、replace_scope=(route, port, date)
 
 raw_html_hash: 鹿児島航路ページの HTML ＋ 今日の始発港2つの検索結果を正規化した文字列
@@ -98,6 +99,8 @@ class ShipInfo:
     status: OperationStatusEnum | None
     excerpt: str | None
     detail_url: str | None
+    # タグが「条件付」か。遅延・スケジュール変更も status は delayed になるので区別する（FR-006）
+    conditional: bool = False
 
 
 class MarueFerry(BaseScraper):
@@ -536,8 +539,8 @@ class MarueFerry(BaseScraper):
             if notice.change_to and notice.change_to not in detail:
                 detail += f"（変更先：{notice.change_to}）"
             return status, detail
-        if ship.status == OperationStatusEnum.delayed and notices:
-            # 条件付の理由は言及された港にあるとみなす
+        if ship.conditional and notices:
+            # 条件付の理由は言及された港にあるとみなす（遅延・スケジュール変更の船は全港そのまま）
             return OperationStatusEnum.operating, None
         return ship.status, self._ship_detail_text(ship)
 
@@ -548,7 +551,7 @@ class MarueFerry(BaseScraper):
                 ship.excerpt, getattr(self, "_ship_details", {}).get(ship.name)
             )
             notices = extract_port_notices(text, self._resolver)
-            if ship.status == OperationStatusEnum.delayed and not notices:
+            if ship.conditional and not notices:
                 self._log.warning(
                     "port_notice_unmatched", ship=ship.name, text=text[:200]
                 )
@@ -569,6 +572,7 @@ class MarueFerry(BaseScraper):
                 continue
             name = ferry_name_div.get_text(strip=True)
             status = None
+            status_text = ""
             tag_span = block.select_one("div.tag-list span")
             if tag_span is None:
                 self._log.warning("tag_span_not_found", ship=name)
@@ -581,7 +585,13 @@ class MarueFerry(BaseScraper):
                     )
             excerpt_div = block.find("div", class_="situation-excerpt")
             excerpt = excerpt_div.get_text(strip=True) if excerpt_div else None
-            ships[name] = ShipInfo(name, status, excerpt or None, block.get("href"))
+            ships[name] = ShipInfo(
+                name,
+                status,
+                excerpt or None,
+                block.get("href"),
+                conditional="条件付" in status_text,
+            )
         return ships
 
     def _load_routes(self) -> tuple:
