@@ -29,8 +29,8 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 `master` から `5-ui-readability-ports` ブランチを切る。`make test-php` が全部通ることを確認してから始める
-- [ ] T002 `app/templates/base.html.twig` の `<head>` に `<style>` ブロックを追加して、このあとのタスクで使う共通の CSS クラスの置き場所を作る（アセットのビルド環境は入れない。plan.md の Structure Decision）。中身は T009・T028・T034・T035 で足す
+- [X] T001 `master` から `5-ui-readability-ports` ブランチを切る。`make test-php` が全部通ることを確認してから始める
+- [X] T002 `app/templates/base.html.twig` の `<head>` に `<style>` ブロックを追加して、このあとのタスクで使う共通の CSS クラスの置き場所を作る（アセットのビルド環境は入れない。plan.md の Structure Decision）。中身は T009・T028・T034・T035 で足す
 
 **Checkpoint**: ブランチと CSS の置き場所ができている → コミット
 
