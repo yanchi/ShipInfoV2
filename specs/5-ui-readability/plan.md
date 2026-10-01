@@ -86,6 +86,7 @@ app/src/View/PortBoardDirection.php              # commonCheckedAt()
 app/src/View/PortBoardEntry.php                  # companyId、isAlert() / isDeparted() / checkedAtDiffersFrom()
 app/src/Service/PortBoardBuilder.php             # エントリーに companyId を入れるだけ（判定ルールは変えない）
 app/src/Repository/DepartureStatusRepository.php # findLatestCheckedAtByCompany()
+app/src/Repository/FerryCompanyRepository.php    # findBoardCompanies()（情報の古さの判定の基準）
 app/src/Repository/OperationStatusRepository.php # findUpcomingByCompany()、findRecentByCompany() を削除
 
 app/templates/base.html.twig                     # 共通ヘッダー・最終確認時刻・古い情報の警告・共通 CSS
@@ -133,7 +134,7 @@ PR1 の `_status_badge` の変更はトップ・会社別にもそのまま効�
 | ボードの加工 | ビルダーの判定は変えず、`PortBoard::filter()` / `forCompany()` で加工。会社は ID で突き合わせる | R5・R13 |
 | 会社別の日付の状態 | 便あり・便なし・情報なしを、元の行の有無で区別 | R13 |
 | 確認時刻 | 方向単位で分まで同じなら見出しに1回 | R6 |
-| 最終確認時刻 | 会社ごとの `MAX(checked_at)` のうち最も古いもの。2時間で警告し、古い会社名も出す | R10 |
+| 最終確認時刻 | 会社ごとの `MAX(checked_at)` のうち最も古いもの。2時間で警告し、古い会社名も出す。前日以降の行が無い会社も古い扱い | R10 |
 | キャッシュ | `/`・`/ports` に `Cache-Control: private`・`Vary: Cookie` | R15 |
 | 画面の高さ | sticky は日付ボタンだけ、要約は3件まで出して残りは開閉 | R16 |
 

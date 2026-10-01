@@ -24,7 +24,7 @@
 - `static none(): self`
 
 **作り方**（`PortFilterResolver`、Service）:
-1. クエリに `port` か `dir` がある → それで表示する。`port=all` は全港。Cookie は書き換えない
+1. クエリに `port` か `dir` がある → それで表示する。`port=all` は全港。Cookie は読む（`hasSaved` のため）が、表示には使わず書き換えない
 2. 無ければ Cookie `port_filter` の値を使う
 3. どちらも無い → `none()`
 
@@ -108,7 +108,8 @@
 
 | メソッド | 内容 |
 |---|---|
-| `DepartureStatusRepository::findLatestCheckedAtByCompany(DateTimeImmutable $today): array` | 有効な会社・有効な航路で、`departure_date >= $today - 1日` の行について、会社ごとの `MAX(checked_at)`。`[companyId => DateTimeImmutable]`。`idx_departure_date_port` が効く |
+| `DepartureStatusRepository::findLatestCheckedAtByCompany(DateTimeImmutable $today): array` | 有効な会社・有効な航路で、`departure_date >= $today - 1日` の行について、会社ごとの `MAX(checked_at)`。`[companyId => DateTimeImmutable]`。`idx_departure_date_port` が効く。結果に出てこない会社は呼び出し側（`SiteExtension`）で古い扱いにする |
+| `FerryCompanyRepository::findBoardCompanies(): list<FerryCompany>` | 有効で、方向のある有効な航路を持つ会社（情報の古さの判定の基準）。新規 |
 | `OperationStatusRepository::findUpcomingByCompany(FerryCompany $company, int $days): array` | 今日〜`$days-1` 日先の、その会社の有効な航路の行。`[Y-m-d => list<OperationStatus>]` |
 | `OperationStatusRepository::findRecentByCompany()` | **削除**（会社別ページでしか使っていない）。`OperationStatusRepositoryTest` の該当テスト2件も削除 |
 

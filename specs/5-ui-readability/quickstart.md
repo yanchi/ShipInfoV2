@@ -46,12 +46,27 @@ make scraper-run   # 最新のデータを入れる
 1. `/company/1` → 今日〜3日先が並び、昨日以前は無い。各日付に航路の要約行（情報があれば）と便の行
    - 便が無いと確認できた日は「便なし」、まだ取得していない日（例：3日先でマルエーの検索前）は「情報なし」になる
 2. 全ページに共通ヘッダー（トップ・港別・各社）と最終確認時刻がある
-3. 古い情報の警告：DB で1社分の `checked_at` だけを2時間以上前にする → もう1社が新しくても、全ページ上部に「情報が古い可能性があります」とその会社名が出る
+3. 古い情報の警告：先にスクレイパーを止める（動いていると次の実行で `checked_at` が上書きされる）
 
-   ```sql
-   UPDATE departure_statuses d JOIN routes r ON r.id = d.route_id
-   SET d.checked_at = NOW() - INTERVAL 3 HOUR WHERE r.ferry_company_id = 2;
+   ```bash
+   docker compose stop scraper
    ```
+
+   - DB で1社分の `checked_at` だけを2時間以上前にする → もう1社が新しくても、全ページ上部に「情報が古い可能性があります」とその会社名が出る
+
+     ```sql
+     UPDATE departure_statuses d JOIN routes r ON r.id = d.route_id
+     SET d.checked_at = NOW() - INTERVAL 3 HOUR WHERE r.ferry_company_id = 2;
+     ```
+
+   - 1社分の前日以降の行を消す（長く止まった状態）→ 警告とその会社名が出たまま
+
+     ```sql
+     DELETE d FROM departure_statuses d JOIN routes r ON r.id = d.route_id
+     WHERE r.ferry_company_id = 2 AND d.departure_date >= CURDATE() - INTERVAL 1 DAY;
+     ```
+
+   - 確認が終わったら `make scraper-run` でデータを戻し、`docker compose start scraper` で再開する
 
 ## テスト
 
