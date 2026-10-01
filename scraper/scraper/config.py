@@ -16,6 +16,13 @@ class Settings:
     db_password: str = os.getenv("DB_PASSWORD", "")
     interval_minutes: int = int(os.getenv("SCRAPER_INTERVAL_MINUTES", "30"))
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    marue_search_days_ahead: int = int(os.getenv("MARUE_SEARCH_DAYS_AHEAD", "3"))
+    marue_far_search_interval_hours: int = int(
+        os.getenv("MARUE_FAR_SEARCH_INTERVAL_HOURS", "6")
+    )
+    marue_search_delay_seconds: float = float(
+        os.getenv("MARUE_SEARCH_DELAY_SECONDS", "0.5")
+    )
 
     @property
     def db_url(self) -> str:

@@ -1,0 +1,61 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}港別運航情報 | ShipInfo{% endblock %}
+
+{% block body %}
+<div class="container py-4">
+    <a href="{{ path('app_status_index') }}" class="text-muted text-decoration-none small">← トップへ戻る</a>
+
+    <h1 class="h4 mt-2 mb-4">港別運航情報</h1>
+
+    {% if board.isEmpty %}
+        <div class="alert alert-secondary">港別の情報がありません。</div>
+    {% else %}
+        {% for day in board.days %}
+            <section class="mb-4">
+                <h2 class="h5 border-bottom pb-1 mb-3">
+                    {{ day.date|date('n月j日（') }}{{ ['日','月','火','水','木','金','土'][day.date|date('w')] }}）
+                </h2>
+                {% for direction in day.directions %}
+                    <h3 class="h6 text-muted mt-3 mb-2">{{ direction.direction.label }}</h3>
+                    <div class="card mb-3">
+                        <ul class="list-group list-group-flush">
+                            {% for row in direction.rows %}
+                                <li class="list-group-item port-row">
+                                    <div class="fw-bold">{{ row.port.name }}発 → {{ direction.arrivalPortName }}</div>
+                                    {% for entry in row.entries %}
+                                        <div class="port-entry mt-1">
+                                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                                {{ include('status/_status_badge.html.twig', {state: entry.state.value == 'status' ? null : entry.state, status: entry.status}) }}
+                                                {% if entry.shipName or entry.companyName %}
+                                                    <span>{{ entry.shipName ? entry.shipName ~ '／' : '' }}{{ entry.companyName }}</span>
+                                                {% endif %}
+                                                {% if entry.departureAt %}
+                                                    <span>{{ entry.departureAt|date('H:i') }}発</span>
+                                                {% endif %}
+                                                {% if entry.arrivalAt %}
+                                                    <span class="text-muted">（{{ entry.arrivalText(day.date) }}）</span>
+                                                {% endif %}
+                                                {% if entry.checkedAt %}
+                                                    <span class="text-muted small ms-auto">{{ entry.checkedAt|date('n/j H:i') }}時点</span>
+                                                {% endif %}
+                                            </div>
+                                            {% if entry.detail %}
+                                                <div class="text-muted small mt-1">└ {{ entry.detail }}</div>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endfor %}
+            </section>
+        {% endfor %}
+    {% endif %}
+
+    <footer class="text-muted small mt-4">
+        運航情報はスクレイピングにより収集しています。最新情報は各社公式サイトをご確認ください。
+    </footer>
+</div>
+{% endblock %}

@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Enum\RouteDirectionEnum;
 use App\Repository\RouteRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -32,6 +33,9 @@ class Route
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $destinationPort = null;
 
+    #[ORM\Column(length: 8, nullable: true, enumType: RouteDirectionEnum::class)]
+    private ?RouteDirectionEnum $direction = null;
+
     #[ORM\Column(type: 'boolean')]
     private bool $active = true;
 
@@ -44,9 +48,14 @@ class Route
     #[ORM\OneToMany(mappedBy: 'route', targetEntity: OperationStatus::class)]
     private Collection $operationStatuses;
 
+    #[ORM\OneToMany(mappedBy: 'route', targetEntity: RouteStop::class)]
+    #[ORM\OrderBy(['stopOrder' => 'ASC'])]
+    private Collection $stops;
+
     public function __construct()
     {
         $this->operationStatuses = new ArrayCollection();
+        $this->stops = new ArrayCollection();
     }
 
     #[ORM\PrePersist]
@@ -71,6 +80,8 @@ class Route
     public function setOriginPort(?string $originPort): static { $this->originPort = $originPort; return $this; }
     public function getDestinationPort(): ?string { return $this->destinationPort; }
     public function setDestinationPort(?string $destinationPort): static { $this->destinationPort = $destinationPort; return $this; }
+    public function getDirection(): ?RouteDirectionEnum { return $this->direction; }
+    public function setDirection(?RouteDirectionEnum $direction): static { $this->direction = $direction; return $this; }
     public function isActive(): bool { return $this->active; }
     public function setActive(bool $active): static { $this->active = $active; return $this; }
     public function getCreatedAt(): ?\DateTimeInterface { return $this->createdAt; }
@@ -78,4 +89,7 @@ class Route
 
     /** @return Collection<int, OperationStatus> */
     public function getOperationStatuses(): Collection { return $this->operationStatuses; }
+
+    /** @return Collection<int, RouteStop> */
+    public function getStops(): Collection { return $this->stops; }
 }
