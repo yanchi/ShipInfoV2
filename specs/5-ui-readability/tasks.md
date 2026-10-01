@@ -218,20 +218,20 @@
 
 **依存**: PR1 がマージ済み
 
-- [ ] T041 [US4] PR1 のマージ後、`master` から `5-ui-readability-top` ブランチを切る
-- [ ] T042 [US4] `StatusController::index()` を変える（research R12）
+- [X] T041 [US4] PR1 のマージ後、`master` から `5-ui-readability-top` ブランチを切る
+- [X] T042 [US4] `StatusController::index()` を変える（research R12）
   - `findBoardStops()`・`findForBoard($today, PORT_BOARD_DAYS)` で全港4日分のボードを作る
   - `PortAlertSummaryBuilder::build($fullBoard, PortFilter::none())` で要約を作る
   - `PortFilterResolver::resolveFromCookie()`（T018）で Cookie だけを読み（クエリは見ないので、`/?port=5&save=1` でもリダイレクトしない）、`cookie` があれば（不正な Cookie を消すとき）レスポンスに付ける。保存した港があれば `$fullBoard->filter($filter)` の今日（`days[0]`）を `savedToday` として渡す。無ければ null
   - 会社一覧は今の `findTodayByAllCompanies()` のまま
   - レスポンスに `Cache-Control: private` と `Vary: Cookie` を付ける
-- [ ] T043 [US4] `app/templates/status/index.html.twig` を FR-015 の順に組み直す
+- [X] T043 [US4] `app/templates/status/index.html.twig` を FR-015 の順に組み直す
   1. `_alert_summary`（`linkPrefix: '/ports?port=all'`）
   2. `savedToday` があれば「{港}発の今日の便」の見出しと、`_port_entry` で各行（`now` を渡す）。その下に「この港の4日分を見る」（`/ports`）
   3. `savedToday` が無ければ、ボタン相当の大きさのリンク「自分の港の便を見る」（`/ports`、`btn btn-primary btn-lg w-100`）（FR-017）
-  4. 会社一覧。航路がすべて `no_service` の会社は、カードにせず「{会社名}：本日運航なし」の1行にまとめて、カードの下に出す（FR-018）
+  4. 会社一覧。航路がすべて `no_service` の会社は、カードにせず「{会社名}：本日運航なし」の1行にまとめて、カードの下に出す（FR-018）。ただし今日の港別ボードにその会社の便があればカードのまま（research R12 の補足）
   - 方向ごとの便の概要は出さない（FR-016）
-- [ ] T044 [US4] `app/tests/Controller/StatusControllerTest.php` を直して足す
+- [X] T044 [US4] `app/tests/Controller/StatusControllerTest.php` を直して足す
   - `testIndexLinksToPorts`（`a[href="/ports"]` が1つ）を、「自分の港の便を見る」ボタンがあることを見るテストに直す
   - Cookie なし → 要約がある、ボタンがある、「今日の便」の見出しが無い
   - Cookie `port_filter` に港 → その港の今日の行がある、ボタンが無い
@@ -241,7 +241,7 @@
   - 全航路 `no_service` の会社が「本日運航なし」の1行になり、カードにならない
   - レスポンスヘッダーに `private` と `Vary: Cookie`
   - 既存の会社カードのテスト（グリッド・カードの中身）は、運航する会社について通ること
-- [ ] T045 [US4] quickstart.md の「PR2」の手順 1〜4 を実際に行い、375 × 667 で要約と保存した港の便がスクロールせずに見えることを確認する
+- [X] T045 [US4] quickstart.md の「PR2」の手順 1〜4 を実際に行い、375 × 667 で要約と保存した港の便がスクロールせずに見えることを確認する
 - [ ] T046 [US4] push して PR を作る。説明に US4・FR-015〜018 との対応を書く
 
 **Checkpoint**: US4 の Independent Test が通る。`make test-php` が全部通る → コミット

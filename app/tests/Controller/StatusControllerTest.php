@@ -467,12 +467,137 @@ class StatusControllerTest extends WebTestCase
         $this->assertStringContainsString('表示期間内に欠航・条件付の便はありません', $crawler->filter('.alert-summary')->text());
     }
 
+    // ------------------------------------------------------------------
+    // /（トップ、US4）
+    // ------------------------------------------------------------------
+
+    /** 保存した港が無ければ、港別ページへのボタン相当の導線（FR-017） */
     public function testIndexLinksToPorts(): void
     {
         $crawler = $this->client->request('GET', '/');
 
         $this->assertResponseIsSuccessful();
-        $this->assertCount(1, $crawler->filter('a[href="/ports"]'));
+        $button = $crawler->filter('a.ports-cta.btn.btn-lg[href="/ports"]');
+        $this->assertCount(1, $button);
+        $this->assertStringContainsString('自分の港の便を見る', $button->text());
+    }
+
+    public function testIndexWithoutCookieShowsSummaryAndButton(): void
+    {
+        $this->createPortBoardData();
+
+        $crawler = $this->client->request('GET', '/');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(1, $crawler->filter('.alert-summary'));
+        $this->assertCount(1, $crawler->filter('a.ports-cta'));
+        $this->assertCount(0, $crawler->filter('.saved-today'));
+        // 方向ごとの便の概要は出さない（FR-016）
+        $this->assertCount(0, $crawler->filter('li.port-row'));
+    }
+
+    public function testIndexWithSavedPortShowsTodaysDepartures(): void
+    {
+        $this->createPortBoardData();
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('名瀬') . '&dir=down'));
+
+        $crawler = $this->client->request('GET', '/');
+
+        $this->assertResponseIsSuccessful();
+        $saved = $crawler->filter('.saved-today');
+        $this->assertCount(1, $saved);
+        $this->assertStringContainsString('名瀬発・下りの今日の便', $saved->filter('h2')->text());
+        $rows = $saved->filter('li.port-row');
+        $this->assertCount(1, $rows);
+        $this->assertStringContainsString('05:50発', $rows->text());
+        $this->assertCount(1, $saved->filter('a[href="/ports"]'));
+        $this->assertCount(0, $crawler->filter('a.ports-cta'));
+    }
+
+    /** トップはクエリを見ない（保存もリダイレクトもしない） */
+    public function testIndexIgnoresSaveQuery(): void
+    {
+        $this->createPortBoardData();
+
+        $this->client->request('GET', '/?port=' . $this->portId('名瀬') . '&save=1');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+    }
+
+    public function testIndexClearsInvalidCookie(): void
+    {
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=999999'));
+
+        $crawler = $this->client->request('GET', '/');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(1, $crawler->filter('a.ports-cta'));
+        $cookies = $this->client->getResponse()->headers->getCookies();
+        $this->assertCount(1, $cookies);
+        $this->assertSame('port_filter', $cookies[0]->getName());
+        $this->assertTrue($cookies[0]->isCleared());
+    }
+
+    /** 要約は全港・4日分。リンクは /ports?port=all#r-…（保存した港に関係なく行に着地する） */
+    public function testIndexAlertSummaryLinksToPortsAll(): void
+    {
+        $this->createPortBoardData(OperationStatusEnum::Cancelled);
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('鹿児島')));
+        $anchor = sprintf('r-%s-down-%d', (new \DateTimeImmutable('tomorrow'))->format('Y-m-d'), $this->portId('名瀬'));
+
+        $crawler = $this->client->request('GET', '/');
+
+        $this->assertCount(1, $crawler->filter(".alert-summary a[href=\"/ports?port=all#{$anchor}\"]"));
+        $this->assertStringNotContainsString('絞り込みの外にも', $crawler->filter('.alert-summary')->text());
+    }
+
+    /** 航路がすべて no_service の会社は「本日運航なし」の1行にまとめる（FR-018） */
+    public function testIndexCollapsesCompanyWithoutServiceToday(): void
+    {
+        $this->createCompanyWithRoute();
+        $this->createCompanyWithRoute('運航なしテスト会社', OperationStatusEnum::NoService);
+
+        $crawler = $this->client->request('GET', '/');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertStringContainsString('運航なしテスト会社：本日運航なし', $crawler->filter('.idle-companies')->text());
+        $this->assertCount(0, $crawler->filter('.card-header')->reduce(
+            static fn (Crawler $n) => str_contains($n->text(), '運航なしテスト会社'),
+        ));
+        $this->findCard($crawler, 'グリッドテスト会社');
+    }
+
+    /**
+     * 航路単位では no_service でも、前日に始発港を出た便が今日途中の港を出るなら「本日運航なし」にしない。
+     */
+    public function testIndexKeepsCompanyWithDeparturesTodayAsCard(): void
+    {
+        $this->createPortBoardData();
+        $em    = $this->entityManager();
+        $route = $em->getRepository(Route::class)->findOneBy(['name' => '港別テスト運航会社 下り']);
+        $em->persist((new OperationStatus())
+            ->setRoute($route)
+            ->setStatus(OperationStatusEnum::NoService)
+            ->setValidDate(new \DateTime('today'))
+            ->setScrapedAt(new \DateTime())
+            ->setSourceUrl('https://example.invalid/test'));
+        $em->flush();
+        $em->clear();
+
+        $crawler = $this->client->request('GET', '/');
+
+        $this->assertResponseIsSuccessful();
+        $this->findCard($crawler, '港別テスト運航会社');
+        $this->assertCount(0, $crawler->filter('.idle-companies'));
+    }
+
+    public function testIndexIsPrivateAndVariesByCookie(): void
+    {
+        $this->client->request('GET', '/');
+
+        $this->assertTrue($this->client->getResponse()->headers->hasCacheControlDirective('private'));
+        $this->assertContains('Cookie', $this->client->getResponse()->getVary());
     }
 
     /**
@@ -570,29 +695,29 @@ class StatusControllerTest extends WebTestCase
     }
 
     /**
-     * 公式サイトURL・有効航路1本・本日の運航ステータス（通常運航）を持つ会社を作成する。
+     * 公式サイトURL・有効航路1本・本日の運航ステータス（既定は通常運航）を持つ会社を作成する。
      * テストDBが空でもグリッドとカード内部の描画を検証できるようにするため。
      */
-    private function createCompanyWithRoute(): int
+    private function createCompanyWithRoute(string $name = 'グリッドテスト会社', OperationStatusEnum $status = OperationStatusEnum::Operating): int
     {
         $company = (new FerryCompany())
-            ->setName('グリッドテスト会社')
+            ->setName($name)
             ->setWebsiteUrl('https://example.invalid')
             ->setActive(true);
         $route = (new Route())
             ->setFerryCompany($company)
             ->setName('グリッドテスト航路')
             ->setActive(true);
-        $status = (new OperationStatus())
+        $operationStatus = (new OperationStatus())
             ->setRoute($route)
-            ->setStatus(OperationStatusEnum::Operating)
+            ->setStatus($status)
             ->setValidDate(new \DateTime('today'))
             ->setScrapedAt(new \DateTime())
             ->setSourceUrl('https://example.invalid/test');
 
         $em = $this->entityManager();
         $em->persist($route);
-        $em->persist($status);
+        $em->persist($operationStatus);
 
         return $this->persistCompany($company);
     }
@@ -603,7 +728,8 @@ class StatusControllerTest extends WebTestCase
     private function findCard(Crawler $crawler, string $companyName): Crawler
     {
         $card = $crawler->filter('.card')->reduce(
-            static fn (Crawler $node) => trim($node->filter('.card-header a')->first()->text()) === $companyName
+            static fn (Crawler $node) => $node->filter('.card-header a')->count() > 0
+                && trim($node->filter('.card-header a')->first()->text()) === $companyName
         );
         $this->assertCount(1, $card, sprintf('「%s」のカードが描画されていません。', $companyName));
 

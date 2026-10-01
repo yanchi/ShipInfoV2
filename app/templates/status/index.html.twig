@@ -5,10 +5,43 @@
 {% block body %}
 <div class="container py-4">
     <h1 class="h4 mb-1">ShipInfo - フェリー運航情報</h1>
-    <p class="text-muted mb-2">{{ today|date('Y年n月j日（') }}{{ ['日','月','火','水','木','金','土'][today|date('w')] }}）の運航状況</p>
-    <p class="mb-4"><a href="{{ path('app_status_ports') }}" class="text-decoration-none">港別に見る →</a></p>
+    <p class="text-muted mb-3">{{ today|date('Y年n月j日（') }}{{ ['日','月','火','水','木','金','土'][today|date('w')] }}）の運航状況</p>
 
-    {% if companies is empty %}
+    {# FR-015: 異常の要約 → 保存した港の今日の便（無ければ港別ページへのボタン）→ 会社一覧 #}
+    {{ include('status/_alert_summary.html.twig', {summary: summary, linkPrefix: path('app_status_ports', {port: 'all'})}) }}
+
+    {% if savedToday %}
+        <section class="saved-today mb-4">
+            <h2 class="h5 mb-2">{{ portFilter.label(portOptions) }}の今日の便</h2>
+            {% for direction in savedToday.directions %}
+                {%- set commonCheckedAt = direction.commonCheckedAt -%}
+                <h3 class="h6 text-muted mt-2 mb-2 d-flex flex-wrap column-gap-2">
+                    <span>{{ direction.direction.label }}</span>
+                    {% if commonCheckedAt %}
+                        <span class="checked-at small fw-normal ms-auto">{{ commonCheckedAt|date('n/j H:i') }}時点</span>
+                    {% endif %}
+                </h3>
+                <div class="card mb-2">
+                    <ul class="list-group list-group-flush">
+                        {% for row in direction.rows %}
+                            <li class="list-group-item port-row">
+                                <div class="fw-bold">{{ row.port.name }}発 → {{ direction.arrivalPortName }}</div>
+                                {% for entry in row.entries %}
+                                    {{ include('status/_port_entry.html.twig', {entry: entry, day: savedToday.date, now: now, commonCheckedAt: commonCheckedAt}) }}
+                                {% endfor %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endfor %}
+            <a href="{{ path('app_status_ports') }}" class="saved-today-more">この港の4日分を見る →</a>
+        </section>
+    {% else %}
+        {# FR-017: 港別ページへの導線はボタン相当の大きさで #}
+        <a href="{{ path('app_status_ports') }}" class="ports-cta btn btn-primary btn-lg w-100 mb-4">自分の港の便を見る</a>
+    {% endif %}
+
+    {% if companies is empty and idleCompanies is empty %}
         <div class="alert alert-secondary">現在情報がありません。</div>
     {% else %}
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
@@ -42,6 +75,14 @@
                 </div>
             {% endfor %}
         </div>
+        {# FR-018: その日運航の無い会社は1行にまとめる #}
+        {% if idleCompanies is not empty %}
+            <ul class="idle-companies list-unstyled small text-muted mt-3 mb-0">
+                {% for company in idleCompanies %}
+                    <li><a href="{{ path('app_status_company', {id: company.id}) }}" class="text-reset">{{ company.name }}</a>：本日運航なし</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
     {% endif %}
 
     <footer class="text-muted small mt-4">
