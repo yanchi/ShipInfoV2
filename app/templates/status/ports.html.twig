@@ -3,10 +3,8 @@
 {% block title %}港別運航情報 | ShipInfo{% endblock %}
 
 {% block body %}
-<div class="container py-4">
-    <a href="{{ path('app_status_index') }}" class="text-muted text-decoration-none small">← トップへ戻る</a>
-
-    <h1 class="h4 mt-2 mb-2">港別運航情報</h1>
+<div class="container pt-3 pb-4">
+    <h1 class="h4 mb-2">港別運航情報</h1>
 
     {% if not fullBoard.isEmpty %}
         <nav class="date-nav d-flex gap-1 py-2 mb-2" aria-label="日付">

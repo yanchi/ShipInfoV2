@@ -3,10 +3,8 @@
 {% block title %}{{ company.name }} - 運航状況 | ShipInfo{% endblock %}
 
 {% block body %}
-<div class="container py-4">
-    <a href="{{ path('app_status_index') }}" class="text-muted text-decoration-none small">← トップへ戻る</a>
-
-    <div class="d-flex align-items-baseline gap-2 mt-2 mb-4">
+<div class="container pt-3 pb-4">
+    <div class="d-flex align-items-baseline gap-2 mb-4">
         <h1 class="h4 mb-0">{{ company.name }} 運航状況</h1>
         {% if company.websiteUrl %}
             <a href="{{ company.websiteUrl }}" target="_blank" rel="noopener noreferrer" class="text-muted small">

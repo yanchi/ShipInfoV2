@@ -131,6 +131,8 @@ CSRF トークンは `symfony/security-csrf` の stateless トークンを使う
 
 **Decision**: 同じ `SiteExtension` に `site_companies()`（有効な会社の一覧）を置く。ヘッダーの「各社」は Bootstrap のドロップダウンにする（Bootstrap の JS は読み込み済み）。スマートフォン幅ではヘッダーを折りたたむ（navbar の collapse）。
 
+**更新（PR3 実装時）**: Bootstrap のドロップダウンと collapse は JS が無いと開かないので、plan の「JS 無しでも全機能が動く」に合わない。そこで、ヘッダーは折りたたまずに1行（「ShipInfo」「港別」「各社 ▾」）にし、「各社」は `<details>` で開くメニューにした。項目が3つだけなので 375px でも1行に収まり、折りたたむより高さも低い（R16）。
+
 ## R12. トップの構成（FR-015〜018）
 
 **Decision**: トップでも `/ports` と同じく全港4日分の `PortBoard` を作る。

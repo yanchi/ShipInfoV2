@@ -296,9 +296,9 @@
 
 ### Tests for User Story 6
 
-- [ ] T056 [P] [US6] `app/tests/Repository/DepartureStatusRepositoryTest.php` に `findLatestCheckedAtByCompany()` のテストを足す：会社ごとの最大値、前日より前の行は見ない、無効な会社・航路は入らない、行が無い会社はキーが無い
-- [ ] T057 [P] [US6] `app/tests/Repository/` に `FerryCompanyRepositoryTest.php` を作り、`findBoardCompanies()` が「有効で、方向のある有効な航路を持つ会社」だけを返すことをテストする
-- [ ] T058 [P] [US6] `app/tests/Twig/SiteExtensionTest.php` を作る（リポジトリはモック）
+- [X] T056 [P] [US6] `app/tests/Repository/DepartureStatusRepositoryTest.php` に `findLatestCheckedAtByCompany()` のテストを足す：会社ごとの最大値、前日より前の行は見ない、無効な会社・航路は入らない、行が無い会社はキーが無い
+- [X] T057 [P] [US6] `app/tests/Repository/` に `FerryCompanyRepositoryTest.php` を作り、`findBoardCompanies()` が「有効で、方向のある有効な航路を持つ会社」だけを返すことをテストする
+- [X] T058 [P] [US6] `app/tests/Twig/SiteExtensionTest.php` を作る（リポジトリはモック）
   - 全社の最終確認時刻が1時間前 → 古くない、表示する時刻は一番古い会社の時刻
   - 1社だけ3時間前 → 古い、その会社名が入る
   - 1社の結果が無い（キーが無い）→ 古い、その会社名が入る
@@ -306,21 +306,21 @@
 
 ### Implementation for User Story 6
 
-- [ ] T059 [P] [US6] `app/src/Repository/DepartureStatusRepository.php` に `findLatestCheckedAtByCompany(\DateTimeImmutable $today): array` を追加する（research R10）。`SELECT fc.id, MAX(d.checkedAt) … WHERE d.departureDate >= :from AND r.active = true AND fc.active = true AND r.direction IS NOT NULL GROUP BY fc.id`、`:from` は `$today->modify('-1 day')`。`[companyId => \DateTimeImmutable]` で返す
-- [ ] T060 [P] [US6] `app/src/Repository/FerryCompanyRepository.php` に `findBoardCompanies(): array` を追加する（有効な会社で、`direction` が NULL でない有効な航路を持つもの。重複なし、ID 順）
-- [ ] T061 [US6] `app/src/Twig/SiteExtension.php` を作る（`AbstractExtension`、自動で登録される）
+- [X] T059 [P] [US6] `app/src/Repository/DepartureStatusRepository.php` に `findLatestCheckedAtByCompany(\DateTimeImmutable $today): array` を追加する（research R10）。`SELECT fc.id, MAX(d.checkedAt) … WHERE d.departureDate >= :from AND r.active = true AND fc.active = true AND r.direction IS NOT NULL GROUP BY fc.id`、`:from` は `$today->modify('-1 day')`。`[companyId => \DateTimeImmutable]` で返す
+- [X] T060 [P] [US6] `app/src/Repository/FerryCompanyRepository.php` に `findBoardCompanies(): array` を追加する（有効な会社で、`direction` が NULL でない有効な航路を持つもの。重複なし、ID 順）
+- [X] T061 [US6] `app/src/Twig/SiteExtension.php` を作る（`AbstractExtension`、自動で登録される）
   - `site_freshness()`：`{checkedAt: ?DateTimeImmutable, isStale: bool, staleCompanies: list<string>}`。`findBoardCompanies()` の各社について `findLatestCheckedAtByCompany()` の値を見て、無い会社と2時間以上前の会社を `staleCompanies` に入れる。`checkedAt` は値のある会社の中で一番古い時刻。閾値は `private const STALE_AFTER = 'PT2H'`
   - `site_companies()`：有効な会社の一覧（ヘッダーの「各社」用）
   - どちらも、結果をプロパティに覚えておき、同じリクエストの中では2回目以降クエリを走らせない（research R10）
-- [ ] T062 [US6] `app/templates/base.html.twig` に共通ヘッダーを置く（FR-022・research R11）
+- [X] T062 [US6] `app/templates/base.html.twig` に共通ヘッダーを置く（FR-022・research R11）
   - Bootstrap の `navbar navbar-expand-md`。サイト名（`/` へのリンク）、「港別」（`/ports`）、「各社」（ドロップダウンで `site_companies()` の各社、`/company/{id}`）
   - 今いるページのリンクに `active` と `aria-current="page"`（`app.request.attributes.get('_route')` で判定）
   - スマートフォン幅では折りたたむ。ヘッダーは sticky にしない（research R16）
-- [ ] T063 [US6] `app/templates/base.html.twig` のヘッダーの下に最終確認時刻を出す（FR-023）
+- [X] T063 [US6] `app/templates/base.html.twig` のヘッダーの下に最終確認時刻を出す（FR-023）
   - 古くない → `small text-muted` で「最終確認 {n/j H:i}」
   - 古い → `alert alert-warning` で「情報が古い可能性があります（{会社名、…} の情報が2時間以上更新されていません）」と最終確認時刻
   - 3画面の「← トップへ戻る」のリンクは、共通ヘッダーがあるので削除する
-- [ ] T064 [US6] `app/tests/Controller/StatusControllerTest.php` に足す：3画面すべてにヘッダー（`nav` の中に `/`・`/ports`・各社へのリンク）があり、今のページに `aria-current="page"`。テストデータの確認時刻が新しい → 警告が無い。1社の `checked_at` を3時間前にする → 警告とその会社名
+- [X] T064 [US6] `app/tests/Controller/StatusControllerTest.php` に足す：3画面すべてにヘッダー（`nav` の中に `/`・`/ports`・各社へのリンク）があり、今のページに `aria-current="page"`。テストデータの確認時刻が新しい → 警告が無い。1社の `checked_at` を3時間前にする → 警告とその会社名
 
 **Checkpoint**: US6 の Independent Test が通る。`make test-php` が全部通る → コミット
 
