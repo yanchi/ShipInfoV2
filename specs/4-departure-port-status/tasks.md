@@ -264,16 +264,16 @@
 
 **Independent Test**: 下り便の fixture と、時刻を固定したテストで、US5 のシナリオ1〜6 どおりになる。
 
-- [ ] T042 [P] [US5] `scraper/tests/test_marix_line.py` に日またぎのテストを足す
+- [X] T042 [P] [US5] `scraper/tests/test_marix_line.py` に日またぎのテストを足す
   - `marix/downstream.html` で、名瀬以降の行の `departure_date` が始発日の翌日になる
   - 12/31 始発・1/1 出港の年またぎ（fixture の日付を書き換えて作る）
   - 一覧から消えた便の行が `departure_statuses` から消されない（FR-013、`_upsert_departures` を通して確認）
-- [ ] T043 [P] [US5] `scraper/tests/test_marue_ferry.py` に確定のテストを足す（US4 シナリオ9）。10/1 05:50 発の行が DB にある状態で、10/1 20:00 に船ステータスが `cancelled` に変わったデータで実行しても、その行の status は `operating` のまま、`checked_at` も出港前の最後の確認時刻のまま変わらない。さらに、出港後の検索でその便が返らなくなっても（結果0件や別の船）、その行は削除されない。また、DB に行が無い状態で 10/1 10:00 に初めて実行したとき、10/1 05:50 発の行は作られない（港別ページでは「情報なし」）
-- [ ] T044 [P] [US5] `app/tests/Controller/StatusControllerTest.php` に表示のテストを足す
+- [X] T043 [P] [US5] `scraper/tests/test_marue_ferry.py` に確定のテストを足す（US4 シナリオ9）。10/1 05:50 発の行が DB にある状態で、10/1 20:00 に船ステータスが `cancelled` に変わったデータで実行しても、その行の status は `operating` のまま、`checked_at` も出港前の最後の確認時刻のまま変わらない。さらに、出港後の検索でその便が返らなくなっても（結果0件や別の船）、その行は削除されない。また、DB に行が無い状態で 10/1 10:00 に初めて実行したとき、10/1 05:50 発の行は作られない（港別ページでは「情報なし」）
+- [X] T044 [P] [US5] `app/tests/Controller/StatusControllerTest.php` に表示のテストを足す
   - `scheduled_departure_at` が前日始発の便でも、その日の日付セクションに出る
   - `checked_at` が「n/j H:i時点」で出る
   - 到着が翌日なら「翌H:i着」で出る
-- [ ] T045 [US5] JST の確認：`scraper/tests/test_base_departures.py` に、`datetime.now()` を 0:30（JST の想定）に固定して、`departure_date` と `checked_at` が同じ暦日で記録されるテストを足す。あわせて quickstart.md の JST 確認手順を実際に実行する
+- [X] T045 [US5] JST の確認：`scraper/tests/test_base_departures.py` に、`datetime.now()` を 0:30（JST の想定）に固定して、`departure_date` と `checked_at` が同じ暦日で記録されるテストを足す。あわせて quickstart.md の JST 確認手順を実際に実行する
 
 **Checkpoint**: `make test-scraper` と `make test-php` が全部通る → コミット
 

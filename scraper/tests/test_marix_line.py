@@ -445,3 +445,75 @@ def test_route_level_parse_unchanged_with_real_list(db_session, marix_line_compa
     by_route = {r["route_id"]: r for r in records}
     assert by_route[down.id]["status"] == OperationStatusEnum.operating
     assert by_route[up.id]["status"] == OperationStatusEnum.delayed
+
+
+# ---------------------------------------------------------------------------
+# 日またぎ（US5）
+# ---------------------------------------------------------------------------
+
+from scraper.db.models import DepartureStatus  # noqa: E402
+
+
+@resp_mock.activate
+def test_downstream_intermediate_ports_depart_next_day(db_session, marix_line_company):
+    """9/30 鹿児島発の下り便：名瀬以降の行は 10/1（US5 シナリオ1）。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages()
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    records = scraper.parse_departures()
+
+    down, _ = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, down)
+    assert rows["鹿児島"]["departure_date"] == date(2026, 9, 30)
+    for name in ["名瀬", "亀徳", "和泊", "与論", "本部"]:
+        assert rows[name]["departure_date"] == date(2026, 10, 1)
+    assert rows["名瀬"]["scheduled_departure_at"] == datetime(2026, 10, 1, 5, 50)
+
+
+@resp_mock.activate
+def test_year_crossing_voyage(db_session, marix_line_company):
+    """12/31 鹿児島発 → 1/1 出港の途中港は翌年の日付になる。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    list_html = (
+        read_fixture("marix/list.html")
+        .replace("2026年9月30日 鹿児島新港発 2026年10月1日", "2026年12月31日 鹿児島新港発 2027年1月1日")
+        .replace("downstream20260930", "downstream20261231")
+    )
+    down_html = read_fixture("marix/downstream.html").replace("09月30日", "12月31日").replace("10月01日", "01月01日")
+    resp_mock.add(resp_mock.GET, SOURCE_URL, body=list_html)
+    resp_mock.add(resp_mock.GET, "https://marixline.com/service/downstream20261231/", body=down_html)
+    resp_mock.add(resp_mock.GET, UP_URL, body=read_fixture("marix/upstream_conditional.html"))
+
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    records = scraper.parse_departures()
+
+    down, _ = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, down)
+    assert rows["鹿児島"]["scheduled_departure_at"] == datetime(2026, 12, 31, 18, 0)
+    assert rows["名瀬"]["departure_date"] == date(2027, 1, 1)
+    assert rows["名瀬"]["scheduled_departure_at"] == datetime(2027, 1, 1, 5, 50)
+    assert rows["本部"]["scheduled_arrival_at"] == datetime(2027, 1, 1, 19, 0)
+
+
+@resp_mock.activate
+def test_rows_are_kept_after_voyage_leaves_list(db_session, marix_line_company):
+    """一覧から消えた便の行は departure_statuses から消さない（FR-013）。"""
+    setup_port_master(db_session, marix_line_company)
+    _mock_pages()
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    scraper._upsert_departures(scraper.parse_departures())
+    db_session.commit()
+    before = db_session.query(DepartureStatus).count()
+    assert before == 12
+
+    resp_mock.reset()
+    resp_mock.add(resp_mock.GET, SOURCE_URL, body="<html><body></body></html>")
+    scraper2 = MarixLine(db_session, marix_line_company.id)
+    scraper2.fetch()
+    scraper2._upsert_departures(scraper2.parse_departures())
+    db_session.commit()
+
+    assert db_session.query(DepartureStatus).count() == before

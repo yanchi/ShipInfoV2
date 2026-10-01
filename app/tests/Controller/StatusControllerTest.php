@@ -209,6 +209,24 @@ class StatusControllerTest extends WebTestCase
         $this->assertStringContainsString($expected, $row->text());
     }
 
+    /**
+     * 前日に始発港を出た便でも、その港を出る日の日付セクションに出る（US5 シナリオ1）。
+     * 到着が翌日なら「翌H:i着」。
+     */
+    public function testPortsShowsIntermediatePortUnderItsDepartureDate(): void
+    {
+        $this->createPortBoardData();
+
+        $crawler = $this->client->request('GET', '/ports');
+
+        // 今日の名瀬発（前日鹿児島発の便）は今日のセクション
+        $row = $this->findPortRow($crawler, 0, '名瀬');
+        $this->assertStringContainsString('05:50発', $row->text());
+        $this->assertStringContainsString('翌08:00着', $row->text());
+        // 翌日のセクションの名瀬発には出ない
+        $this->assertStringNotContainsString('港別テスト丸', $this->findPortRow($crawler, 1, '名瀬')->text());
+    }
+
     public function testIndexLinksToPorts(): void
     {
         $crawler = $this->client->request('GET', '/');
@@ -219,7 +237,7 @@ class StatusControllerTest extends WebTestCase
 
     /**
      * 下りの寄港順（鹿児島→名瀬→那覇）を持つ2社と、名瀬発の港別ステータスを作る。
-     * - 今日: 運航会社が船あり・通常運航（05:50発）、非運航会社が no_service
+     * - 今日: 運航会社が船あり・通常運航（05:50発・翌08:00着）、非運航会社が no_service
      * - 3日先: 運航会社が status null（運航予定）
      */
     private function createPortBoardData(): void
@@ -249,7 +267,8 @@ class StatusControllerTest extends WebTestCase
             $routes[] = $route;
         }
 
-        $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today), '港別テスト丸', OperationStatusEnum::Operating, (clone $today)->setTime(5, 50)));
+        $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today), '港別テスト丸', OperationStatusEnum::Operating, (clone $today)->setTime(5, 50))
+            ->setScheduledArrivalAt((clone $today)->modify('+1 day')->setTime(8, 0)));
         $em->persist($this->makeDeparture($routes[1], $ports['名瀬'], (clone $today), '', OperationStatusEnum::NoService, null));
         $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today)->modify('+3 days'), '港別テスト丸', null, (clone $today)->modify('+3 days')->setTime(5, 50)));
 

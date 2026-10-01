@@ -675,3 +675,70 @@ def test_route_level_parse_is_unchanged_by_port_notices(db_session, marue_with_p
 
     down, _ = routes_of(db_session, company)
     assert next(r for r in records if r["route_id"] == down.id)["status"] == OperationStatusEnum.operating
+
+
+# ---------------------------------------------------------------------------
+# 出港済みの行の確定（US4 シナリオ9、FR-020）
+# ---------------------------------------------------------------------------
+
+NAZE_0550 = search_html([marue("フェリーあけぼの", "2026年10月1日 05:50", "2026年10月1日 19:00")])
+
+
+def run_at(db_session, company, now, searches, akebono):
+    resp_mock.reset()
+    mock_search(searches)
+    mock_kagoshima(kagoshima_html(akebono=akebono))
+    scraper = MarueFerry(db_session, company.id)
+    with fixed_now(now):
+        scraper.run()
+    db_session.commit()
+
+
+def naze_rows(db_session, company, ports):
+    down, _ = routes_of(db_session, company)
+    return db_session.execute(
+        select(DepartureStatus).where(
+            DepartureStatus.route_id == down.id,
+            DepartureStatus.port_id == ports["名瀬"].id,
+            DepartureStatus.departure_date == date(2026, 10, 1),
+        )
+    ).scalars().all()
+
+
+@resp_mock.activate
+def test_departed_row_is_frozen(db_session, marue_with_ports):
+    company, ports = marue_with_ports
+    searches = {(NAZE, NAHA, D1001): NAZE_0550}
+
+    # 出港前（05:30）に通常運航で記録
+    run_at(db_session, company, datetime(2026, 10, 1, 5, 30), searches, ("通常運航", "通常運航致しております。"))
+    [row] = naze_rows(db_session, company, ports)
+    assert row.status == "operating"
+    assert row.checked_at == datetime(2026, 10, 1, 5, 30)
+
+    # 20:00 に船ステータスが次の便の「欠航」に変わった
+    run_at(db_session, company, datetime(2026, 10, 1, 20, 0), searches, ("欠航", "台風接近のため欠航いたします。"))
+    [row] = naze_rows(db_session, company, ports)
+    assert row.status == "operating"
+    assert row.checked_at == datetime(2026, 10, 1, 5, 30)
+    assert row.scraped_at == datetime(2026, 10, 1, 5, 30)
+
+    # 出港後の検索でその便が返らなくなっても（0件・別の船）、行は消えない
+    run_at(db_session, company, datetime(2026, 10, 1, 20, 30), {}, ("通常運航", "通常運航致しております。"))
+    run_at(db_session, company, datetime(2026, 10, 1, 21, 0), {
+        (NAZE, NAHA, D1001): search_html([marue("フェリー波之上", "2026年10月1日 23:00", "2026年10月2日 12:00")]),
+    }, ("通常運航", "通常運航致しております。"))
+    akebono = [r for r in naze_rows(db_session, company, ports) if r.ship_name == "フェリーあけぼの"]
+    assert len(akebono) == 1
+    assert akebono[0].status == "operating"
+    assert akebono[0].checked_at == datetime(2026, 10, 1, 5, 30)
+
+
+@resp_mock.activate
+def test_departed_row_is_not_created_on_first_run(db_session, marue_with_ports):
+    """DB に行が無い状態で 10:00 に初めて実行 → 05:50 発の行は作らない（港別ページでは「情報なし」）。"""
+    company, ports = marue_with_ports
+    run_at(db_session, company, datetime(2026, 10, 1, 10, 0), {(NAZE, NAHA, D1001): NAZE_0550},
+           ("欠航", "台風接近のため欠航いたします。"))
+
+    assert naze_rows(db_session, company, ports) == []

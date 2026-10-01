@@ -337,3 +337,31 @@ def test_run_route_level_flush_error_is_failed(db_session, setup):
     assert not log.error_message.startswith("departures:")
     assert db_session.execute(select(OperationStatus)).scalars().all() == []
     assert _rows(db_session) == []
+
+
+# ---------------------------------------------------------------------------
+# JST（US5、FR-016）
+# ---------------------------------------------------------------------------
+
+def test_departure_date_and_checked_at_are_same_day_just_after_midnight(db_session, setup):
+    """0:30（JST）に実行しても、departure_date と checked_at は同じ暦日で記録される。"""
+    from unittest.mock import patch
+
+    scraper, _, route, port = setup
+    fixed = datetime(2026, 10, 2, 0, 30)
+
+    class _DateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed
+
+    with patch("scraper.scrapers.base.datetime", _DateTime):
+        scraper._upsert_departures([_rec(
+            route, port, departure_date=fixed.date(),
+            scheduled_departure_at=datetime(2026, 10, 2, 5, 50),
+        )])
+    db_session.commit()
+
+    row = _rows(db_session)[0]
+    assert row.checked_at == fixed
+    assert row.checked_at.date() == row.departure_date
