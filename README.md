@@ -26,7 +26,7 @@ specs/      機能仕様（Spec-Driven Development）
 cp .env.example .env          # 環境変数を設定
 cp scraper/.env.example scraper/.env
 
-make init   # ビルド・起動・マイグレーション一括実行
+make init   # ビルド・起動・マイグレーション・テスト用 DB 作成を一括実行
 ```
 
 ブラウザで http://localhost:8080 を開く。
@@ -40,6 +40,8 @@ make migrate       # DB マイグレーション実行
 make fixtures      # テストデータ投入
 make scraper-run   # スクレイパー即時実行
 make test-php      # PHPUnit テスト
+make init-test-db  # テスト用 DB（${DB_NAME}_test）を作成（何度実行しても大丈夫）
+make reset-test-db # テスト用 DB を消して作り直す
 make test-scraper  # pytest テスト
 make shell-php     # PHP コンテナにシェル接続
 make shell-scraper # Scraper コンテナにシェル接続
