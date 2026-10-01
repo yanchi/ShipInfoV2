@@ -1,3 +1,19 @@
+<!--
+Sync Impact Report
+- Version change: 1.1.0 → 2.0.0（MAJOR：原則 III の「変更履歴をすべて保持」を「キーごとの最新状態を保持」に定義し直したため）
+- Modified principles: III. データ品質保証（変更履歴の保持 → 最新状態の保持。履歴は MVP では持たない）
+- Added sections: なし
+- Removed sections: なし
+- Templates:
+  - ✅ .specify/templates/plan-template.md（Constitution Check は constitution から作るので変更なし）
+  - ✅ .specify/templates/spec-template.md（変更なし）
+  - ✅ .specify/templates/tasks-template.md（変更なし）
+- Dependent artifacts:
+  - ✅ specs/4-departure-port-status/plan.md（Constitution Check の III を「#20 で決める」から更新）
+- Follow-up TODOs: なし
+- 理由: https://github.com/yanchi/ShipInfoV2/issues/20
+-->
+
 # ShipInfoV2 Constitution
 
 ## Core Principles
@@ -16,7 +32,14 @@ REST APIの提供はMVP以降のフェーズで検討する。
 
 ### III. データ品質保証
 `raw_html_hash`（SHA-256）による重複スクレイピング防止を必須とする。
-運航状況の変更履歴はすべて`operation_statuses`テーブルに保持すること。
+運航状況はキーごとの最新状態を1行で保持し、内容が変わったら同じ行を上書きすること。
+- `operation_statuses`：航路 × 日付ごとに1行
+- `departure_statuses`：航路 × 港 × 出港日 × 船ごとに1行
+
+変更の履歴（同じキーの過去の状態）は MVP では保持しない。
+理由：MVP には履歴を使う画面・機能が無い。履歴を持つなら保持期間も設計する必要があり、
+使い道が無いまま貯めると負債になる。履歴が必要な機能を作るときは、保持期間とあわせて
+追記型の履歴テーブルを設計すること。
 スクレイパーの実行ログは`scraper_logs`テーブルに記録し、障害追跡を可能にする。
 
 ### IV. Docker完結
@@ -65,4 +88,4 @@ AIの暴走を防ぐため、一度に実装するスコープを明確に制限
 変更には明文化された理由が必要。
 技術的負債は即日解消することを原則とする。
 
-**Version**: 1.1.0 | **Ratified**: 2026-03-07 | **Last Amended**: 2026-03-07
+**Version**: 2.0.0 | **Ratified**: 2026-03-07 | **Last Amended**: 2026-10-01
