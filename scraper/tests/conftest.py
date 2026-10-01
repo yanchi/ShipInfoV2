@@ -1,6 +1,6 @@
 import pytest
 from datetime import datetime
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from scraper.db.models import Base, FerryCompany, Route
@@ -10,6 +10,17 @@ from scraper.db.models import Base, FerryCompany, Route
 def db_session():
     """In-memory SQLite session for unit tests."""
     engine = create_engine("sqlite:///:memory:")
+
+    # pysqlite は BEGIN を自前で出すため SAVEPOINT（session.begin_nested）が正しく効かない。
+    # SQLAlchemy ドキュメントのレシピで、BEGIN を SQLAlchemy 側から出すようにする。
+    @event.listens_for(engine, "connect")
+    def _do_connect(dbapi_connection, connection_record):
+        dbapi_connection.isolation_level = None
+
+    @event.listens_for(engine, "begin")
+    def _do_begin(conn):
+        conn.exec_driver_sql("BEGIN")
+
     Base.metadata.create_all(engine)
     Session = sessionmaker(engine)
     session = Session()

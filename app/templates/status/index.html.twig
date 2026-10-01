@@ -31,23 +31,7 @@
                                 {% set status = routeData.status %}
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span>{{ route.name }}</span>
-                                    {% if status is null %}
-                                        <span class="badge bg-secondary">情報なし</span>
-                                    {% elseif status.status.value == 'operating' %}
-                                        <span class="badge bg-success">✓ 通常運航</span>
-                                    {% elseif status.status.value == 'delayed' %}
-                                        <span class="badge bg-warning text-dark">● 条件付・遅延</span>
-                                    {% elseif status.status.value == 'cancelled' %}
-                                        <span class="badge bg-danger">✗ 欠航</span>
-                                    {% elseif status.status.value == 'suspended' %}
-                                        <span class="badge bg-secondary">- 運休</span>
-                                    {% elseif status.status.value == 'no_service' %}
-                                        <span class="badge bg-light text-dark border">— 便なし</span>
-                                    {% elseif status.status.value == 'unknown' %}
-                                        <span class="badge bg-secondary">? 不明</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">? 情報なし</span>
-                                    {% endif %}
+                                    {{ include('status/_status_badge.html.twig', {state: null, status: status ? status.status : null}) }}
                                 </li>
                             {% else %}
                                 <li class="list-group-item text-muted">航路情報がありません。</li>

@@ -37,7 +37,7 @@
 
 **⚠️ CRITICAL**: この Phase が終わるまで US の実装を始めないこと
 
-- [ ] T004 Doctrine マイグレーション `app/migrations/Version20261001000000.php` を作る（data-model.md に従う）
+- [X] T004 Doctrine マイグレーション `app/migrations/Version20261001000000.php` を作る（data-model.md に従う）
   - `ports`（`name` UNIQUE、`aliases` JSON）
   - `port_company_codes`（UNIQUE(port_id, ferry_company_id)）
   - `route_stops`（UNIQUE(route_id, port_id)、UNIQUE(route_id, stop_order)）
@@ -50,15 +50,15 @@
     - `route_stops`：`INSERT ... SELECT` で、`direction` の付いた既存の routes ごとに入れる（data-model.md の表）
     - ID は決め打ちしない。routes や ferry_companies が空のテスト用 DB（`shipinfo_test`）でも、外部キーエラーにならずに通ること
   - `down()` でテーブル削除と列削除をする
-- [ ] T005 [P] `app/src/Enum/RouteDirectionEnum.php`（`Down = 'down'`、`Up = 'up'`、ラベル「下り（那覇行き）」「上り（鹿児島行き）」を返す `label()`）と `app/src/Enum/DepartureDisplayStateEnum.php`（`Status`、`Scheduled`、`NoInfo`、`NoService`）を作る
-- [ ] T006 [P] `app/src/Entity/Port.php`（`name`、`aliases` は json 型）と `app/src/Entity/PortCompanyCode.php` を作る。マッピングは T004 のスキーマと一致させる
-- [ ] T007 [P] `app/src/Entity/RouteStop.php`（`route`、`port`、`stopOrder`、`dayOffset`）を作る。`app/src/Entity/Route.php` に `direction`（`RouteDirectionEnum`、nullable）と `stops`（OneToMany、`stopOrder` 昇順）を足す
-- [ ] T008 [P] `app/src/Entity/DepartureStatus.php` を作る（data-model.md の全カラム。`status` は `OperationStatusEnum`、nullable）。リポジトリクラスとして `app/src/Repository/DepartureStatusRepository.php` と `app/src/Repository/RouteStopRepository.php` の雛形も作る
-- [ ] T009 [P] `scraper/scraper/db/models.py` に SQLAlchemy の `Port`、`PortCompanyCode`、`RouteStop`、`DepartureStatus` を追加して、`Route` に `direction` と `stops` リレーションを足す。カラム名・型・ユニーク制約は T004 と一致させる（`aliases` は `JSON` 型。SQLite のテストでも動くこと）
-- [ ] T010 [P] `docker/mysql/init/01_schema.sql` の冒頭コメントに「港別の新しいテーブルと初期データは Doctrine マイグレーション（`app/migrations/Version20261001000000.php`）で作る。ここには書かない」と追記する（init スクリプトとマイグレーションの二重適用を防ぐため）
-- [ ] T011 `make migrate` を実行して、テスト用 DB にも `docker compose exec php bin/console doctrine:migrations:migrate --env=test --no-interaction` で適用する（routes が空でも通ること）。続けて `make migrate-diff` で差分が出ない（エンティティとマイグレーションが一致している）ことを確認する。差分が出たらエンティティ側（`app/src/Entity/`）を直す
-- [ ] T012 [P] `scraper/scraper/utils/ports.py` に `PortResolver` を作る。`PortResolver.from_session(session)` で ports を読み込んで、`resolve(text) -> Port | None` は別名の長い順にマッチ（「鹿児島新港」を「鹿児島」より先に）、`find_all(text) -> list[Port]` は文中の港を重複なしで出現順に返す。テストは `scraper/tests/test_ports.py`（表記揺れ全部、「鹿児島新港」の優先、未知の港名 → None）
-- [ ] T013 `scraper/scraper/scrapers/base.py` に港別の共通処理を足す
+- [X] T005 [P] `app/src/Enum/RouteDirectionEnum.php`（`Down = 'down'`、`Up = 'up'`、ラベル「下り（那覇行き）」「上り（鹿児島行き）」を返す `label()`）と `app/src/Enum/DepartureDisplayStateEnum.php`（`Status`、`Scheduled`、`NoInfo`、`NoService`）を作る
+- [X] T006 [P] `app/src/Entity/Port.php`（`name`、`aliases` は json 型）と `app/src/Entity/PortCompanyCode.php` を作る。マッピングは T004 のスキーマと一致させる
+- [X] T007 [P] `app/src/Entity/RouteStop.php`（`route`、`port`、`stopOrder`、`dayOffset`）を作る。`app/src/Entity/Route.php` に `direction`（`RouteDirectionEnum`、nullable）と `stops`（OneToMany、`stopOrder` 昇順）を足す
+- [X] T008 [P] `app/src/Entity/DepartureStatus.php` を作る（data-model.md の全カラム。`status` は `OperationStatusEnum`、nullable）。リポジトリクラスとして `app/src/Repository/DepartureStatusRepository.php` と `app/src/Repository/RouteStopRepository.php` の雛形も作る
+- [X] T009 [P] `scraper/scraper/db/models.py` に SQLAlchemy の `Port`、`PortCompanyCode`、`RouteStop`、`DepartureStatus` を追加して、`Route` に `direction` と `stops` リレーションを足す。カラム名・型・ユニーク制約は T004 と一致させる（`aliases` は `JSON` 型。SQLite のテストでも動くこと）
+- [X] T010 [P] `docker/mysql/init/01_schema.sql` の冒頭コメントに「港別の新しいテーブルと初期データは Doctrine マイグレーション（`app/migrations/Version20261001000000.php`）で作る。ここには書かない」と追記する（init スクリプトとマイグレーションの二重適用を防ぐため）
+- [X] T011 `make migrate` を実行して、テスト用 DB にも `docker compose exec php bin/console doctrine:migrations:migrate --env=test --no-interaction` で適用する（routes が空でも通ること）。続けて `make migrate-diff` で差分が出ない（エンティティとマイグレーションが一致している）ことを確認する。差分が出たらエンティティ側（`app/src/Entity/`）を直す
+- [X] T012 [P] `scraper/scraper/utils/ports.py` に `PortResolver` を作る。`PortResolver.from_session(session)` で ports を読み込んで、`resolve(text) -> Port | None` は別名の長い順にマッチ（「鹿児島新港」を「鹿児島」より先に）、`find_all(text) -> list[Port]` は文中の港を重複なしで出現順に返す。テストは `scraper/tests/test_ports.py`（表記揺れ全部、「鹿児島新港」の優先、未知の港名 → None）
+- [X] T013 `scraper/scraper/scrapers/base.py` に港別の共通処理を足す
   - `parse_departures(self) -> list[dict]`：デフォルトは `[]`
   - `_upsert_departures(records) -> tuple[int, int]`：data-model.md の更新ルール1〜5・7
     - `content_hash` は status・status_detail・ship_name・各日時・operated_by_company_id の SHA-256
@@ -67,7 +67,7 @@
     - `replace_scope` があれば、同じ (route_id, port_id, departure_date) で今回のレコードに無い ship_name の行を削除する。**ただし `scheduled_departure_at < now` の行は削除しない**
   - `run()`：`_upsert()` のあとに `self.session.flush()` を明示的に呼ぶ（航路単位のエラーは今までどおり外側の except で failed にする）。そのあと `with self.session.begin_nested():`（SAVEPOINT）の中で `parse_departures()` と `_upsert_departures()` を実行する。例外は SAVEPOINT の外で捕まえて、`scraper_log.error_message` に `departures: <msg>` を入れる。航路単位の結果は success のまま保存する（Session が失敗状態のまま残って、最後の commit が失敗しないこと）。SQLite のテストで SAVEPOINT が効くように、必要なら `scraper/tests/conftest.py` に pysqlite の SAVEPOINT 対応（SQLAlchemy ドキュメントの `do_begin` イベントのレシピ）を入れる
   - `fetch()` / `parse()` のシグネチャは変えない
-- [ ] T014 `scraper/tests/test_base_departures.py` を作る。T013 のルールを全部テストする
+- [X] T014 `scraper/tests/test_base_departures.py` を作る。T013 のルールを全部テストする
   - 新規 INSERT
   - 同じハッシュなら `checked_at` だけ進む（`scraped_at` は変わらない）
   - ハッシュが違えば両方進む
@@ -79,11 +79,11 @@
   - 航路単位の `_upsert()` の flush で起きたエラーは、港別のエラーとしては扱われず、今までどおり failed になる
   - `_upsert_departures` で DB エラー（例：一意制約違反）が起きても、航路単位の `operation_statuses` と `scraper_logs`（`error_message` 入り）がコミットされる
   - parse_departures の例外で航路単位が保存されて error_message が入る
-- [ ] T015 [P] バッジを `app/templates/status/_status_badge.html.twig` に切り出して、`app/templates/status/index.html.twig` と `app/templates/status/company.html.twig` から `include` する。表示される HTML は変えない。パーシャルの引数は次の2つ（3画面で共通）
+- [X] T015 [P] バッジを `app/templates/status/_status_badge.html.twig` に切り出して、`app/templates/status/index.html.twig` と `app/templates/status/company.html.twig` から `include` する。表示される HTML は変えない。パーシャルの引数は次の2つ（3画面で共通）
   - `state`：`DepartureDisplayStateEnum|null`。null のときは `status` だけで判定する（既存2画面の呼び方）
   - `status`：`OperationStatusEnum|null`。`state` が null で `status` も null → 「情報なし」（既存の挙動）
   - `state` が `Status` → `status` のバッジ、`Scheduled` → 「運航予定」、`NoInfo` → 「情報なし」、`NoService` → 「便なし」
-- [ ] T016 `make test-php`（`app/tests/`）と `make test-scraper`（`scraper/tests/`）で既存テストが全部通ることを確認する
+- [X] T016 `make test-php`（`app/tests/`）と `make test-scraper`（`scraper/tests/`）で既存テストが全部通ることを確認する
 
 **Checkpoint**: マイグレーションが適用され、既存テストが全部通る → コミット
 

@@ -2,6 +2,9 @@
 -- Note: This file is for reference only.
 -- The authoritative schema is managed by Doctrine Migrations (app/migrations/).
 -- This file is executed only on first MySQL container startup.
+-- 港別の新しいテーブル（ports / port_company_codes / route_stops / departure_statuses）と
+-- その初期データ、routes.direction は Doctrine マイグレーション（app/migrations/Version20261001000000.php）で作る。
+-- ここには書かない（make init で init スクリプトとマイグレーションが両方走って二重に適用されるため）。
 
 SET NAMES utf8mb4;
 SET time_zone = '+09:00';
