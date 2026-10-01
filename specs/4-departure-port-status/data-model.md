@@ -127,8 +127,9 @@ INDEX (`departure_date`, `port_id`)
 1. 同じキーの行が無い → INSERT（`scraped_at` = `checked_at` = 今）
 2. 行があって `content_hash` が同じ → `checked_at` だけ更新する
 3. 行があって `content_hash` が違う → 内容と `scraped_at`・`checked_at` を更新する
-4. **マルエーの出港済みの行**（`freeze_after_departure` かつ既存行の `scheduled_departure_at` < 今）は、`status` / `status_detail` を更新しない（FR-020）。時刻と `checked_at` は更新する
-   - **順番**：先に「保存する値」を決める（status・status_detail は既存の値、ほかは受け取った値）→ その保存する値から `content_hash` を計算する → 既存のハッシュと比べて 2 か 3 を適用する。受け取った値でハッシュを計算すると、保存した値とハッシュが合わなくなって、毎回「変更あり」と判定されてしまうため
+4. **マルエーの出港済みの行**（`freeze_after_departure` かつ既存行の `scheduled_departure_at` < 今）は、**一切更新しない**（FR-020）。`checked_at` も進めない
+   - 出港後に受け取る船ステータスは次の便のもので、この行のステータスを確認したことにはならないため。`checked_at` は「表示しているステータスを最後に確認した時刻」（FR-014）のまま残す
+   - 更新しないので、保存値と `content_hash` がずれることもない
 5. **マルエーの検索の取り直し**：同じ (route, port, departure_date) で今回の検索結果に無い `ship_name` の行は削除する。検索結果が正なので、船の入れ替えや「※下記参照」から船名への変化で古い行が残らないようにする
    - **ただし出港済みの行（`scheduled_departure_at` < 今）は削除しない**。出港後の検索で便が返らなくなっても、ルール4で確定した行を残すため（FR-020）
 6. マリックスは、一覧から消えた便の行を消さない（FR-013：最後のステータスを出し続ける）

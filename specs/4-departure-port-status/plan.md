@@ -73,7 +73,7 @@ specs/4-departure-port-status/
 
 ```
 docker-compose.yml                                   # scraper に TZ: Asia/Tokyo
-docker/mysql/init/02_seed.sql                        # ports / codes / route_stops / direction の初期データ
+docker/mysql/init/01_schema.sql                      # 港別のテーブルはマイグレーションで作る旨のコメントだけ（二重適用を防ぐ）
 
 app/migrations/VersionYYYYMMDDHHMMSS.php             # 新規テーブル + routes.direction + 初期データ
 app/src/Entity/Port.php                              # 新規
@@ -128,8 +128,8 @@ scraper/tests/test_marue_ferry.py                    # 日付形式・方向別�
 | R5 | 港の別名は `ports.aliases` に持たせて、長いものから順にマッチ |
 | R6 | `TZ=Asia/Tokyo`。naive な JST で統一 |
 | R7 | `content_hash` が同じなら `checked_at` だけ更新 |
-| R8 | 今日・明日は毎回、2〜3日先は6時間ごとに検索。検索の間に0.5秒待つ |
-| R9 | 船ステータスは「まだ終わってない一番早い便」にだけ当てはめる。出港済みの行は確定させる |
+| R8 | 今日・明日は毎回、2〜3日先は検索キーごとに6時間たったら検索。検索の間に0.5秒待つ |
+| R9 | 船ステータスは「まだ終わってない一番早い便」にだけ当てはめる。出港済みの行は確定させて、`checked_at` も進めない |
 | R10 | マルエーの航路単位の記録も、方向ごとに正しい便有無になる |
 
 ---

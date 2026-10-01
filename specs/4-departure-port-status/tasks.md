@@ -43,22 +43,27 @@
   - `route_stops`（UNIQUE(route_id, port_id)、UNIQUE(route_id, stop_order)）
   - `departure_statuses`（UNIQUE(route_id, port_id, departure_date, ship_name)、INDEX(departure_date, port_id)、`status` は NULL 可、`operated_by_company_id` は NULL 可の FK）
   - `routes.direction` VARCHAR(8) NULL を追加
-  - 初期データを INSERT する：港7件と別名（research R5）、マルエー（ferry_company_id=1）の港コード7件（research R3）、routes 1〜4 の `direction`（1・3 = down、2・4 = up）、route_stops 28件（data-model.md の表）
+  - 初期データはこのマイグレーションだけで入れる（`01_schema.sql` / `02_seed.sql` には足さない。`make init` では init スクリプトの後に `make migrate` が走るので、両方に書くと二重に適用されて衝突するため）
+    - `ports` 7件と別名（research R5）：そのまま INSERT
+    - 港コード（research R3）：`INSERT ... SELECT` で `ferry_companies.scraper_class = 'MarueFerry'` の会社があるときだけ入れる
+    - `routes.direction`：`origin_port` が「鹿児島」なら `down`、「那覇」なら `up` を UPDATE
+    - `route_stops`：`INSERT ... SELECT` で、`direction` の付いた既存の routes ごとに入れる（data-model.md の表）
+    - ID は決め打ちしない。routes や ferry_companies が空のテスト用 DB（`shipinfo_test`）でも、外部キーエラーにならずに通ること
   - `down()` でテーブル削除と列削除をする
 - [ ] T005 [P] `app/src/Enum/RouteDirectionEnum.php`（`Down = 'down'`、`Up = 'up'`、ラベル「下り（那覇行き）」「上り（鹿児島行き）」を返す `label()`）と `app/src/Enum/DepartureDisplayStateEnum.php`（`Status`、`Scheduled`、`NoInfo`、`NoService`）を作る
 - [ ] T006 [P] `app/src/Entity/Port.php`（`name`、`aliases` は json 型）と `app/src/Entity/PortCompanyCode.php` を作る。マッピングは T004 のスキーマと一致させる
 - [ ] T007 [P] `app/src/Entity/RouteStop.php`（`route`、`port`、`stopOrder`、`dayOffset`）を作る。`app/src/Entity/Route.php` に `direction`（`RouteDirectionEnum`、nullable）と `stops`（OneToMany、`stopOrder` 昇順）を足す
 - [ ] T008 [P] `app/src/Entity/DepartureStatus.php` を作る（data-model.md の全カラム。`status` は `OperationStatusEnum`、nullable）。リポジトリクラスとして `app/src/Repository/DepartureStatusRepository.php` と `app/src/Repository/RouteStopRepository.php` の雛形も作る
 - [ ] T009 [P] `scraper/scraper/db/models.py` に SQLAlchemy の `Port`、`PortCompanyCode`、`RouteStop`、`DepartureStatus` を追加して、`Route` に `direction` と `stops` リレーションを足す。カラム名・型・ユニーク制約は T004 と一致させる（`aliases` は `JSON` 型。SQLite のテストでも動くこと）
-- [ ] T010 [P] `docker/mysql/init/02_seed.sql` に T004 と同じ初期データ（ports、port_company_codes、routes.direction、route_stops）を `ON DUPLICATE KEY UPDATE` で追加する。テーブル作成は `01_schema.sql` にも参考として足す
-- [ ] T011 `make migrate` を実行して、続けて `make migrate-diff` で差分が出ない（エンティティとマイグレーションが一致している）ことを確認する。差分が出たらエンティティ側（`app/src/Entity/`）を直す
+- [ ] T010 [P] `docker/mysql/init/01_schema.sql` の冒頭コメントに「港別の新しいテーブルと初期データは Doctrine マイグレーション（`app/migrations/Version20261001000000.php`）で作る。ここには書かない」と追記する（init スクリプトとマイグレーションの二重適用を防ぐため）
+- [ ] T011 `make migrate` を実行して、テスト用 DB にも `docker compose exec php bin/console doctrine:migrations:migrate --env=test --no-interaction` で適用する（routes が空でも通ること）。続けて `make migrate-diff` で差分が出ない（エンティティとマイグレーションが一致している）ことを確認する。差分が出たらエンティティ側（`app/src/Entity/`）を直す
 - [ ] T012 [P] `scraper/scraper/utils/ports.py` に `PortResolver` を作る。`PortResolver.from_session(session)` で ports を読み込んで、`resolve(text) -> Port | None` は別名の長い順にマッチ（「鹿児島新港」を「鹿児島」より先に）、`find_all(text) -> list[Port]` は文中の港を重複なしで出現順に返す。テストは `scraper/tests/test_ports.py`（表記揺れ全部、「鹿児島新港」の優先、未知の港名 → None）
 - [ ] T013 `scraper/scraper/scrapers/base.py` に港別の共通処理を足す
   - `parse_departures(self) -> list[dict]`：デフォルトは `[]`
   - `_upsert_departures(records) -> tuple[int, int]`：data-model.md の更新ルール1〜5・7
     - `content_hash` は status・status_detail・ship_name・各日時・operated_by_company_id の SHA-256
     - ハッシュが同じなら `checked_at` だけ更新
-    - `freeze_after_departure=True` で既存行の `scheduled_departure_at < now` なら status と status_detail を更新しない。**保存する値を先に決めて、その値から `content_hash` を計算する**（受け取った値では計算しない）
+    - `freeze_after_departure=True` で既存行の `scheduled_departure_at < now` なら、その行は一切更新しない（`checked_at` も進めない）
     - `replace_scope` があれば、同じ (route_id, port_id, departure_date) で今回のレコードに無い ship_name の行を削除する。**ただし `scheduled_departure_at < now` の行は削除しない**
   - `run()`：`_upsert()` のあとに、`with self.session.begin_nested():`（SAVEPOINT）の中で `parse_departures()` と `_upsert_departures()` を実行する。例外は SAVEPOINT の外で捕まえて、`scraper_log.error_message` に `departures: <msg>` を入れる。航路単位の結果は success のまま保存する（Session が失敗状態のまま残って、最後の commit が失敗しないこと）。SQLite のテストで SAVEPOINT が効くように、必要なら `scraper/tests/conftest.py` に pysqlite の SAVEPOINT 対応（SQLAlchemy ドキュメントの `do_begin` イベントのレシピ）を入れる
   - `fetch()` / `parse()` のシグネチャは変えない
@@ -67,7 +72,7 @@
   - 同じハッシュなら `checked_at` だけ進む（`scraped_at` は変わらない）
   - ハッシュが違えば両方進む
   - freeze で出港済みの行の status が変わらない
-  - freeze した行は、次の実行で同じデータを受け取ったとき「変更なし」（`checked_at` だけ進む）と判定される（保存値とハッシュが一致している）
+  - freeze した行は、`checked_at` も `scraped_at` も `content_hash` も変わらない（FR-014：表示中のステータスを最後に確認した時刻を保つ）
   - replace_scope で古い ship_name の行が消える
   - replace_scope でも、出港済みの行は消えない
   - `_upsert_departures` で DB エラー（例：一意制約違反）が起きても、航路単位の `operation_statuses` と `scraper_logs`（`error_message` 入り）がコミットされる
@@ -176,18 +181,18 @@
   - 船名が船ブロックに無い → `unknown` + warning（シナリオ6）
   - 同じ船の2便目以降 → `status` None（FR-021）
   - `freeze_after_departure=True` と `replace_scope` が付いている
-  - 2〜3日先の検索は、前回の `checked_at` から6時間以内なら行わない
+  - 2〜3日先の検索はキーごとに判定する：`checked_at` が6時間以内のキーは検索しない、行が無いキーと古いキーは検索する（一部のキーだけ失敗した次の実行で、失敗したキーだけ取り直される）
   - 検索の間に待ちが入る（`time.sleep` をモック）
 
 ### Implementation for User Story 4
 
 - [ ] T033 [US4] `scraper/scraper/scrapers/marue_ferry.py` に便検索のヘルパーを作る
   - `_format_search_date(d) -> "YYYY年MM月DD日"`
-  - `_search(start_code, end_code, d) -> list[SearchRow]`：`SearchRow` は `ship_name`、`company_name`、`is_other_company`、`departure_at`、`arrival_at`。「YYYY年M月D日 HH:MM」を解析する。`table.s-result` が無ければ None を返して warning
+  - `_search(start_code, end_code, d) -> list[SearchRow] | None`（None = 取得・解析の失敗、`[]` = 便0件）：`SearchRow` は `ship_name`、`company_name`、`is_other_company`、`departure_at`、`arrival_at`。「YYYY年M月D日 HH:MM」を解析する。`table.s-result` が無ければ None を返して warning
   - 呼び出しごとに `settings.marue_search_delay_seconds` だけ待つ
 - [ ] T034 [US4] `scraper/scraper/scrapers/marue_ferry.py` の `fetch()` を書き直す
   - 港コードと寄港順を DB から読む
-  - 方向 × 終点以外の港 × 日付（今日・明日は毎回、2〜3日先は、この会社の `departure_statuses` で `departure_date >= 今日+2` の `checked_at` の最大値から `marue_far_search_interval_hours` 以上たっていれば）で `_search()` して `self._searches` に持たせる
+  - 方向 × 終点以外の港 × 日付（今日・明日は毎回、2〜3日先は、検索キー (route, port, departure_date) ごとに、そのキーの `departure_statuses` が無いか `checked_at` が `marue_far_search_interval_hours` より古ければ）で `_search()` して `self._searches` に持たせる
   - 鹿児島航路ページを取って、船ブロック（船名・タグ・抜粋・詳細ページの URL）を `self._ships` に持たせる
   - 各船の詳細ページを取って `self._ship_details` に持たせる
   - 戻り値は鹿児島航路ページの HTML に、今日の始発港2つの検索結果を正規化した文字列をつなげたもの（方向ごとの便有無が変わったら `raw_html_hash` が変わるように）
@@ -261,7 +266,7 @@
   - `marix/downstream.html` で、名瀬以降の行の `departure_date` が始発日の翌日になる
   - 12/31 始発・1/1 出港の年またぎ（fixture の日付を書き換えて作る）
   - 一覧から消えた便の行が `departure_statuses` から消されない（FR-013、`_upsert_departures` を通して確認）
-- [ ] T043 [P] [US5] `scraper/tests/test_marue_ferry.py` に確定のテストを足す（US4 シナリオ9）。10/1 05:50 発の行が DB にある状態で、10/1 20:00 に船ステータスが `cancelled` に変わったデータで実行しても、その行の status は `operating` のままで、`checked_at` は更新される。さらに、出港後の検索でその便が返らなくなっても（結果0件や別の船）、その行は削除されない
+- [ ] T043 [P] [US5] `scraper/tests/test_marue_ferry.py` に確定のテストを足す（US4 シナリオ9）。10/1 05:50 発の行が DB にある状態で、10/1 20:00 に船ステータスが `cancelled` に変わったデータで実行しても、その行の status は `operating` のまま、`checked_at` も出港前の最後の確認時刻のまま変わらない。さらに、出港後の検索でその便が返らなくなっても（結果0件や別の船）、その行は削除されない
 - [ ] T044 [P] [US5] `app/tests/Controller/StatusControllerTest.php` に表示のテストを足す
   - `scheduled_departure_at` が前日始発の便でも、その日の日付セクションに出る
   - `checked_at` が「n/j H:i時点」で出る
@@ -308,7 +313,7 @@ Phase 2 Foundational（T004 → T011 → T016。T005〜T010・T012・T015 は T0
 **Phase 2（T004 の後）**:
 ```
 T005 Enum / T006 Port エンティティ / T007 RouteStop エンティティ / T008 DepartureStatus エンティティ
-T009 SQLAlchemy モデル / T010 seed SQL / T012 PortResolver / T015 バッジのパーシャル
+T009 SQLAlchemy モデル / T010 schema コメント / T012 PortResolver / T015 バッジのパーシャル
 ```
 
 **US1**:
