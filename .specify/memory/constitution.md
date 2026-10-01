@@ -8,6 +8,7 @@ Sync Impact Report
   - ✅ .specify/templates/plan-template.md（Constitution Check は constitution から作るので変更なし）
   - ✅ .specify/templates/spec-template.md（変更なし）
   - ✅ .specify/templates/tasks-template.md（変更なし）
+- Dependent artifacts:
   - ✅ specs/4-departure-port-status/plan.md（Constitution Check の III を「#20 で決める」から更新）
 - Follow-up TODOs: なし
 - 理由: https://github.com/yanchi/ShipInfoV2/issues/20
@@ -36,7 +37,7 @@ REST APIの提供はMVP以降のフェーズで検討する。
 - `departure_statuses`：航路 × 港 × 出港日 × 船ごとに1行
 
 変更の履歴（同じキーの過去の状態）は MVP では保持しない。
-理由：MVP には履歴を使う画面・機能が無く、港別の行は1日あたり最大約100行と多いため、
+理由：MVP には履歴を使う画面・機能が無い。履歴を持つなら保持期間も設計する必要があり、
 使い道が無いまま貯めると負債になる。履歴が必要な機能を作るときは、保持期間とあわせて
 追記型の履歴テーブルを設計すること。
 スクレイパーの実行ログは`scraper_logs`テーブルに記録し、障害追跡を可能にする。
