@@ -13,6 +13,8 @@ jobs:
     env:
       APP_ENV: test
       APP_SECRET: ci-secret
+      APP_SHARE_DIR: var/share
+      DEFAULT_URI: http://localhost
       # テスト環境では doctrine.yaml の dbname_suffix で shipinfo_test に繋がる
       DATABASE_URL: mysql://root:password@127.0.0.1:3306/shipinfo?serverVersion=8.0&charset=utf8mb4
 
