@@ -3,6 +3,7 @@ BaseScraper の港別処理（parse_departures / _upsert_departures / run）の�
 
 data-model.md の更新ルール1〜5・7 を確認する。
 """
+
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -91,6 +92,7 @@ def _age(row, hours=2):
 # _upsert_departures
 # ---------------------------------------------------------------------------
 
+
 def test_insert_new_row(db_session, setup):
     scraper, _, route, port = setup
     created, updated = scraper._upsert_departures([_rec(route, port)])
@@ -156,12 +158,19 @@ def test_freeze_keeps_departed_row_untouched(db_session, setup):
     past = datetime.now() - timedelta(hours=1)
     rec = _rec(route, port, scheduled_departure_at=past, freeze_after_departure=True)
     # 出港前に記録された行を用意する
-    db_session.add(DepartureStatus(
-        route_id=route.id, port_id=port.id, departure_date=rec["departure_date"],
-        ship_name=rec["ship_name"], status="operating", scheduled_departure_at=past,
-        content_hash=scraper._departure_hash(rec),
-        scraped_at=past - timedelta(hours=3), checked_at=past - timedelta(minutes=10),
-    ))
+    db_session.add(
+        DepartureStatus(
+            route_id=route.id,
+            port_id=port.id,
+            departure_date=rec["departure_date"],
+            ship_name=rec["ship_name"],
+            status="operating",
+            scheduled_departure_at=past,
+            content_hash=scraper._departure_hash(rec),
+            scraped_at=past - timedelta(hours=3),
+            checked_at=past - timedelta(minutes=10),
+        )
+    )
     db_session.commit()
     row = _rows(db_session)[0]
     before = (row.status, row.checked_at, row.scraped_at, row.content_hash)
@@ -179,9 +188,9 @@ def test_freeze_does_not_insert_departed_row(db_session, setup):
     """既存行が無い出港済みのレコードは INSERT しない（デプロイ直後の初回実行など）。"""
     scraper, _, route, port = setup
     past = datetime.now() - timedelta(minutes=5)
-    created, _ = scraper._upsert_departures([
-        _rec(route, port, scheduled_departure_at=past, freeze_after_departure=True)
-    ])
+    created, _ = scraper._upsert_departures(
+        [_rec(route, port, scheduled_departure_at=past, freeze_after_departure=True)]
+    )
     db_session.commit()
     assert created == 0
     assert _rows(db_session) == []
@@ -201,9 +210,19 @@ def test_without_freeze_departed_row_is_updated(db_session, setup):
 def test_replace_scope_deletes_old_ship_rows(db_session, setup):
     scraper, _, route, port = setup
     scope = (route.id, port.id, date.today())
-    scraper._upsert_departures([_rec(route, port, ship_name="", status=OperationStatusEnum.no_service,
-                                     scheduled_departure_at=None, scheduled_arrival_at=None,
-                                     replace_scope=scope)])
+    scraper._upsert_departures(
+        [
+            _rec(
+                route,
+                port,
+                ship_name="",
+                status=OperationStatusEnum.no_service,
+                scheduled_departure_at=None,
+                scheduled_arrival_at=None,
+                replace_scope=scope,
+            )
+        ]
+    )
     db_session.commit()
 
     # 「※下記参照」から船名に変わった
@@ -219,16 +238,35 @@ def test_replace_scope_keeps_departed_rows(db_session, setup):
     scraper, _, route, port = setup
     scope = (route.id, port.id, date.today())
     past = datetime.now() - timedelta(hours=1)
-    db_session.add(DepartureStatus(
-        route_id=route.id, port_id=port.id, departure_date=date.today(),
-        ship_name="フェリーあけぼの", status="operating", scheduled_departure_at=past,
-        content_hash="x" * 64, scraped_at=past, checked_at=past,
-    ))
+    db_session.add(
+        DepartureStatus(
+            route_id=route.id,
+            port_id=port.id,
+            departure_date=date.today(),
+            ship_name="フェリーあけぼの",
+            status="operating",
+            scheduled_departure_at=past,
+            content_hash="x" * 64,
+            scraped_at=past,
+            checked_at=past,
+        )
+    )
     db_session.commit()
 
-    scraper._upsert_departures([_rec(route, port, ship_name="", status=OperationStatusEnum.no_service,
-                                     scheduled_departure_at=None, scheduled_arrival_at=None,
-                                     freeze_after_departure=True, replace_scope=scope)])
+    scraper._upsert_departures(
+        [
+            _rec(
+                route,
+                port,
+                ship_name="",
+                status=OperationStatusEnum.no_service,
+                scheduled_departure_at=None,
+                scheduled_arrival_at=None,
+                freeze_after_departure=True,
+                replace_scope=scope,
+            )
+        ]
+    )
     db_session.commit()
 
     names = sorted(r.ship_name for r in _rows(db_session))
@@ -238,7 +276,9 @@ def test_replace_scope_keeps_departed_rows(db_session, setup):
 def test_replace_scope_does_not_touch_other_keys(db_session, setup):
     scraper, _, route, port = setup
     tomorrow = date.today() + timedelta(days=1)
-    scraper._upsert_departures([_rec(route, port, departure_date=tomorrow, ship_name="フェリー波之上")])
+    scraper._upsert_departures(
+        [_rec(route, port, departure_date=tomorrow, ship_name="フェリー波之上")]
+    )
     db_session.commit()
 
     scope = (route.id, port.id, date.today())
@@ -252,6 +292,7 @@ def test_replace_scope_does_not_touch_other_keys(db_session, setup):
 # run()（ルール7：トランザクション）
 # ---------------------------------------------------------------------------
 
+
 def _route_rec(route, **kw):
     rec = {
         "route_id": route.id,
@@ -264,7 +305,11 @@ def _route_rec(route, **kw):
 
 
 def _last_log(db_session):
-    return db_session.execute(select(ScraperLog).order_by(ScraperLog.id.desc())).scalars().first()
+    return (
+        db_session.execute(select(ScraperLog).order_by(ScraperLog.id.desc()))
+        .scalars()
+        .first()
+    )
 
 
 def test_run_saves_route_and_departures(db_session, setup):
@@ -343,7 +388,10 @@ def test_run_route_level_flush_error_is_failed(db_session, setup):
 # JST（US5、FR-016）
 # ---------------------------------------------------------------------------
 
-def test_departure_date_and_checked_at_are_same_day_just_after_midnight(db_session, setup):
+
+def test_departure_date_and_checked_at_are_same_day_just_after_midnight(
+    db_session, setup
+):
     """0:30（JST）に実行しても、departure_date と checked_at は同じ暦日で記録される。"""
     from unittest.mock import patch
 
@@ -356,10 +404,16 @@ def test_departure_date_and_checked_at_are_same_day_just_after_midnight(db_sessi
             return fixed
 
     with patch("scraper.scrapers.base.datetime", _DateTime):
-        scraper._upsert_departures([_rec(
-            route, port, departure_date=fixed.date(),
-            scheduled_departure_at=datetime(2026, 10, 2, 5, 50),
-        )])
+        scraper._upsert_departures(
+            [
+                _rec(
+                    route,
+                    port,
+                    departure_date=fixed.date(),
+                    scheduled_departure_at=datetime(2026, 10, 2, 5, 50),
+                )
+            ]
+        )
     db_session.commit()
 
     row = _rows(db_session)[0]

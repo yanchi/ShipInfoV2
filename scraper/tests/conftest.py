@@ -4,7 +4,14 @@ from pathlib import Path
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from scraper.db.models import Base, FerryCompany, Port, PortCompanyCode, Route, RouteStop
+from scraper.db.models import (
+    Base,
+    FerryCompany,
+    Port,
+    PortCompanyCode,
+    Route,
+    RouteStop,
+)
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -19,8 +26,24 @@ PORTS = [
     ("那覇", ["那覇港", "那覇"], "83"),
 ]
 STOPS = {
-    "down": [("鹿児島", 0), ("名瀬", 1), ("亀徳", 1), ("和泊", 1), ("与論", 1), ("本部", 1), ("那覇", 1)],
-    "up": [("那覇", 0), ("本部", 0), ("与論", 0), ("和泊", 0), ("亀徳", 0), ("名瀬", 0), ("鹿児島", 1)],
+    "down": [
+        ("鹿児島", 0),
+        ("名瀬", 1),
+        ("亀徳", 1),
+        ("和泊", 1),
+        ("与論", 1),
+        ("本部", 1),
+        ("那覇", 1),
+    ],
+    "up": [
+        ("那覇", 0),
+        ("本部", 0),
+        ("与論", 0),
+        ("和泊", 0),
+        ("亀徳", 0),
+        ("名瀬", 0),
+        ("鹿児島", 1),
+    ],
 }
 
 
@@ -40,10 +63,23 @@ def setup_port_master(session, *companies) -> dict[str, Port]:
         for route in session.query(Route).filter(Route.ferry_company_id == company.id):
             route.direction = "down" if route.origin_port == "鹿児島" else "up"
             for i, (name, offset) in enumerate(STOPS[route.direction], start=1):
-                session.add(RouteStop(route_id=route.id, port_id=ports[name].id, stop_order=i, day_offset=offset))
+                session.add(
+                    RouteStop(
+                        route_id=route.id,
+                        port_id=ports[name].id,
+                        stop_order=i,
+                        day_offset=offset,
+                    )
+                )
         if company.scraper_class == "MarueFerry":
             for name, _, code in PORTS:
-                session.add(PortCompanyCode(port_id=ports[name].id, ferry_company_id=company.id, external_code=code))
+                session.add(
+                    PortCompanyCode(
+                        port_id=ports[name].id,
+                        ferry_company_id=company.id,
+                        external_code=code,
+                    )
+                )
     session.commit()
     return ports
 

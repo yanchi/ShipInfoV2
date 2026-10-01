@@ -3,6 +3,7 @@
 各社のページの港の表記（「鹿児島新港」「名瀬港」など）を ports テーブルの港に直す。
 別名は長いものから順にマッチさせる（「鹿児島新港」を「鹿児島」より先に）。
 """
+
 from __future__ import annotations
 
 from sqlalchemy import select

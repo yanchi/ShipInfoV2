@@ -4,6 +4,8 @@
 **Feature**: website
 **Date**: 2026-03-07
 
+> 港別運航情報ページ（`/ports`）は [specs/4-departure-port-status/contracts/http-routes.md](../../4-departure-port-status/contracts/http-routes.md) を参照。
+
 ---
 
 ## ルート一覧

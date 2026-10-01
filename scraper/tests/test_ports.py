@@ -1,4 +1,5 @@
 """PortResolver（港名の正規化）のテスト。"""
+
 import pytest
 
 from scraper.db.models import Port

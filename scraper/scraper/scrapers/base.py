@@ -8,7 +8,12 @@ import structlog
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
-from scraper.db.models import DepartureStatus, OperationStatus, ScraperLog, ScraperStatusEnum
+from scraper.db.models import (
+    DepartureStatus,
+    OperationStatus,
+    ScraperLog,
+    ScraperStatusEnum,
+)
 from scraper.utils.http import create_session
 
 log = structlog.get_logger()
@@ -19,7 +24,9 @@ class BaseScraper(ABC):
 
     company_id: int
 
-    def __init__(self, session: Session, company_id: int, *, retry_post: bool = False) -> None:
+    def __init__(
+        self, session: Session, company_id: int, *, retry_post: bool = False
+    ) -> None:
         self.session = session
         self.company_id = company_id
         self.http = create_session(retry_post=retry_post)
@@ -89,13 +96,15 @@ class BaseScraper(ABC):
             # flush に失敗した Session はロールバックしないとコミットできないので、
             # 今回の書き込みを捨てて failed のログだけ残す
             self.session.rollback()
-            self.session.add(ScraperLog(
-                ferry_company_id=self.company_id,
-                started_at=started_at,
-                finished_at=datetime.now(),
-                status=ScraperStatusEnum.failed,
-                error_message=str(exc),
-            ))
+            self.session.add(
+                ScraperLog(
+                    ferry_company_id=self.company_id,
+                    started_at=started_at,
+                    finished_at=datetime.now(),
+                    status=ScraperStatusEnum.failed,
+                    error_message=str(exc),
+                )
+            )
             self._log.error("scraper_error", error=str(exc))
             return
 
@@ -170,7 +179,9 @@ class BaseScraper(ABC):
         def norm(v):
             if isinstance(v, enum.Enum):
                 return v.value
-            if hasattr(v, "isoformat"):  # date / datetime（テストで差し替えたサブクラスも含む）
+            if hasattr(
+                v, "isoformat"
+            ):  # date / datetime（テストで差し替えたサブクラスも含む）
                 return v.isoformat()
             return v
 
@@ -182,7 +193,9 @@ class BaseScraper(ABC):
             norm(rec.get("scheduled_arrival_at")),
             rec.get("operated_by_company_id"),
         ]
-        return hashlib.sha256(json.dumps(payload, ensure_ascii=False).encode()).hexdigest()
+        return hashlib.sha256(
+            json.dumps(payload, ensure_ascii=False).encode()
+        ).hexdigest()
 
     def _upsert_departures(self, records: list[dict]) -> tuple[int, int]:
         """departure_statuses を更新する（data-model.md の更新ルール1〜5）。
@@ -247,21 +260,23 @@ class BaseScraper(ABC):
                 dep_at = rec.get("scheduled_departure_at")
                 if freeze and dep_at is not None and dep_at < now:
                     continue  # 出港後の初回取得は、今の船ステータスを過去の便に当てはめない
-                self.session.add(DepartureStatus(
-                    route_id=key[0],
-                    port_id=key[1],
-                    departure_date=key[2],
-                    ship_name=ship_name,
-                    status=status_value,
-                    status_detail=rec.get("status_detail"),
-                    scheduled_departure_at=dep_at,
-                    scheduled_arrival_at=rec.get("scheduled_arrival_at"),
-                    operated_by_company_id=rec.get("operated_by_company_id"),
-                    source_url=rec.get("source_url"),
-                    content_hash=content_hash,
-                    scraped_at=now,
-                    checked_at=now,
-                ))
+                self.session.add(
+                    DepartureStatus(
+                        route_id=key[0],
+                        port_id=key[1],
+                        departure_date=key[2],
+                        ship_name=ship_name,
+                        status=status_value,
+                        status_detail=rec.get("status_detail"),
+                        scheduled_departure_at=dep_at,
+                        scheduled_arrival_at=rec.get("scheduled_arrival_at"),
+                        operated_by_company_id=rec.get("operated_by_company_id"),
+                        source_url=rec.get("source_url"),
+                        content_hash=content_hash,
+                        scraped_at=now,
+                        checked_at=now,
+                    )
+                )
                 created += 1
 
         for (route_id, port_id, departure_date), names in scopes.items():

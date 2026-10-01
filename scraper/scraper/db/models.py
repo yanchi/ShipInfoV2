@@ -51,7 +51,9 @@ class FerryCompany(Base):
     scraper_class = Column(String(255), nullable=True)
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.now)
-    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+    updated_at = Column(
+        DateTime, nullable=False, default=datetime.now, onupdate=datetime.now
+    )
 
     routes = relationship("Route", back_populates="ferry_company")
     scraper_logs = relationship("ScraperLog", back_populates="ferry_company")
@@ -69,11 +71,15 @@ class Route(Base):
     direction = Column(String(8), nullable=True)
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.now)
-    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+    updated_at = Column(
+        DateTime, nullable=False, default=datetime.now, onupdate=datetime.now
+    )
 
     ferry_company = relationship("FerryCompany", back_populates="routes")
     operation_statuses = relationship("OperationStatus", back_populates="route")
-    stops = relationship("RouteStop", back_populates="route", order_by="RouteStop.stop_order")
+    stops = relationship(
+        "RouteStop", back_populates="route", order_by="RouteStop.stop_order"
+    )
 
 
 class OperationStatus(Base):
@@ -85,7 +91,9 @@ class OperationStatus(Base):
 
     id = Column(_BigIntegerSQLite, primary_key=True, autoincrement=True)
     route_id = Column(Integer, ForeignKey("routes.id"), nullable=False)
-    status = Column(Enum(OperationStatusEnum), nullable=False, default=OperationStatusEnum.unknown)
+    status = Column(
+        Enum(OperationStatusEnum), nullable=False, default=OperationStatusEnum.unknown
+    )
     status_detail = Column(Text, nullable=True)
     departure_time = Column(DateTime, nullable=True)
     arrival_time = Column(DateTime, nullable=True)
@@ -94,7 +102,9 @@ class OperationStatus(Base):
     source_url = Column(String(512), nullable=True)
     raw_html_hash = Column(String(64), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.now)
-    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+    updated_at = Column(
+        DateTime, nullable=False, default=datetime.now, onupdate=datetime.now
+    )
 
     route = relationship("Route", back_populates="operation_statuses")
 
@@ -106,12 +116,16 @@ class ScraperLog(Base):
     ferry_company_id = Column(Integer, ForeignKey("ferry_companies.id"), nullable=False)
     started_at = Column(DateTime, nullable=False, default=datetime.now)
     finished_at = Column(DateTime, nullable=True)
-    status = Column(Enum(ScraperStatusEnum), nullable=False, default=ScraperStatusEnum.running)
+    status = Column(
+        Enum(ScraperStatusEnum), nullable=False, default=ScraperStatusEnum.running
+    )
     records_created = Column(Integer, nullable=False, default=0)
     records_updated = Column(Integer, nullable=False, default=0)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.now)
-    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+    updated_at = Column(
+        DateTime, nullable=False, default=datetime.now, onupdate=datetime.now
+    )
 
     ferry_company = relationship("FerryCompany", back_populates="scraper_logs")
 
@@ -125,7 +139,9 @@ class Port(Base):
     name = Column(String(64), nullable=False, unique=True)
     aliases = Column(JSON, nullable=False, default=list)
     created_at = Column(DateTime, nullable=False, default=datetime.now)
-    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+    updated_at = Column(
+        DateTime, nullable=False, default=datetime.now, onupdate=datetime.now
+    )
 
 
 class PortCompanyCode(Base):
@@ -188,10 +204,14 @@ class DepartureStatus(Base):
     status_detail = Column(Text, nullable=True)
     scheduled_departure_at = Column(DateTime, nullable=True)
     scheduled_arrival_at = Column(DateTime, nullable=True)
-    operated_by_company_id = Column(Integer, ForeignKey("ferry_companies.id"), nullable=True)
+    operated_by_company_id = Column(
+        Integer, ForeignKey("ferry_companies.id"), nullable=True
+    )
     source_url = Column(String(512), nullable=True)
     content_hash = Column(String(64), nullable=False)
     scraped_at = Column(DateTime, nullable=False, default=datetime.now)
     checked_at = Column(DateTime, nullable=False, default=datetime.now)
     created_at = Column(DateTime, nullable=False, default=datetime.now)
-    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+    updated_at = Column(
+        DateTime, nullable=False, default=datetime.now, onupdate=datetime.now
+    )

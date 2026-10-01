@@ -1,4 +1,5 @@
 """運航状況テキストからの港別情報の抽出（research R4）。"""
+
 import pytest
 from bs4 import BeautifulSoup
 
@@ -10,7 +11,9 @@ from tests.conftest import PORTS, read_fixture
 
 @pytest.fixture
 def resolver():
-    return PortResolver([Port(id=i, name=n, aliases=a) for i, (n, a, _) in enumerate(PORTS, start=1)])
+    return PortResolver(
+        [Port(id=i, name=n, aliases=a) for i, (n, a, _) in enumerate(PORTS, start=1)]
+    )
 
 
 def _names(notices, resolver):
@@ -29,7 +32,9 @@ def test_normal_detail_page_has_no_notices(resolver):
 
 def test_normal_detail_full_text_has_no_notices(resolver):
     """念のため、注意書きまで含めたページ全文でも0件（仮定・案内の文を除外できている）。"""
-    archive = BeautifulSoup(read_fixture("marue/ship_detail_normal.html"), "lxml").select_one("div.status-archive")
+    archive = BeautifulSoup(
+        read_fixture("marue/ship_detail_normal.html"), "lxml"
+    ).select_one("div.status-archive")
     full = "\n".join(p.get_text(" ", strip=True) for p in archive.find_all("p"))
     assert "港変更" in full and "抜港" in full
     assert extract_port_notices(full, resolver) == []
@@ -37,19 +42,29 @@ def test_normal_detail_full_text_has_no_notices(resolver):
 
 def test_body_is_taken_up_to_boilerplate():
     html = read_fixture("marue/ship_detail_normal.html").replace(
-        "<p>通常運航致しております。</p>", "<p>気象荒天のため条件付運航。</p><p>与論港は抜港となります。</p>", 1
+        "<p>通常運航致しております。</p>",
+        "<p>気象荒天のため条件付運航。</p><p>与論港は抜港となります。</p>",
+        1,
     )
     text = extract_notice_text("抜粋", html)
-    assert text.splitlines() == ["抜粋", "気象荒天のため条件付運航。", "与論港は抜港となります。"]
+    assert text.splitlines() == [
+        "抜粋",
+        "気象荒天のため条件付運航。",
+        "与論港は抜港となります。",
+    ]
 
 
 def test_excerpt_only_when_boilerplate_marker_missing():
-    html = "<div class='status-archive'><h4>見出し</h4><p>和泊港は条件付寄港。</p></div>"
+    html = (
+        "<div class='status-archive'><h4>見出し</h4><p>和泊港は条件付寄港。</p></div>"
+    )
     assert extract_notice_text("抜粋", html) == "抜粋"
     assert extract_notice_text("抜粋", None) == "抜粋"
 
 
-@pytest.mark.parametrize("text", ["条件付寄港地: 和泊港、与論港", "和泊港・与論港は条件付寄港。"])
+@pytest.mark.parametrize(
+    "text", ["条件付寄港地: 和泊港、与論港", "和泊港・与論港は条件付寄港。"]
+)
 def test_conditional_ports(resolver, text):
     found = _names(extract_port_notices(text, resolver), resolver)
     assert set(found) == {"和泊", "与論"}
@@ -64,24 +79,33 @@ def test_skip_port(resolver):
 
 
 def test_port_change(resolver):
-    found = _names(extract_port_notices("亀徳港から平土野港へ港変更", resolver), resolver)
+    found = _names(
+        extract_port_notices("亀徳港から平土野港へ港変更", resolver), resolver
+    )
     assert set(found) == {"亀徳"}
     assert found["亀徳"].kind == "change"
     assert found["亀徳"].change_to == "平土野港"
 
 
 def test_hypothetical_sentence_is_ignored(resolver):
-    assert extract_port_notices("港変更がある場合、亀徳港から平土野港になります", resolver) == []
+    assert (
+        extract_port_notices("港変更がある場合、亀徳港から平土野港になります", resolver)
+        == []
+    )
     assert extract_port_notices("与論港は抜港になる可能性があります。", resolver) == []
 
 
 def test_skip_wins_over_conditional_for_same_port(resolver):
-    found = _names(extract_port_notices("与論港は条件付寄港。与論港は抜港。", resolver), resolver)
+    found = _names(
+        extract_port_notices("与論港は条件付寄港。与論港は抜港。", resolver), resolver
+    )
     assert found["与論"].kind == "skip"
 
 
 def test_mixed_kinds_in_one_sentence(resolver):
-    found = _names(extract_port_notices("与論港は抜港、和泊港は条件付寄港", resolver), resolver)
+    found = _names(
+        extract_port_notices("与論港は抜港、和泊港は条件付寄港", resolver), resolver
+    )
     assert found["与論"].kind == "skip"
     assert found["和泊"].kind == "conditional"
 

@@ -57,6 +57,7 @@ Date: div.info2 の最初の "YYYY年M月D日" を valid_date として使用
     - 詳細ページが取れない便は、便全体のステータスを全出発港に当てはめ、出港日は始発日 + day_offset、
       時刻は None にする（予備ルート）。ただし同じキーの行がすでにあれば、最後に詳細ページから取れた内容を残す
 """
+
 import re
 from datetime import date, datetime, timedelta
 from urllib.parse import urljoin
@@ -144,14 +145,16 @@ class MarixLine(BaseScraper):
             exp_text = exp.get_text(strip=True) if exp else None
             detail = exp_text if status != OperationStatusEnum.operating else None
 
-            records.append({
-                "route_id": route.id,
-                "status": status,
-                "status_detail": detail,
-                "valid_date": valid_date,
-                "scraped_at": datetime.now(),
-                "source_url": SOURCE_URL,
-            })
+            records.append(
+                {
+                    "route_id": route.id,
+                    "status": status,
+                    "status_detail": detail,
+                    "valid_date": valid_date,
+                    "scraped_at": datetime.now(),
+                    "source_url": SOURCE_URL,
+                }
+            )
 
         # 今日の便が存在しないルートに no_service / unknown を記録
         today = date.today()
@@ -175,14 +178,16 @@ class MarixLine(BaseScraper):
                     status = OperationStatusEnum.unknown
                 else:
                     status = OperationStatusEnum.no_service
-                records.append({
-                    "route_id": route.id,
-                    "status": status,
-                    "status_detail": None,
-                    "valid_date": today,
-                    "scraped_at": now,
-                    "source_url": SOURCE_URL,
-                })
+                records.append(
+                    {
+                        "route_id": route.id,
+                        "status": status,
+                        "status_detail": None,
+                        "valid_date": today,
+                        "scraped_at": now,
+                        "source_url": SOURCE_URL,
+                    }
+                )
 
         self._log.info("parsed", records=len(records))
         return records
@@ -219,7 +224,9 @@ class MarixLine(BaseScraper):
             url = urljoin(SOURCE_URL, link["href"])
             detail_html = detail_pages.get(url)
             detail_records = (
-                self._departures_from_detail(detail_html, route, stops[route.id], start_date, url, resolver)
+                self._departures_from_detail(
+                    detail_html, route, stops[route.id], start_date, url, resolver
+                )
                 if detail_html
                 else None
             )
@@ -229,8 +236,16 @@ class MarixLine(BaseScraper):
 
             self._log.warning("departure_fallback", url=url, route_id=route.id)
             exp = block.find("p", class_="exp")
-            detail = exp.get_text(strip=True) if exp and status != OperationStatusEnum.operating else None
-            records.extend(self._fallback_departures(route, stops[route.id], start_date, status, detail, url))
+            detail = (
+                exp.get_text(strip=True)
+                if exp and status != OperationStatusEnum.operating
+                else None
+            )
+            records.extend(
+                self._fallback_departures(
+                    route, stops[route.id], start_date, status, detail, url
+                )
+            )
 
         self._log.info("parsed_departures", records=len(records))
         return records
@@ -263,14 +278,23 @@ class MarixLine(BaseScraper):
                 continue
             status = self._parse_status_from_classes(single.get("class", []))
             if status is None:
-                self._log.warning("detail_status_unknown", url=url, port=name, classes=single.get("class"))
+                self._log.warning(
+                    "detail_status_unknown",
+                    url=url,
+                    port=name,
+                    classes=single.get("class"),
+                )
                 status = OperationStatusEnum.unknown
             exp = single.select_one("div.exp")
             by_port[port.id] = {
                 "status": status,
                 "exp": exp.get_text(strip=True) if exp else None,
-                "entry_at": self._parse_detail_time(single.select_one("div.entry"), start_date),
-                "departure_at": self._parse_detail_time(single.select_one("div.departure"), start_date),
+                "entry_at": self._parse_detail_time(
+                    single.select_one("div.entry"), start_date
+                ),
+                "departure_at": self._parse_detail_time(
+                    single.select_one("div.departure"), start_date
+                ),
             }
 
         ship_name, reasons = self._parse_detail_heading(soup)
@@ -283,26 +307,30 @@ class MarixLine(BaseScraper):
                 continue
             departure_at = info["departure_at"]
             departure_date = (
-                departure_at.date() if departure_at else start_date + timedelta(days=stop.day_offset)
+                departure_at.date()
+                if departure_at
+                else start_date + timedelta(days=stop.day_offset)
             )
             detail = None
             if info["status"] != OperationStatusEnum.operating:
                 detail = " ".join(t for t in [*reasons, info["exp"]] if t) or None
-            records.append({
-                "route_id": route.id,
-                "port_id": stop.port_id,
-                "departure_date": departure_date,
-                "ship_name": ship_name,
-                "status": info["status"],
-                "status_detail": detail,
-                "scheduled_departure_at": departure_at,
-                "scheduled_arrival_at": arrival_at,
-                "operated_by_company_id": None,
-                "source_url": url,
-                "freeze_after_departure": False,
-                # 予備ルートで作った行（船名なし）を、詳細ページが取れたときに消すため
-                "replace_scope": (route.id, stop.port_id, departure_date),
-            })
+            records.append(
+                {
+                    "route_id": route.id,
+                    "port_id": stop.port_id,
+                    "departure_date": departure_date,
+                    "ship_name": ship_name,
+                    "status": info["status"],
+                    "status_detail": detail,
+                    "scheduled_departure_at": departure_at,
+                    "scheduled_arrival_at": arrival_at,
+                    "operated_by_company_id": None,
+                    "source_url": url,
+                    "freeze_after_departure": False,
+                    # 予備ルートで作った行（船名なし）を、詳細ページが取れたときに消すため
+                    "replace_scope": (route.id, stop.port_id, departure_date),
+                }
+            )
         return records or None
 
     def _fallback_departures(
@@ -319,35 +347,41 @@ class MarixLine(BaseScraper):
         for stop in stops[:-1]:
             departure_date = start_date + timedelta(days=stop.day_offset)
             exists = self.session.execute(
-                select(DepartureStatus.id).where(
+                select(DepartureStatus.id)
+                .where(
                     DepartureStatus.route_id == route.id,
                     DepartureStatus.port_id == stop.port_id,
                     DepartureStatus.departure_date == departure_date,
-                ).limit(1)
+                )
+                .limit(1)
             ).first()
             if exists:
                 continue  # 最後に詳細ページから取れた内容を残す（FR-013）
-            records.append({
-                "route_id": route.id,
-                "port_id": stop.port_id,
-                "departure_date": departure_date,
-                "ship_name": "",
-                "status": status,
-                "status_detail": detail,
-                "scheduled_departure_at": None,
-                "scheduled_arrival_at": None,
-                "operated_by_company_id": None,
-                "source_url": url,
-                "freeze_after_departure": False,
-                "replace_scope": None,
-            })
+            records.append(
+                {
+                    "route_id": route.id,
+                    "port_id": stop.port_id,
+                    "departure_date": departure_date,
+                    "ship_name": "",
+                    "status": status,
+                    "status_detail": detail,
+                    "scheduled_departure_at": None,
+                    "scheduled_arrival_at": None,
+                    "operated_by_company_id": None,
+                    "source_url": url,
+                    "freeze_after_departure": False,
+                    "replace_scope": None,
+                }
+            )
         return records
 
     def _parse_detail_heading(self, soup: BeautifulSoup) -> tuple[str, list[str]]:
         """(船名, 理由の見出し) を返す。船名は h1.heading1 の後の最初の h4。"""
         h1 = soup.select_one("h1.heading1")
         container = h1.parent if h1 else soup
-        h4s = [h.get_text(strip=True) for h in container.find_all("h4", recursive=False)]
+        h4s = [
+            h.get_text(strip=True) for h in container.find_all("h4", recursive=False)
+        ]
         h4s = [t for t in h4s if t]
         if not h4s:
             return "", []
@@ -376,11 +410,15 @@ class MarixLine(BaseScraper):
         """route_id → 寄港順（stop_order 昇順）。"""
         if not routes:
             return {}
-        rows = self.session.execute(
-            select(RouteStop)
-            .where(RouteStop.route_id.in_([r.id for r in routes]))
-            .order_by(RouteStop.route_id, RouteStop.stop_order)
-        ).scalars().all()
+        rows = (
+            self.session.execute(
+                select(RouteStop)
+                .where(RouteStop.route_id.in_([r.id for r in routes]))
+                .order_by(RouteStop.route_id, RouteStop.stop_order)
+            )
+            .scalars()
+            .all()
+        )
         result: dict[int, list[RouteStop]] = {}
         for row in rows:
             result.setdefault(row.route_id, []).append(row)
@@ -392,17 +430,23 @@ class MarixLine(BaseScraper):
 
     def _load_routes(self) -> tuple:
         """(down_route, up_route) を返す。origin_port で判定。"""
-        routes = self.session.execute(
-            select(Route).where(
-                Route.ferry_company_id == self.company_id,
-                Route.active.is_(True),
+        routes = (
+            self.session.execute(
+                select(Route).where(
+                    Route.ferry_company_id == self.company_id,
+                    Route.active.is_(True),
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         down = next((r for r in routes if r.origin_port == "鹿児島"), None)
         up = next((r for r in routes if r.origin_port == "那覇"), None)
         return down, up
 
-    def _parse_status_from_classes(self, classes: list[str]) -> OperationStatusEnum | None:
+    def _parse_status_from_classes(
+        self, classes: list[str]
+    ) -> OperationStatusEnum | None:
         if "normal" in classes:
             return OperationStatusEnum.operating
         if "conditional" in classes and "alert" in classes:

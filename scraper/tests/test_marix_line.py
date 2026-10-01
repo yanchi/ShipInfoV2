@@ -5,6 +5,7 @@ MarixLine スクレイパーのユニットテスト。
 HTTP リクエストは responses ライブラリでモック。
 DBは SQLite in-memory を使用（conftest.py の db_session / marix_line_company フィクスチャ）。
 """
+
 import responses as resp_mock
 from datetime import date
 from unittest.mock import patch, MagicMock
@@ -128,19 +129,26 @@ HTML_ONLY_DOWN_TODAY = """
 # テスト
 # ---------------------------------------------------------------------------
 
+
 @resp_mock.activate
 def test_normal_down_delayed_up(db_session, marix_line_company):
     """下り通常・上り条件付きが個別に保存される。"""
-    resp_mock.add(resp_mock.GET, SOURCE_URL, body=HTML_NORMAL_DOWN_DELAYED_UP, status=200)
+    resp_mock.add(
+        resp_mock.GET, SOURCE_URL, body=HTML_NORMAL_DOWN_DELAYED_UP, status=200
+    )
 
     scraper = MarixLine(db_session, marix_line_company.id)
     # HTML内日付（2026-03-07）を today に固定して no_service が追加されないようにする
     with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 3, 7))):
         records = scraper.parse(scraper.fetch())
 
-    routes = db_session.execute(
-        select(Route).where(Route.ferry_company_id == marix_line_company.id)
-    ).scalars().all()
+    routes = (
+        db_session.execute(
+            select(Route).where(Route.ferry_company_id == marix_line_company.id)
+        )
+        .scalars()
+        .all()
+    )
     down = next(r for r in routes if r.origin_port == "鹿児島")
     up = next(r for r in routes if r.origin_port == "那覇")
 
@@ -175,15 +183,21 @@ def test_both_cancelled(db_session, marix_line_company):
 @resp_mock.activate
 def test_conditional_alert_is_delayed_not_cancelled(db_session, marix_line_company):
     """conditional + alert クラスは cancelled ではなく delayed になる。"""
-    resp_mock.add(resp_mock.GET, SOURCE_URL, body=HTML_NORMAL_DOWN_DELAYED_UP, status=200)
+    resp_mock.add(
+        resp_mock.GET, SOURCE_URL, body=HTML_NORMAL_DOWN_DELAYED_UP, status=200
+    )
 
     scraper = MarixLine(db_session, marix_line_company.id)
     with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 3, 7))):
         records = scraper.parse(scraper.fetch())
 
-    routes = db_session.execute(
-        select(Route).where(Route.ferry_company_id == marix_line_company.id)
-    ).scalars().all()
+    routes = (
+        db_session.execute(
+            select(Route).where(Route.ferry_company_id == marix_line_company.id)
+        )
+        .scalars()
+        .all()
+    )
     up = next(r for r in routes if r.origin_port == "那覇")
 
     rec_up = next(r for r in records if r["route_id"] == up.id)
@@ -201,7 +215,9 @@ def test_irrelevant_divs_ignored(db_session, marix_line_company):
 
     # 下り: operating（2026-03-07）、上り: no_service（today=2026-03-07 の上りブロックが存在しない）
     assert len(records) == 2
-    operating_recs = [r for r in records if r["status"] == OperationStatusEnum.operating]
+    operating_recs = [
+        r for r in records if r["status"] == OperationStatusEnum.operating
+    ]
     assert len(operating_recs) == 1
 
     # 上りルートが no_service になっていることを明示的に検証する（今日の上り出発ブロックがHTMLに存在しない）
@@ -217,7 +233,8 @@ def test_irrelevant_divs_ignored(db_session, marix_line_company):
     up_no_service_recs = [
         r
         for r in records
-        if r["route_id"] == up_route.id and r["status"] == OperationStatusEnum.no_service
+        if r["route_id"] == up_route.id
+        and r["status"] == OperationStatusEnum.no_service
     ]
     assert len(up_no_service_recs) == 1
     assert up_no_service_recs[0]["valid_date"] == date(2026, 3, 7)
@@ -226,7 +243,9 @@ def test_irrelevant_divs_ignored(db_session, marix_line_company):
 @resp_mock.activate
 def test_date_parsed_from_info2(db_session, marix_line_company):
     """info2 の YYYY年M月D日 が valid_date として正しく解析される。"""
-    resp_mock.add(resp_mock.GET, SOURCE_URL, body=HTML_NORMAL_DOWN_DELAYED_UP, status=200)
+    resp_mock.add(
+        resp_mock.GET, SOURCE_URL, body=HTML_NORMAL_DOWN_DELAYED_UP, status=200
+    )
 
     scraper = MarixLine(db_session, marix_line_company.id)
     with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 3, 7))):
@@ -246,13 +265,19 @@ def test_no_service_when_no_block_for_today(db_session, marix_line_company):
     with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 3, 8))):
         records = scraper.parse(scraper.fetch())
 
-    routes = db_session.execute(
-        select(Route).where(Route.ferry_company_id == marix_line_company.id)
-    ).scalars().all()
+    routes = (
+        db_session.execute(
+            select(Route).where(Route.ferry_company_id == marix_line_company.id)
+        )
+        .scalars()
+        .all()
+    )
     down = next(r for r in routes if r.origin_port == "鹿児島")
     up = next(r for r in routes if r.origin_port == "那覇")
 
-    no_service_recs = [r for r in records if r["status"] == OperationStatusEnum.no_service]
+    no_service_recs = [
+        r for r in records if r["status"] == OperationStatusEnum.no_service
+    ]
     assert len(no_service_recs) == 2
 
     rec_down = next((r for r in no_service_recs if r["route_id"] == down.id), None)
@@ -273,9 +298,13 @@ def test_no_service_only_for_missing_direction(db_session, marix_line_company):
     with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 3, 8))):
         records = scraper.parse(scraper.fetch())
 
-    routes = db_session.execute(
-        select(Route).where(Route.ferry_company_id == marix_line_company.id)
-    ).scalars().all()
+    routes = (
+        db_session.execute(
+            select(Route).where(Route.ferry_company_id == marix_line_company.id)
+        )
+        .scalars()
+        .all()
+    )
     down = next(r for r in routes if r.origin_port == "鹿児島")
     up = next(r for r in routes if r.origin_port == "那覇")
 
@@ -303,14 +332,35 @@ DOWN_URL = "https://marixline.com/service/downstream20260930/"
 
 
 def _mock_pages(list_html=None, up=None, down=None, up_status=200, down_status=200):
-    resp_mock.add(resp_mock.GET, SOURCE_URL, body=list_html or read_fixture("marix/list.html"), status=200)
-    resp_mock.add(resp_mock.GET, UP_URL, body=up if up is not None else read_fixture("marix/upstream_conditional.html"), status=up_status)
-    resp_mock.add(resp_mock.GET, DOWN_URL, body=down if down is not None else read_fixture("marix/downstream.html"), status=down_status)
+    resp_mock.add(
+        resp_mock.GET,
+        SOURCE_URL,
+        body=list_html or read_fixture("marix/list.html"),
+        status=200,
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        UP_URL,
+        body=up if up is not None else read_fixture("marix/upstream_conditional.html"),
+        status=up_status,
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        DOWN_URL,
+        body=down if down is not None else read_fixture("marix/downstream.html"),
+        status=down_status,
+    )
 
 
 def _routes(db_session, company):
-    routes = db_session.execute(select(Route).where(Route.ferry_company_id == company.id)).scalars().all()
-    return next(r for r in routes if r.origin_port == "鹿児島"), next(r for r in routes if r.origin_port == "那覇")
+    routes = (
+        db_session.execute(select(Route).where(Route.ferry_company_id == company.id))
+        .scalars()
+        .all()
+    )
+    return next(r for r in routes if r.origin_port == "鹿児島"), next(
+        r for r in routes if r.origin_port == "那覇"
+    )
 
 
 def _by_port(records, ports, route):
@@ -355,7 +405,9 @@ def test_departures_times_from_detail(db_session, marix_line_company):
     assert rows["那覇"]["scheduled_departure_at"] == datetime(2026, 9, 30, 7, 0)
     assert rows["与論"]["scheduled_departure_at"] == datetime(2026, 9, 30, 12, 10)
     assert rows["名瀬"]["scheduled_departure_at"] == datetime(2026, 9, 30, 21, 20)
-    assert all(r["scheduled_arrival_at"] == datetime(2026, 10, 1, 8, 30) for r in rows.values())
+    assert all(
+        r["scheduled_arrival_at"] == datetime(2026, 10, 1, 8, 30) for r in rows.values()
+    )
     assert all(r["departure_date"] == date(2026, 9, 30) for r in rows.values())
 
 
@@ -416,7 +468,8 @@ def test_departures_unknown_port_is_ignored(db_session, marix_line_company):
     """寄港順に無い港（平土野）は無視して warning。"""
     ports = setup_port_master(db_session, marix_line_company)
     up_html = read_fixture("marix/upstream_conditional.html").replace(
-        '<span class="port_name">和泊港</span>', '<span class="port_name">平土野港</span>'
+        '<span class="port_name">和泊港</span>',
+        '<span class="port_name">平土野港</span>',
     )
     assert "平土野港" in up_html
     _mock_pages(up=up_html)
@@ -477,13 +530,26 @@ def test_year_crossing_voyage(db_session, marix_line_company):
     ports = setup_port_master(db_session, marix_line_company)
     list_html = (
         read_fixture("marix/list.html")
-        .replace("2026年9月30日 鹿児島新港発 2026年10月1日", "2026年12月31日 鹿児島新港発 2027年1月1日")
+        .replace(
+            "2026年9月30日 鹿児島新港発 2026年10月1日",
+            "2026年12月31日 鹿児島新港発 2027年1月1日",
+        )
         .replace("downstream20260930", "downstream20261231")
     )
-    down_html = read_fixture("marix/downstream.html").replace("09月30日", "12月31日").replace("10月01日", "01月01日")
+    down_html = (
+        read_fixture("marix/downstream.html")
+        .replace("09月30日", "12月31日")
+        .replace("10月01日", "01月01日")
+    )
     resp_mock.add(resp_mock.GET, SOURCE_URL, body=list_html)
-    resp_mock.add(resp_mock.GET, "https://marixline.com/service/downstream20261231/", body=down_html)
-    resp_mock.add(resp_mock.GET, UP_URL, body=read_fixture("marix/upstream_conditional.html"))
+    resp_mock.add(
+        resp_mock.GET,
+        "https://marixline.com/service/downstream20261231/",
+        body=down_html,
+    )
+    resp_mock.add(
+        resp_mock.GET, UP_URL, body=read_fixture("marix/upstream_conditional.html")
+    )
 
     scraper = MarixLine(db_session, marix_line_company.id)
     scraper.fetch()

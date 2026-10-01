@@ -40,6 +40,7 @@ MarueFerry (マルエーフェリー) scraper.
 raw_html_hash: 鹿児島航路ページの HTML ＋ 今日の始発港2つの検索結果を正規化した文字列
 valid_date: 常に date.today()
 """
+
 import json
 import re
 import time
@@ -59,7 +60,11 @@ from scraper.db.models import (
     RouteStop,
 )
 from scraper.scrapers.base import BaseScraper
-from scraper.utils.port_notice import PortNotice, extract_notice_text, extract_port_notices
+from scraper.utils.port_notice import (
+    PortNotice,
+    extract_notice_text,
+    extract_port_notices,
+)
 from scraper.utils.ports import PortResolver
 
 SEARCH_URL = "https://www.aline-ferry.com/search/result.php"
@@ -130,7 +135,9 @@ class MarueFerry(BaseScraper):
                         continue
                     start_code = codes.get(stop.port_id)
                     if start_code is None or end_code is None:
-                        self._log.warning("port_code_missing", route_id=route.id, port_id=stop.port_id)
+                        self._log.warning(
+                            "port_code_missing", route_id=route.id, port_id=stop.port_id
+                        )
                         continue
                     self._searches[key] = self._search(start_code, end_code, d)
 
@@ -151,11 +158,18 @@ class MarueFerry(BaseScraper):
                 detail.encoding = detail.apparent_encoding
                 self._ship_details[ship.name] = detail.text
             except Exception as exc:
-                self._log.warning("ship_detail_fetch_failed", ship=ship.name, error=str(exc))
+                self._log.warning(
+                    "ship_detail_fetch_failed", ship=ship.name, error=str(exc)
+                )
                 self._ship_details[ship.name] = None
 
         # 方向ごとの便有無が変わったら raw_html_hash も変わるように、今日の始発港の検索結果をつなげる
-        return resp.text + "\n<!-- searches: " + self._normalized_origin_searches(routes) + " -->"
+        return (
+            resp.text
+            + "\n<!-- searches: "
+            + self._normalized_origin_searches(routes)
+            + " -->"
+        )
 
     def _needs_far_search(self, key: tuple[int, int, date], now: datetime) -> bool:
         """2日先以降の検索キー：行が無いか、最後の確認から MARUE_FAR_SEARCH_INTERVAL_HOURS たっていれば検索する。"""
@@ -169,7 +183,9 @@ class MarueFerry(BaseScraper):
         ).scalar()
         if last_checked is None:
             return True
-        return last_checked < now - timedelta(hours=settings.marue_far_search_interval_hours)
+        return last_checked < now - timedelta(
+            hours=settings.marue_far_search_interval_hours
+        )
 
     def _normalized_origin_searches(self, routes: list[Route]) -> str:
         result = {}
@@ -178,9 +194,19 @@ class MarueFerry(BaseScraper):
             if not stops:
                 continue
             rows = self._searches.get((route.id, stops[0].port_id, self._valid_date))
-            result[str(route.id)] = None if rows is None else [
-                [r.ship_name, r.company_name, _iso(r.departure_at), _iso(r.arrival_at)] for r in rows
-            ]
+            result[str(route.id)] = (
+                None
+                if rows is None
+                else [
+                    [
+                        r.ship_name,
+                        r.company_name,
+                        _iso(r.departure_at),
+                        _iso(r.arrival_at),
+                    ]
+                    for r in rows
+                ]
+            )
         return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
     # ------------------------------------------------------------------
@@ -191,7 +217,9 @@ class MarueFerry(BaseScraper):
     def _format_search_date(d: date) -> str:
         return f"{d.year}年{d.month:02d}月{d.day:02d}日"
 
-    def _search(self, start_code: str, end_code: str, d: date) -> list[SearchRow] | None:
+    def _search(
+        self, start_code: str, end_code: str, d: date
+    ) -> list[SearchRow] | None:
         """便検索。None = 取得・解析の失敗、[] = 便0件。"""
         if self._search_count > 0:
             time.sleep(settings.marue_search_delay_seconds)
@@ -210,12 +238,20 @@ class MarueFerry(BaseScraper):
             resp.raise_for_status()
             resp.encoding = resp.apparent_encoding
         except Exception as exc:
-            self._log.warning("search_failed", start=start_code, end=end_code, date=str(d), error=str(exc))
+            self._log.warning(
+                "search_failed",
+                start=start_code,
+                end=end_code,
+                date=str(d),
+                error=str(exc),
+            )
             return None
 
         table = BeautifulSoup(resp.text, "lxml").select_one("table.s-result")
         if table is None:
-            self._log.warning("result_table_missing", start=start_code, end=end_code, date=str(d))
+            self._log.warning(
+                "result_table_missing", start=start_code, end=end_code, date=str(d)
+            )
             return None
 
         rows: list[SearchRow] = []
@@ -229,9 +265,16 @@ class MarueFerry(BaseScraper):
             departure_at = _parse_search_datetime(dep_text)
             arrival_at = _parse_search_datetime(arr_text)
             if not is_other and (departure_at is None or arrival_at is None):
-                self._log.warning("search_datetime_parse_failed", dep=dep_text, arr=arr_text, date=str(d))
+                self._log.warning(
+                    "search_datetime_parse_failed",
+                    dep=dep_text,
+                    arr=arr_text,
+                    date=str(d),
+                )
                 return None
-            rows.append(SearchRow(ship_name, company_name, is_other, departure_at, arrival_at))
+            rows.append(
+                SearchRow(ship_name, company_name, is_other, departure_at, arrival_at)
+            )
         return rows
 
     # ------------------------------------------------------------------
@@ -252,14 +295,16 @@ class MarueFerry(BaseScraper):
         records: list[dict] = []
         for route in [r for r in (down_route, up_route) if r]:
             status, detail, source_url = self._route_status(route, ships, valid_date)
-            records.append({
-                "route_id": route.id,
-                "status": status,
-                "status_detail": detail,
-                "valid_date": valid_date,
-                "scraped_at": datetime.now(),
-                "source_url": source_url,
-            })
+            records.append(
+                {
+                    "route_id": route.id,
+                    "status": status,
+                    "status_detail": detail,
+                    "valid_date": valid_date,
+                    "scraped_at": datetime.now(),
+                    "source_url": source_url,
+                }
+            )
 
         self._log.info("parsed", records=len(records))
         return records
@@ -271,7 +316,9 @@ class MarueFerry(BaseScraper):
         stops = getattr(self, "_stops", {}).get(route.id, [])
         rows = None
         if stops:
-            rows = getattr(self, "_searches", {}).get((route.id, stops[0].port_id, valid_date))
+            rows = getattr(self, "_searches", {}).get(
+                (route.id, stops[0].port_id, valid_date)
+            )
 
         if rows is None:
             # 検索に失敗 → 今までの安全側の挙動（船ステータスのうち一番重いもの）
@@ -285,22 +332,30 @@ class MarueFerry(BaseScraper):
         self._require_ship_statuses(ships)
         ship = ships.get(marue_rows[0].ship_name)
         if ship is None or ship.status is None:
-            self._log.warning("ship_not_found", ship=marue_rows[0].ship_name, route_id=route.id)
+            self._log.warning(
+                "ship_not_found", ship=marue_rows[0].ship_name, route_id=route.id
+            )
             return OperationStatusEnum.unknown, None, KAGOSHIMA_URL
         return ship.status, self._ship_detail_text(ship), KAGOSHIMA_URL
 
-    def _worst_ship_status(self, ships: dict[str, ShipInfo]) -> tuple[OperationStatusEnum, str | None]:
+    def _worst_ship_status(
+        self, ships: dict[str, ShipInfo]
+    ) -> tuple[OperationStatusEnum, str | None]:
         self._require_ship_statuses(ships)
         known = [s for s in ships.values() if s.status is not None]
         if len({s.status for s in known}) > 1:
-            self._log.warning("mixed_ship_statuses", statuses=sorted({s.status.value for s in known}))
+            self._log.warning(
+                "mixed_ship_statuses", statuses=sorted({s.status.value for s in known})
+            )
         worst = max(known, key=lambda s: _SEVERITY.get(s.status, 0))
         return worst.status, self._ship_detail_text(worst)
 
     def _require_ship_statuses(self, ships: dict[str, ShipInfo]) -> None:
         if not any(s.status is not None for s in ships.values()):
             self._log.error("no_records_parsed")
-            raise RuntimeError("MarueFerry.parse: no ship statuses parsed (possible site structure change)")
+            raise RuntimeError(
+                "MarueFerry.parse: no ship statuses parsed (possible site structure change)"
+            )
 
     @staticmethod
     def _ship_detail_text(ship: ShipInfo) -> str | None:
@@ -326,7 +381,11 @@ class MarueFerry(BaseScraper):
         current_voyage: dict[str, tuple[int, datetime]] = {}
         for (route_id, _, _), rows in searches.items():
             for row in rows or []:
-                if row.is_other_company or row.arrival_at is None or row.arrival_at <= now:
+                if (
+                    row.is_other_company
+                    or row.arrival_at is None
+                    or row.arrival_at <= now
+                ):
                     continue
                 voyage = (route_id, row.arrival_at)
                 cur = current_voyage.get(row.ship_name)
@@ -348,38 +407,48 @@ class MarueFerry(BaseScraper):
             marue_rows = [r for r in rows if not r.is_other_company]
             if not marue_rows:
                 other = next((r for r in rows if r.is_other_company), None)
-                records.append({
-                    **base,
-                    "ship_name": "",
-                    "status": OperationStatusEnum.no_service,
-                    "status_detail": None,
-                    "scheduled_departure_at": None,
-                    "scheduled_arrival_at": None,
-                    "operated_by_company_id": (
-                        marix_id if other is not None and "マリックス" in other.company_name else None
-                    ),
-                })
+                records.append(
+                    {
+                        **base,
+                        "ship_name": "",
+                        "status": OperationStatusEnum.no_service,
+                        "status_detail": None,
+                        "scheduled_departure_at": None,
+                        "scheduled_arrival_at": None,
+                        "operated_by_company_id": (
+                            marix_id
+                            if other is not None and "マリックス" in other.company_name
+                            else None
+                        ),
+                    }
+                )
                 continue
 
             seen_ships: set[str] = set()
             for row in marue_rows:
                 if row.ship_name in seen_ships:
-                    self._log.warning("search_duplicate_ship", ship=row.ship_name, date=str(d))
+                    self._log.warning(
+                        "search_duplicate_ship", ship=row.ship_name, date=str(d)
+                    )
                     continue
                 seen_ships.add(row.ship_name)
                 if current_voyage.get(row.ship_name) == (route_id, row.arrival_at):
-                    status, detail = self._current_voyage_status(row.ship_name, ships, route_id, port_id)
+                    status, detail = self._current_voyage_status(
+                        row.ship_name, ships, route_id, port_id
+                    )
                 else:
                     status, detail = None, None  # 運航予定（FR-021）
-                records.append({
-                    **base,
-                    "ship_name": row.ship_name,
-                    "status": status,
-                    "status_detail": detail,
-                    "scheduled_departure_at": row.departure_at,
-                    "scheduled_arrival_at": row.arrival_at,
-                    "operated_by_company_id": None,
-                })
+                records.append(
+                    {
+                        **base,
+                        "ship_name": row.ship_name,
+                        "status": status,
+                        "status_detail": detail,
+                        "scheduled_departure_at": row.departure_at,
+                        "scheduled_arrival_at": row.arrival_at,
+                        "operated_by_company_id": None,
+                    }
+                )
 
         self._log.info("parsed_departures", records=len(records))
         return records
@@ -390,7 +459,9 @@ class MarueFerry(BaseScraper):
         """今の便の行のステータス：船ステータス（船ブロックに無ければ unknown）に港別情報を重ねる（FR-006）。"""
         ship = ships.get(ship_name)
         if ship is None or ship.status is None:
-            self._log.warning("ship_not_found", ship=ship_name, route_id=route_id, port_id=port_id)
+            self._log.warning(
+                "ship_not_found", ship=ship_name, route_id=route_id, port_id=port_id
+            )
             return OperationStatusEnum.unknown, None
 
         if ship.status in (
@@ -403,7 +474,11 @@ class MarueFerry(BaseScraper):
         notices = self._ship_notices(ship)
         notice = next((n for n in notices if n.port_id == port_id), None)
         if notice is not None:
-            status = OperationStatusEnum.cancelled if notice.kind == "skip" else OperationStatusEnum.delayed
+            status = (
+                OperationStatusEnum.cancelled
+                if notice.kind == "skip"
+                else OperationStatusEnum.delayed
+            )
             detail = notice.sentence
             if notice.change_to and notice.change_to not in detail:
                 detail += f"（変更先：{notice.change_to}）"
@@ -416,10 +491,14 @@ class MarueFerry(BaseScraper):
     def _ship_notices(self, ship: ShipInfo) -> list[PortNotice]:
         """船ごとの港別情報（1回の実行で1度だけ抜き出す）。"""
         if ship.name not in self._notices:
-            text = extract_notice_text(ship.excerpt, getattr(self, "_ship_details", {}).get(ship.name))
+            text = extract_notice_text(
+                ship.excerpt, getattr(self, "_ship_details", {}).get(ship.name)
+            )
             notices = extract_port_notices(text, self._resolver)
             if ship.status == OperationStatusEnum.delayed and not notices:
-                self._log.warning("port_notice_unmatched", ship=ship.name, text=text[:200])
+                self._log.warning(
+                    "port_notice_unmatched", ship=ship.name, text=text[:200]
+                )
             self._notices[ship.name] = notices
         return self._notices[ship.name]
 
@@ -444,7 +523,9 @@ class MarueFerry(BaseScraper):
                 status_text = tag_span.get_text(strip=True)
                 status = self._parse_status_text(status_text)
                 if status is None:
-                    self._log.warning("unknown_status_text", ship=name, text=status_text[:60])
+                    self._log.warning(
+                        "unknown_status_text", ship=name, text=status_text[:60]
+                    )
             excerpt_div = block.find("div", class_="situation-excerpt")
             excerpt = excerpt_div.get_text(strip=True) if excerpt_div else None
             ships[name] = ShipInfo(name, status, excerpt or None, block.get("href"))
@@ -452,12 +533,16 @@ class MarueFerry(BaseScraper):
 
     def _load_routes(self) -> tuple:
         """(down_route, up_route) を返す。origin_port で判定。"""
-        routes = self.session.execute(
-            select(Route).where(
-                Route.ferry_company_id == self.company_id,
-                Route.active.is_(True),
+        routes = (
+            self.session.execute(
+                select(Route).where(
+                    Route.ferry_company_id == self.company_id,
+                    Route.active.is_(True),
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         down = next((r for r in routes if r.origin_port == "鹿児島"), None)
         up = next((r for r in routes if r.origin_port == "那覇"), None)
         return down, up
@@ -465,20 +550,30 @@ class MarueFerry(BaseScraper):
     def _load_stops(self, routes: list[Route]) -> dict[int, list[RouteStop]]:
         if not routes:
             return {}
-        rows = self.session.execute(
-            select(RouteStop)
-            .where(RouteStop.route_id.in_([r.id for r in routes]))
-            .order_by(RouteStop.route_id, RouteStop.stop_order)
-        ).scalars().all()
+        rows = (
+            self.session.execute(
+                select(RouteStop)
+                .where(RouteStop.route_id.in_([r.id for r in routes]))
+                .order_by(RouteStop.route_id, RouteStop.stop_order)
+            )
+            .scalars()
+            .all()
+        )
         result: dict[int, list[RouteStop]] = {}
         for row in rows:
             result.setdefault(row.route_id, []).append(row)
         return result
 
     def _load_port_codes(self) -> dict[int, str]:
-        rows = self.session.execute(
-            select(PortCompanyCode).where(PortCompanyCode.ferry_company_id == self.company_id)
-        ).scalars().all()
+        rows = (
+            self.session.execute(
+                select(PortCompanyCode).where(
+                    PortCompanyCode.ferry_company_id == self.company_id
+                )
+            )
+            .scalars()
+            .all()
+        )
         return {r.port_id: r.external_code for r in rows}
 
     def _marix_company_id(self) -> int | None:

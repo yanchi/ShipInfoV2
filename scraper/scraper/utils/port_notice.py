@@ -8,6 +8,7 @@
 - 抜港 → skip、港変更・寄港地変更・「A港からB港へ／に」→ change（B が変更先）、条件付 → conditional
 - 1つの港に複数あれば skip > change > conditional
 """
+
 from __future__ import annotations
 
 import re
@@ -19,7 +20,9 @@ from scraper.utils.ports import PortResolver
 
 BOILERPLATE_MARKER = "台風の影響や"
 _HYPOTHETICAL = ("場合", "ことがあります", "可能性", "問い合わせ")
-_CHANGE_ROUTE = re.compile(r"([^\s、。・,，:：]+?港)から([^\s、。・,，:：]+?港)(?:へ|に)")
+_CHANGE_ROUTE = re.compile(
+    r"([^\s、。・,，:：]+?港)から([^\s、。・,，:：]+?港)(?:へ|に)"
+)
 _PRIORITY = {"skip": 3, "change": 2, "conditional": 1}
 
 
@@ -122,10 +125,12 @@ def _sentence_notices(sentence: str, resolver: PortResolver) -> list[PortNotice]
         for port in resolver.find_all(clause):
             if port.id in destinations:
                 continue
-            notices.append(PortNotice(
-                port_id=port.id,
-                kind=kind,
-                change_to=change_to.get(port.id) if kind == "change" else None,
-                sentence=sentence,
-            ))
+            notices.append(
+                PortNotice(
+                    port_id=port.id,
+                    kind=kind,
+                    change_to=change_to.get(port.id) if kind == "change" else None,
+                    sentence=sentence,
+                )
+            )
     return notices
