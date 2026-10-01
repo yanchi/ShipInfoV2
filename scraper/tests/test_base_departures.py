@@ -327,6 +327,108 @@ def test_replace_scope_does_not_touch_other_keys(db_session, setup):
     assert len(_rows(db_session)) == 2
 
 
+def test_replace_source_deletes_rows_on_other_dates(db_session, setup):
+    """同じ便（source_url）の行で、今回書かなかった日付の行は消える。他の便の行は残る。"""
+    scraper, _, route, port = setup
+    url = "https://example.com/service/downstream20260930/"
+    tomorrow = date.today() + timedelta(days=1)
+    scraper._upsert_departures(
+        [
+            _rec(route, port, ship_name="", scheduled_departure_at=None, source_url=url),
+            _rec(route, port, departure_date=tomorrow, source_url="https://example.com/other/"),
+        ]
+    )
+    db_session.commit()
+
+    # 遅延で出港日が翌日にずれた
+    scraper._upsert_departures(
+        [
+            _rec(
+                route,
+                port,
+                departure_date=tomorrow,
+                ship_name="フェリー波之上",
+                scheduled_departure_at=datetime.now() + timedelta(days=1),
+                source_url=url,
+                replace_source=(route.id, port.id, url),
+            )
+        ]
+    )
+    db_session.commit()
+
+    rows = sorted((r.departure_date, r.ship_name, r.source_url) for r in _rows(db_session))
+    assert rows == [
+        (tomorrow, "フェリーあけぼの", "https://example.com/other/"),
+        (tomorrow, "フェリー波之上", url),
+    ]
+
+
+def _departed_row(route, port, url):
+    past = datetime.now() - timedelta(hours=1)
+    return DepartureStatus(
+        route_id=route.id,
+        port_id=port.id,
+        departure_date=date.today(),
+        ship_name="フェリーあけぼの",
+        status="operating",
+        scheduled_departure_at=past,
+        source_url=url,
+        content_hash="x" * 64,
+        scraped_at=past,
+        checked_at=past,
+    )
+
+
+def test_replace_source_deletes_row_past_its_old_departure_time(db_session, setup):
+    """元の出港時刻を過ぎてから遅延が発表されても、同じ便の前の日付の行は消える。"""
+    scraper, _, route, port = setup
+    url = "https://example.com/service/downstream20260930/"
+    db_session.add(_departed_row(route, port, url))
+    db_session.commit()
+
+    tomorrow = date.today() + timedelta(days=1)
+    scraper._upsert_departures(
+        [
+            _rec(
+                route,
+                port,
+                departure_date=tomorrow,
+                scheduled_departure_at=datetime.now() + timedelta(hours=12),
+                source_url=url,
+                replace_source=(route.id, port.id, url),
+            )
+        ]
+    )
+    db_session.commit()
+
+    assert [r.departure_date for r in _rows(db_session)] == [tomorrow]
+
+
+def test_replace_source_keeps_departed_rows_when_frozen(db_session, setup):
+    """freeze_after_departure の便は、出港済みの行を残す（ルール4）。"""
+    scraper, _, route, port = setup
+    url = "https://example.com/service/downstream20260930/"
+    db_session.add(_departed_row(route, port, url))
+    db_session.commit()
+
+    tomorrow = date.today() + timedelta(days=1)
+    scraper._upsert_departures(
+        [
+            _rec(
+                route,
+                port,
+                departure_date=tomorrow,
+                source_url=url,
+                freeze_after_departure=True,
+                replace_source=(route.id, port.id, url),
+            )
+        ]
+    )
+    db_session.commit()
+
+    assert len(_rows(db_session)) == 2
+
+
 # ---------------------------------------------------------------------------
 # run()（ルール7：トランザクション）
 # ---------------------------------------------------------------------------
