@@ -96,7 +96,8 @@ class PortBoardBuilder
         // ルール3: 他社運航と分かっている
         foreach ($statuses as $s) {
             $operator = $s->getOperatedByCompany();
-            if ($operator === null) {
+            // 無効にした会社は「〇〇／運航予定」として出さない（トップ・/ports の対象外なので）
+            if ($operator === null || !$operator->isActive()) {
                 continue;
             }
 

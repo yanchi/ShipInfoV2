@@ -55,7 +55,7 @@ Date: div.info2 の最初の "YYYY年M月D日" を valid_date として使用
     - 出入港日時に年が無いので、一覧の始発日の年で補う（始発日より前の月日なら翌年）
     - 寄港順（route_stops）のうち終点以外の港について行を作る。到着予定は終点の入港日時
     - 詳細ページが取れない便は、便全体のステータスを全出発港に当てはめ、出港日は始発日 + day_offset、
-      時刻は None にする（予備ルート）。ただし同じキーの行がすでにあれば、最後に詳細ページから取れた内容を残す
+      時刻は None にする（予備ルート）。ただし詳細ページから取れた行（船名あり）がすでにあれば、そちらを残す
 """
 
 import re
@@ -352,6 +352,8 @@ class MarixLine(BaseScraper):
                     DepartureStatus.route_id == route.id,
                     DepartureStatus.port_id == stop.port_id,
                     DepartureStatus.departure_date == departure_date,
+                    # 予備ルート自身が書いた行（船名なし）は更新したいので、詳細ページの行だけ見る
+                    DepartureStatus.ship_name != "",
                 )
                 .limit(1)
             ).first()

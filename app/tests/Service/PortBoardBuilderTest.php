@@ -123,6 +123,18 @@ class PortBoardBuilderTest extends TestCase
         $this->assertSame('マリックスライン', $entries[0]->companyName);
     }
 
+    public function testInactiveOperatorIsTreatedAsNoService(): void
+    {
+        $this->marix->setActive(false);
+        $board = $this->build([
+            $this->departure('marue_down', '名瀬', '2026-10-03', OperationStatusEnum::NoService, operatedBy: $this->marix),
+        ]);
+
+        $entries = $this->row($board, 2, RouteDirectionEnum::Down, '名瀬')->entries;
+        $this->assertSame(DepartureDisplayStateEnum::NoService, $entries[0]->state);
+        $this->assertNull($entries[0]->companyName);
+    }
+
     public function testOperatedByIsIgnoredWhenOperatorRowExists(): void
     {
         $board = $this->build([

@@ -583,3 +583,63 @@ def test_rows_are_kept_after_voyage_leaves_list(db_session, marix_line_company):
     db_session.commit()
 
     assert db_session.query(DepartureStatus).count() == before
+
+
+@resp_mock.activate
+def test_fallback_rows_follow_list_status_changes(db_session, marix_line_company):
+    """詳細ページが取れない状態が続いても、一覧のステータスの変化は予備ルートの行に反映される。"""
+    setup_port_master(db_session, marix_line_company)
+    _mock_pages(up_status=404)
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    scraper._upsert_departures(scraper.parse_departures())
+    db_session.commit()
+
+    # 一覧の上り便が 条件付 → 欠航 に変わった（詳細ページは引き続き取れない）
+    list_html = read_fixture("marix/list.html").replace(
+        "status_single_cover conditional alert", "status_single_cover alert"
+    )
+    resp_mock.reset()
+    _mock_pages(list_html=list_html, up_status=404)
+    scraper2 = MarixLine(db_session, marix_line_company.id)
+    scraper2.fetch()
+    scraper2._upsert_departures(scraper2.parse_departures())
+    db_session.commit()
+
+    _, up = _routes(db_session, marix_line_company)
+    rows = (
+        db_session.query(DepartureStatus)
+        .filter(DepartureStatus.route_id == up.id)
+        .all()
+    )
+    assert len(rows) == 6
+    assert all(r.status == "cancelled" and r.ship_name == "" for r in rows)
+
+
+@resp_mock.activate
+def test_fallback_does_not_overwrite_detail_rows(db_session, marix_line_company):
+    """詳細ページから取れた行がある日・港は、予備ルートで上書きしない。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages()
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    scraper._upsert_departures(scraper.parse_departures())
+    db_session.commit()
+
+    resp_mock.reset()
+    _mock_pages(up_status=404)
+    scraper2 = MarixLine(db_session, marix_line_company.id)
+    scraper2.fetch()
+    scraper2._upsert_departures(scraper2.parse_departures())
+    db_session.commit()
+
+    _, up = _routes(db_session, marix_line_company)
+    rows = (
+        db_session.query(DepartureStatus)
+        .filter(DepartureStatus.route_id == up.id)
+        .all()
+    )
+    assert len(rows) == 6
+    assert all(r.ship_name == "クイーンコーラルプラス" for r in rows)
+    yoron = next(r for r in rows if r.port_id == ports["与論"].id)
+    assert yoron.status == "delayed"

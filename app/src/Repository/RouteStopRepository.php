@@ -22,7 +22,7 @@ class RouteStopRepository extends ServiceEntityRepository
      * 港別ページ用: 方向ごとの出発港（終点を除く、寄港順）と終点の港。
      *
      * 2社で寄港順が同じ前提なので、方向ごとに最初の航路（route.id 順）の並びを使う。
-     * 返す順は下り → 上り。direction が null の航路と無効な航路は対象外。
+     * 返す順は下り → 上り。direction が null の航路と、無効な航路・無効な会社の航路は対象外。
      *
      * @return list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}>
      */
@@ -32,8 +32,10 @@ class RouteStopRepository extends ServiceEntityRepository
         $stops = $this->createQueryBuilder('s')
             ->select('s', 'r', 'p')
             ->join('s.route', 'r')
+            ->join('r.ferryCompany', 'fc')
             ->join('s.port', 'p')
             ->where('r.active = :active')
+            ->andWhere('fc.active = :active')
             ->andWhere('r.direction IS NOT NULL')
             ->setParameter('active', true)
             ->orderBy('r.id', 'ASC')
