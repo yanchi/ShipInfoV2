@@ -328,9 +328,9 @@
 
 ## Phase 9: Polish & Cross-Cutting（PR3 の仕上げ）
 
-- [ ] T065 幅 375 × 667 で3画面すべてを目視する（SC-008）。共通ヘッダーが入った状態で、港別ページとトップの SC-003・SC-004（スクロールせずに見える）を満たすこと。満たさなければヘッダーの高さを詰める
-- [ ] T066 全ステータスを出したページをグレースケール（開発者ツールの「Emulate vision deficiencies → Achromatopsia」）で見て、記号と文言だけで区別できることを確認する（SC-007）
-- [ ] T067 quickstart.md の「PR3」の手順を全部実際に行う（スクレイパーを止めてから。終わったら `make scraper-run` と `docker compose start scraper` で戻す）
+- [X] T065 幅 375 × 667 で3画面すべてを目視する（SC-008）。共通ヘッダーが入った状態で、港別ページとトップの SC-003・SC-004（スクロールせずに見える）を満たすこと。満たさなければヘッダーの高さを詰める
+- [X] T066 全ステータスを出したページをグレースケール（開発者ツールの「Emulate vision deficiencies → Achromatopsia」）で見て、記号と文言だけで区別できることを確認する（SC-007）
+- [X] T067 quickstart.md の「PR3」の手順を全部実際に行う（スクレイパーを止めてから。終わったら `make scraper-run` と `docker compose start scraper` で戻す）
 - [ ] T068 push して PR を作る。説明に US5・US6 との対応、削除した `findRecentByCompany()` とそのテスト、「← トップへ戻る」を消したことを書く
 
 ---

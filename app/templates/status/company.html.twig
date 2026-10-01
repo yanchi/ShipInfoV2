@@ -4,10 +4,10 @@
 
 {% block body %}
 <div class="container pt-3 pb-4">
-    <div class="d-flex align-items-baseline gap-2 mb-4">
+    <div class="d-flex flex-wrap align-items-baseline column-gap-2 mb-4">
         <h1 class="h4 mb-0">{{ company.name }} 運航状況</h1>
         {% if company.websiteUrl %}
-            <a href="{{ company.websiteUrl }}" target="_blank" rel="noopener noreferrer" class="text-muted small">
+            <a href="{{ company.websiteUrl }}" target="_blank" rel="noopener noreferrer" class="text-muted small text-nowrap">
                 公式サイト ↗
             </a>
         {% endif %}
