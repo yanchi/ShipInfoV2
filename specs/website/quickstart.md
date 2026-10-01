@@ -69,6 +69,7 @@ Chromeデベロッパーツール → デバイスモード（iPhone SE等）で
 | cancelled | 赤（Bootstrap `text-danger` or `badge bg-danger`） |
 | delayed | 黄（Bootstrap `text-warning` or `badge bg-warning`） |
 | suspended | グレー（Bootstrap `text-secondary`） |
+| no_service | 白枠（Bootstrap `badge bg-light text-dark border`） |
 | unknown | グレー（Bootstrap `text-secondary`） |
 
 ---
