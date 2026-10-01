@@ -283,7 +283,7 @@
 
 - [X] T046 [P] `scraper/` で `black` と `ruff` を実行して、指摘を直す
 - [X] T047 [P] `specs/website/contracts/http-routes.md` の冒頭に、`/ports` は `specs/4-departure-port-status/contracts/http-routes.md` を参照する旨の1行を足す
-- [ ] T048 quickstart.md の手順を全部実際に実行する（マイグレーション、`make scraper-run`、`/ports` の目視、SQL の確認）。2社の実データで US1 のシナリオ1・5・6 になっていることを確かめる
+- [X] T048 quickstart.md の手順を全部実際に実行する（マイグレーション、`make scraper-run`、`/ports` の目視、SQL の確認）。2社の実データで US1 のシナリオ1・5・6 になっていることを確かめる
 - [ ] T049 PR の説明（`specs/4-departure-port-status/` の成果物へのリンク付き）に、既存の表示への影響（マリックスの日には、トップと会社詳細のマルエーが「便なし」になる）と、港別情報の抽出は実例なしで作っていること（quickstart の改善手順）を書く
 
 ---
