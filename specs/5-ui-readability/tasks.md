@@ -170,21 +170,21 @@
 
 ### Tests for User Story 3
 
-- [ ] T030 [P] [US3] `app/tests/Controller/StatusControllerTest.php` の `testPortsShowsCheckedAt`（今は行に「時点」があることを見ている）を、方向の見出しに「{n/j H:i}時点」が1回出て、同じ時刻の行には出ないことを見るテストに直す。確認時刻が違う行だけ行に出るテストを足す
-- [ ] T031 [P] [US3] `app/tests/Controller/StatusControllerTest.php` に足す：日付ボタンが4つあり `href="#d-{Y-m-d}"`、各 `section` に同じ `id`。60文字を超える詳細文は `<details>` になり、60文字以下はならない。凡例（`<details>` の中に全ステータス）がある
+- [X] T030 [P] [US3] `app/tests/Controller/StatusControllerTest.php` の `testPortsShowsCheckedAt`（今は行に「時点」があることを見ている）を、方向の見出しに「{n/j H:i}時点」が1回出て、同じ時刻の行には出ないことを見るテストに直す。確認時刻が違う行だけ行に出るテストを足す
+- [X] T031 [P] [US3] `app/tests/Controller/StatusControllerTest.php` に足す：日付ボタンが4つあり `href="#d-{Y-m-d}"`、各 `section` に同じ `id`。60文字を超える詳細文は `<details>` になり、60文字以下はならない。凡例（`<details>` の中に全ステータス）がある
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] `app/templates/status/_port_entry.html.twig` を2段にする（FR-005・research R14）
+- [X] T032 [US3] `app/templates/status/_port_entry.html.twig` を2段にする（FR-005・research R14）
   - 1段目（`d-flex`）：出港時刻（`H:i発`、太字）とステータスのバッジ。出港時刻が無ければバッジだけ
   - 2段目（`small text-muted`）：船名／会社、着時刻（今の `arrivalText()` のまま）、確認時刻（`entry.checkedAtDiffersFrom(commonCheckedAt)` のときだけ「{n/j H:i}時点」）
   - 行の見出し（`.fw-bold` の「{港}発 → {到着港}」）は `ports.html.twig` の `li.port-row` に残す。375px で1段目が折り返す場合は、到着港を方向の見出しに任せて行は「{港}発」だけにする
-- [ ] T033 [US3] `app/templates/status/ports.html.twig` の方向の見出し（`h3`）の横に、`direction.commonCheckedAt()` があれば「{n/j H:i}時点」を出す（FR-006）
-- [ ] T034 [US3] 日付ボタン（FR-007・research R3）。`ports.html.twig` のフォームの上に、表示期間の日付を「n/j（曜）」のリンク（`href="#d-…"`）で横に並べる。`base.html.twig` の `<style>` に `.date-nav { position: sticky; top: 0; z-index: 10; background: var(--bs-body-bg); }` と `section[id^="d-"], li[id^="r-"] { scroll-margin-top: <日付ボタンの高さ>; }` を足す
-- [ ] T035 [US3] 出港済み（FR-008・contracts/ui-status.md）。`StatusController::ports()` で `now`（`new \DateTimeImmutable()`）を渡し、`_port_entry.html.twig` で `entry.isDeparted(now)` のとき `port-entry--departed`（不透明度 0.55）と「出港済み」の小さな文字を付ける
-- [ ] T036 [US3] 長い詳細文（FR-028・research R9）。`_port_entry.html.twig` で `entry.detail|length > 60` のとき `<details><summary>{{ entry.detail|slice(0, 60) }}…</summary>{{ entry.detail }}</details>`、それ以外は今の「└ {detail}」のまま
-- [ ] T037 [US6] `app/templates/status/_status_legend.html.twig` を新しく作る。`<details><summary>ステータスの見かた</summary>` の中に、contracts/ui-status.md の8種類を `_status_badge` で出し、それぞれに1行の説明を付ける（例：運航予定＝まだ運航状況が発表されていない便、情報なし＝情報を取得できていない）。`ports.html.twig` のフォームの下に `include` する（FR-026）
-- [ ] T038 [US3] 幅 375 × 667 で `/ports` を目視する（quickstart PR1 の 8・9・11・13）。横スクロールが無いこと、日付ボタン・要約（3件＋ほか）・最初の行がスクロールせずに見えること。収まらなければ T032 の「行は『{港}発』だけ」に切り替え、フォームを1行にまとめる
+- [X] T033 [US3] `app/templates/status/ports.html.twig` の方向の見出し（`h3`）の横に、`direction.commonCheckedAt()` があれば「{n/j H:i}時点」を出す（FR-006）
+- [X] T034 [US3] 日付ボタン（FR-007・research R3）。`ports.html.twig` のフォームの上に、表示期間の日付を「n/j（曜）」のリンク（`href="#d-…"`）で横に並べる。`base.html.twig` の `<style>` に `.date-nav { position: sticky; top: 0; z-index: 10; background: var(--bs-body-bg); }` と `section[id^="d-"], li[id^="r-"] { scroll-margin-top: <日付ボタンの高さ>; }` を足す
+- [X] T035 [US3] 出港済み（FR-008・contracts/ui-status.md）。`StatusController::ports()` で `now`（`new \DateTimeImmutable()`）を渡し、`_port_entry.html.twig` で `entry.isDeparted(now)` のとき `port-entry--departed`（不透明度 0.55）と「出港済み」の小さな文字を付ける
+- [X] T036 [US3] 長い詳細文（FR-028・research R9）。`_port_entry.html.twig` で `entry.detail|length > 60` のとき `<details><summary>{{ entry.detail|slice(0, 60) }}…</summary>{{ entry.detail }}</details>`、それ以外は今の「└ {detail}」のまま
+- [X] T037 [US6] `app/templates/status/_status_legend.html.twig` を新しく作る。`<details><summary>ステータスの見かた</summary>` の中に、contracts/ui-status.md の8種類を `_status_badge` で出し、それぞれに1行の説明を付ける（例：運航予定＝まだ運航状況が発表されていない便、情報なし＝情報を取得できていない）。`ports.html.twig` のフォームの下に `include` する（FR-026）
+- [X] T038 [US3] 幅 375 × 667 で `/ports` を目視する（quickstart PR1 の 8・9・11・13）。横スクロールが無いこと、日付ボタン・要約（3件＋ほか）・最初の行がスクロールせずに見えること。収まらなければ T032 の「行は『{港}発』だけ」に切り替え、フォームを1行にまとめる
 
 **Checkpoint**: US3 の Independent Test が通る。`make test-php` が全部通る → コミット
 

@@ -1,0 +1,24 @@
+{#
+    ステータスの凡例（FR-026。contracts/ui-status.md の8種類）
+#}
+{%- set legend = [
+    {status: constant('App\\Enum\\OperationStatusEnum::Operating'), note: '発表どおり運航する'},
+    {state: constant('App\\Enum\\DepartureDisplayStateEnum::Scheduled'), note: 'まだ運航状況が発表されていない便'},
+    {status: constant('App\\Enum\\OperationStatusEnum::Delayed'), note: '条件付きの運航（寄港しない・引き返す場合あり）や遅れ'},
+    {status: constant('App\\Enum\\OperationStatusEnum::Cancelled'), note: 'この便は運航しない'},
+    {status: constant('App\\Enum\\OperationStatusEnum::Suspended'), note: 'ドック入りなどでしばらく運航しない'},
+    {state: constant('App\\Enum\\DepartureDisplayStateEnum::NoService'), note: 'この日この港を出る便がない'},
+    {state: constant('App\\Enum\\DepartureDisplayStateEnum::NoInfo'), note: '情報を取得できていない'},
+    {status: constant('App\\Enum\\OperationStatusEnum::Unknown'), note: '発表の内容を読み取れなかった'},
+] -%}
+<details class="status-legend small mb-3">
+    <summary>ステータスの見かた</summary>
+    <ul class="list-unstyled mt-2 mb-0">
+        {% for item in legend %}
+            <li class="mb-1">
+                {{ include('status/_status_badge.html.twig', {state: item.state|default(null), status: item.status|default(null)}) }}
+                <span class="text-muted ms-1">{{ item.note }}</span>
+            </li>
+        {% endfor %}
+    </ul>
+</details>

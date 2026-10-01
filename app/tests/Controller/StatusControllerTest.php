@@ -199,15 +199,75 @@ class StatusControllerTest extends WebTestCase
         $this->assertCount(0, $row->filter('.badge.bg-success'));
     }
 
+    /** 方向内の確認時刻が全部同じ分なら、方向の見出しに1回だけ出して、行には出さない（FR-006） */
     public function testPortsShowsCheckedAt(): void
     {
         $this->createPortBoardData();
 
         $crawler = $this->client->request('GET', '/ports');
 
-        $row      = $this->findPortRow($crawler, 0, '名瀬');
         $expected = (new \DateTimeImmutable('today'))->setTime(6, 0)->format('n/j H:i') . '時点';
-        $this->assertStringContainsString($expected, $row->text());
+        $heading  = $crawler->filter('section')->eq(0)->filter('h3')->first();
+        $this->assertSame($expected, trim($heading->filter('.checked-at')->text()));
+        $this->assertStringNotContainsString('時点', $this->findPortRow($crawler, 0, '名瀬')->text());
+    }
+
+    /** 確認時刻が違うエントリーがあれば見出しにまとめず、行ごとに出す */
+    public function testPortsShowsCheckedAtOnRowsWhenDifferent(): void
+    {
+        $this->createPortBoardData();
+        $this->updateTestDeparture(0, 'checkedAt', (new \DateTime('today'))->setTime(5, 0));
+
+        $crawler = $this->client->request('GET', '/ports');
+
+        $this->assertCount(0, $crawler->filter('section')->eq(0)->filter('h3')->first()->filter('.checked-at'));
+        $expected = (new \DateTimeImmutable('today'))->setTime(5, 0)->format('n/j H:i') . '時点';
+        $this->assertStringContainsString($expected, $this->findPortRow($crawler, 0, '名瀬')->text());
+    }
+
+    public function testPortsHasDateNavigation(): void
+    {
+        $this->createPortBoardData();
+
+        $crawler = $this->client->request('GET', '/ports');
+
+        $links = $crawler->filter('.date-nav a[href^="#d-"]');
+        $this->assertCount(4, $links);
+        $today = new \DateTimeImmutable('today');
+        for ($i = 0; $i < 4; $i++) {
+            $id = 'd-' . $today->modify("+{$i} days")->format('Y-m-d');
+            $this->assertSame('#' . $id, $links->eq($i)->attr('href'));
+            $this->assertCount(1, $crawler->filter("section#{$id}"));
+        }
+    }
+
+    public function testPortsFoldsLongDetail(): void
+    {
+        $this->createPortBoardData();
+        $long  = str_repeat('天候不良のため条件付きで運航します。', 5);
+        $short = '天候に注意';
+        $this->updateTestDeparture(0, 'statusDetail', $long);
+        $this->updateTestDeparture(3, 'statusDetail', $short);
+
+        $crawler = $this->client->request('GET', '/ports');
+
+        $details = $this->findPortRow($crawler, 0, '名瀬')->filter('details');
+        $this->assertCount(1, $details);
+        $this->assertSame(mb_substr($long, 0, 60) . '…', trim($details->filter('summary')->text()));
+        $later = $this->findPortRow($crawler, 3, '名瀬');
+        $this->assertCount(0, $later->filter('details'));
+        $this->assertStringContainsString('└ ' . $short, $later->text());
+    }
+
+    public function testPortsHasStatusLegend(): void
+    {
+        $crawler = $this->client->request('GET', '/ports');
+
+        $legend = $crawler->filter('details.status-legend');
+        $this->assertCount(1, $legend);
+        foreach (['✓ 通常運航', '○ 運航予定', '▲ 条件付・遅延', '✗ 欠航', '■ 運休', '— 便なし', '？ 情報なし', '？ 不明'] as $label) {
+            $this->assertStringContainsString($label, $legend->text());
+        }
     }
 
     /**
@@ -363,7 +423,7 @@ class StatusControllerTest extends WebTestCase
 
     /**
      * 下りの寄港順（鹿児島→名瀬→那覇）を持つ2社と、名瀬発の港別ステータスを作る。
-     * - 今日: 運航会社が船あり・通常運航（05:50発・翌08:00着）、非運航会社が no_service
+     * - 今日: 運航会社が船あり・通常運航（05:50発・翌08:00着）、非運航会社が no_service。鹿児島発は非運航会社の no_service だけ
      * - 3日先: 運航会社が status null（運航予定）
      * - $tomorrowStatus を渡すと、明日の名瀬発に運航会社のその status の行を足す
      */
@@ -397,6 +457,7 @@ class StatusControllerTest extends WebTestCase
         $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today), '港別テスト丸', OperationStatusEnum::Operating, (clone $today)->setTime(5, 50))
             ->setScheduledArrivalAt((clone $today)->modify('+1 day')->setTime(8, 0)));
         $em->persist($this->makeDeparture($routes[1], $ports['名瀬'], (clone $today), '', OperationStatusEnum::NoService, null));
+        $em->persist($this->makeDeparture($routes[1], $ports['鹿児島'], (clone $today), '', OperationStatusEnum::NoService, null));
         $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today)->modify('+3 days'), '港別テスト丸', null, (clone $today)->modify('+3 days')->setTime(5, 50)));
         if ($tomorrowStatus !== null) {
             $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today)->modify('+1 day'), '港別テスト丸', $tomorrowStatus, (clone $today)->modify('+1 day')->setTime(5, 50)));
@@ -405,6 +466,19 @@ class StatusControllerTest extends WebTestCase
         $em->persist($other);
         $this->persistCompany($operator);
         $this->createdCompanyIds[] = $other->getId();
+    }
+
+    /**
+     * createPortBoardData() で作った港別テスト丸の、$daysAhead 日後の行の1項目を書き換える。
+     */
+    private function updateTestDeparture(int $daysAhead, string $field, mixed $value): void
+    {
+        $this->entityManager()
+            ->createQuery("UPDATE App\\Entity\\DepartureStatus d SET d.{$field} = :value WHERE d.departureDate = :date AND d.shipName = :ship")
+            ->setParameter('value', $value)
+            ->setParameter('date', (new \DateTime('today'))->modify("+{$daysAhead} days"))
+            ->setParameter('ship', '港別テスト丸')
+            ->execute();
     }
 
     private function portId(string $name): int

@@ -6,11 +6,11 @@
       linkPrefix: 行へのリンクの前に付ける URL（港別ページは ''、トップは '/ports?port=all'）
 #}
 {%- macro item(alert, linkPrefix) -%}
-    <a href="{{ linkPrefix }}#{{ alert.anchor }}" class="alert-item d-flex flex-wrap align-items-center gap-1 text-reset text-decoration-none py-1">
-        <span>{{ alert.date|date('n/j') }}（{{ ['日','月','火','水','木','金','土'][alert.date|date('w')] }}）</span>
-        <span class="fw-bold">{{ alert.port.name }}発→{{ alert.arrivalPortName }}</span>
+    <a href="{{ linkPrefix }}#{{ alert.anchor }}" class="alert-item d-flex align-items-center gap-1 text-reset text-decoration-none py-1">
+        <span class="text-nowrap">{{ alert.date|date('n/j') }}（{{ ['日','月','火','水','木','金','土'][alert.date|date('w')] }}）</span>
+        <span class="fw-bold text-nowrap">{{ alert.port.name }}発→{{ alert.arrivalPortName }}</span>
         {{ include('status/_status_badge.html.twig', {state: null, status: alert.entry.status}) }}
-        {% if alert.entry.companyName %}<span class="small text-muted">{{ alert.entry.companyName }}</span>{% endif %}
+        {% if alert.entry.companyName %}<span class="small text-muted text-truncate">{{ alert.entry.companyName }}</span>{% endif %}
     </a>
 {%- endmacro -%}
 {%- if summary.hasData -%}

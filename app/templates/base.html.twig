@@ -18,6 +18,21 @@
             .port-entry--cancelled { border-left-color: var(--bs-danger); background: var(--bs-danger-bg-subtle); }
             .port-entry--delayed { border-left-color: var(--bs-warning); background: var(--bs-warning-bg-subtle); }
             .port-entry--suspended { border-left-color: var(--bs-secondary); background: var(--bs-secondary-bg-subtle); }
+
+            /* 異常の要約。1項目1行に収め、会社名は省略して詰める */
+            .alert-item { font-size: .875rem; min-width: 0; }
+
+            /* 出港済みの行（FR-008） */
+            .port-entry--departed { opacity: .55; }
+
+            /* 日付ボタン（FR-007）。スクロールしても上に残し、飛んだ先の見出しが隠れないようにする */
+            .date-nav { position: sticky; top: 0; z-index: 10; background: var(--bs-body-bg); }
+            .date-nav .btn { white-space: nowrap; padding-left: .25rem; padding-right: .25rem; }
+            section[id^="d-"], li[id^="r-"] { scroll-margin-top: 3.25rem; }
+
+            /* 絞り込みフォーム。375px でも1行に収める */
+            .port-filter { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; gap: .25rem; align-items: center; }
+            .port-filter .form-select { padding-left: .5rem; }
         </style>
         {% block stylesheets %}{% endblock %}
     </head>
