@@ -1,0 +1,29 @@
+{#
+    便の1件分（港別・トップ・会社別で共通）
+
+    引数:
+      entry:           App\View\PortBoardEntry
+      day:             その行の日付（着時刻の表示に使う）
+      now:             現在時刻（出港済みの判定）
+      commonCheckedAt: 方向の見出しに出している確認時刻（null 可）
+#}
+<div class="port-entry mt-1">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        {{ include('status/_status_badge.html.twig', {state: entry.state.value == 'status' ? null : entry.state, status: entry.status}) }}
+        {% if entry.shipName or entry.companyName %}
+            <span>{{ entry.shipName ? entry.shipName ~ '／' : '' }}{{ entry.companyName }}</span>
+        {% endif %}
+        {% if entry.departureAt %}
+            <span>{{ entry.departureAt|date('H:i') }}発</span>
+        {% endif %}
+        {% if entry.arrivalAt %}
+            <span class="text-muted">（{{ entry.arrivalText(day) }}）</span>
+        {% endif %}
+        {% if entry.checkedAt %}
+            <span class="text-muted small ms-auto">{{ entry.checkedAt|date('n/j H:i') }}時点</span>
+        {% endif %}
+    </div>
+    {% if entry.detail %}
+        <div class="text-muted small mt-1">└ {{ entry.detail }}</div>
+    {% endif %}
+</div>

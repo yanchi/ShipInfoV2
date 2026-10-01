@@ -42,27 +42,27 @@
 
 **⚠️ CRITICAL**: この Phase が終わるまで US の実装を始めないこと
 
-- [ ] T003 [P] `app/src/View/PortBoardEntry.php` に `public ?int $companyId = null` を追加する（コンストラクタの引数の最後に足す）。`app/src/Service/PortBoardBuilder.php` で、エントリーを作る2か所（ルール2：`$s->getRoute()->getFerryCompany()->getId()`、ルール3：`$operator->getId()`）で値を入れる。ルール4・5は入れない。判定のロジックには触らない（research R13）
-- [ ] T004 `app/src/View/PortBoardEntry.php` に次のメソッドを追加する（T003 と同じファイルなので T003 の後に行う）（data-model.md・research R7）
+- [X] T003 [P] `app/src/View/PortBoardEntry.php` に `public ?int $companyId = null` を追加する（コンストラクタの引数の最後に足す）。`app/src/Service/PortBoardBuilder.php` で、エントリーを作る2か所（ルール2：`$s->getRoute()->getFerryCompany()->getId()`、ルール3：`$operator->getId()`）で値を入れる。ルール4・5は入れない。判定のロジックには触らない（research R13）
+- [X] T004 `app/src/View/PortBoardEntry.php` に次のメソッドを追加する（T003 と同じファイルなので T003 の後に行う）（data-model.md・research R7）
   - `isAlert(): bool` … `state === Status` かつ status が `Cancelled` / `Delayed` / `Suspended`
   - `isDeparted(\DateTimeInterface $now): bool` … `isAlert()` なら false。`departureAt` が null なら false。`departureAt < $now` かつ（`state === Scheduled` または status が `Operating`）なら true
   - `checkedAtDiffersFrom(?\DateTimeInterface $common): bool` … `checkedAt` が null なら false。`$common` が null なら true。それ以外は `Y-m-d H:i` で比べて違えば true
-- [ ] T005 [P] `app/src/View/PortBoardDirection.php` に `commonCheckedAt(): ?\DateTimeInterface` を追加する。`checkedAt` を持つエントリーの `Y-m-d H:i` が全部同じならその時刻（最初のもの）、1つも無いか違うものがあれば null（research R6）
-- [ ] T006 [P] `app/src/View/PortBoard.php` に `lastCheckedAt(): ?\DateTimeInterface`（ボード内の最大の `checkedAt`）を追加する
-- [ ] T007 [P] `app/tests/Service/PortBoardBuilderTest.php` とは別に `app/tests/View/PortBoardEntryTest.php` を作り、T004 の3メソッドをテストする
+- [X] T005 [P] `app/src/View/PortBoardDirection.php` に `commonCheckedAt(): ?\DateTimeInterface` を追加する。`checkedAt` を持つエントリーの `Y-m-d H:i` が全部同じならその時刻（最初のもの）、1つも無いか違うものがあれば null（research R6）
+- [X] T006 [P] `app/src/View/PortBoard.php` に `lastCheckedAt(): ?\DateTimeInterface`（ボード内の最大の `checkedAt`）を追加する
+- [X] T007 [P] `app/tests/Service/PortBoardBuilderTest.php` とは別に `app/tests/View/PortBoardEntryTest.php` を作り、T004 の3メソッドをテストする
   - `isAlert`：Cancelled / Delayed / Suspended は true、Operating・NoService・Scheduled・NoInfo は false
   - `isDeparted`：Operating で出港時刻の1分後 → true、1分前 → false、Scheduled で過ぎた → true、Delayed・Cancelled・Suspended で過ぎた → false、`departureAt` が null → false
   - `checkedAtDiffersFrom`：同じ分で秒だけ違う → false、分が違う → true、`$common` が null → true、自分の `checkedAt` が null → false
-- [ ] T008 [P] `app/tests/View/PortBoardTest.php` を作り、T005 の `commonCheckedAt()`（全部同じ分 → その時刻、1つ違う → null、checkedAt が無い → null）と T006 の `lastCheckedAt()` をテストする。あわせて `app/tests/Service/PortBoardBuilderTest.php` に、ルール2・3のエントリーに `companyId` が入り、ルール4・5は null になるテストを**追加**する（既存のテストは変えない）
-- [ ] T009 `app/templates/status/_status_badge.html.twig` を `contracts/ui-status.md` の表のとおりに直す
+- [X] T008 [P] `app/tests/View/PortBoardTest.php` を作り、T005 の `commonCheckedAt()`（全部同じ分 → その時刻、1つ違う → null、checkedAt が無い → null）と T006 の `lastCheckedAt()` をテストする。あわせて `app/tests/Service/PortBoardBuilderTest.php` に、ルール2・3のエントリーに `companyId` が入り、ルール4・5は null になるテストを**追加**する（既存のテストは変えない）
+- [X] T009 `app/templates/status/_status_badge.html.twig` を `contracts/ui-status.md` の表のとおりに直す
   - 記号を変える：条件付・遅延「●」→「▲」、運休「-」→「■」、情報なし・不明は「？」（全角）
   - 便なしはバッジにせず、灰色の文字だけ（`<span class="status-none text-secondary">— 便なし</span>`）
   - 運航予定は白地に破線の枠（今の `style` 属性をやめて、T002 の `<style>` に `.badge-scheduled` を作る）
   - 情報なし・不明は薄い灰の塗り（`bg-secondary-subtle text-dark`）。運休は濃い灰（`bg-secondary`）
   - 既存の `bg-success`（通常運航）のクラスは残す（`StatusControllerTest` が見ている）
-- [ ] T010 `app/templates/status/_port_entry.html.twig` を新しく作り、`ports.html.twig` の便の1件分（今の `.port-entry` の中身）を移す。引数は `entry`・`day`（日付）・`now`・`commonCheckedAt`。この Phase では見た目は今のままでよい（T032 で2段にする）。`ports.html.twig` からはこのパーシャルを `include` する
-- [ ] T011 `app/templates/status/ports.html.twig` の各日付の `<section>` に `id="d-{{ day.date|date('Y-m-d') }}"`、各行の `<li class="list-group-item port-row">` に `id="r-{{ day.date|date('Y-m-d') }}-{{ direction.direction.value }}-{{ row.port.id }}"` を付ける（contracts/http-routes.md のアンカー）
-- [ ] T012 `make test-php` を実行する。T009 で文言（「● 条件付・遅延」など）を見ているテストがあれば、新しい記号に合わせて直す
+- [X] T010 `app/templates/status/_port_entry.html.twig` を新しく作り、`ports.html.twig` の便の1件分（今の `.port-entry` の中身）を移す。引数は `entry`・`day`（日付）・`now`・`commonCheckedAt`。この Phase では見た目は今のままでよい（T032 で2段にする）。`ports.html.twig` からはこのパーシャルを `include` する
+- [X] T011 `app/templates/status/ports.html.twig` の各日付の `<section>` に `id="d-{{ day.date|date('Y-m-d') }}"`、各行の `<li class="list-group-item port-row">` に `id="r-{{ day.date|date('Y-m-d') }}-{{ direction.direction.value }}-{{ row.port.id }}"` を付ける（contracts/http-routes.md のアンカー）
+- [X] T012 `make test-php` を実行する。T009 で文言（「● 条件付・遅延」など）を見ているテストがあれば、新しい記号に合わせて直す
 
 **Checkpoint**: 表示用オブジェクトの追加メソッドとテストがある。ステータス表示が contracts/ui-status.md のとおり。既存テストが通る → コミット
 

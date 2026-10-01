@@ -26,4 +26,23 @@ final readonly class PortBoard
 
         return true;
     }
+
+    /** ボード内の最大の確認時刻 */
+    public function lastCheckedAt(): ?\DateTimeInterface
+    {
+        $last = null;
+        foreach ($this->days as $day) {
+            foreach ($day->directions as $direction) {
+                foreach ($direction->rows as $row) {
+                    foreach ($row->entries as $entry) {
+                        if ($entry->checkedAt !== null && ($last === null || $entry->checkedAt > $last)) {
+                            $last = $entry->checkedAt;
+                        }
+                    }
+                }
+            }
+        }
+
+        return $last;
+    }
 }

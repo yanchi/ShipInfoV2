@@ -226,6 +226,24 @@ class PortBoardBuilderTest extends TestCase
         $this->assertSame('10/3 08:00着', $entry('2026-10-01 18:00', '2026-10-03 08:00')->arrivalText($day));
     }
 
+    public function testCompanyIdIsSetForServiceAndOperatedByEntries(): void
+    {
+        $board = $this->build([
+            // ルール2
+            $this->departure('marix_down', '名瀬', '2026-10-01', OperationStatusEnum::Operating, 'クイーンコーラルプラス'),
+            // ルール3
+            $this->departure('marue_down', '和泊', '2026-10-02', OperationStatusEnum::NoService, operatedBy: $this->marix),
+            // ルール4
+            $this->departure('marue_down', '与論', '2026-10-01', OperationStatusEnum::NoService),
+        ]);
+
+        $this->assertSame(2, $this->row($board, 0, RouteDirectionEnum::Down, '名瀬')->entries[0]->companyId);
+        $this->assertSame(2, $this->row($board, 1, RouteDirectionEnum::Down, '和泊')->entries[0]->companyId);
+        $this->assertNull($this->row($board, 0, RouteDirectionEnum::Down, '与論')->entries[0]->companyId);
+        // ルール5
+        $this->assertNull($this->row($board, 0, RouteDirectionEnum::Up, '那覇')->entries[0]->companyId);
+    }
+
     // ------------------------------------------------------------------
 
     /** @param list<DepartureStatus> $statuses */
