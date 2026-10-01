@@ -36,6 +36,8 @@
 
 - `hasSaved: bool` … Cookie に保存した条件があるか（「保存を解除」を出すかの判定）
 
+**トップ用**: `resolveFromCookie()` はクエリを見ず Cookie だけを読む（`save`・`clear` も受け付けないので、リダイレクトしない）。Cookie が不正なら港別ページと同じく消す
+
 ### PortBoard（変更）
 
 | 追加メソッド | 説明 |
