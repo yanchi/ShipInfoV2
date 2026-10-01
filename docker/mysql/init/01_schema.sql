@@ -1,7 +1,11 @@
 -- ShipInfoV2 Initial Schema
--- Note: This file is for reference only.
--- The authoritative schema is managed by Doctrine Migrations (app/migrations/).
--- This file is executed only on first MySQL container startup.
+-- Doctrine マイグレーション（app/migrations/）の土台になるスキーマ。消さないこと。
+-- 最初のマイグレーションはここで作ったテーブルを ALTER するので、「このファイル → migrate」の順で流す。
+-- 流すタイミングは2つ：
+--   - MySQL コンテナの初回起動時（dev DB。docker-entrypoint-initdb.d）
+--   - make init-test-db（テスト用 DB。DB 名を指定して流す）
+-- USE や CREATE DATABASE は書かないこと（テスト用 DB に流すときに dev DB を触ってしまうため）。
+-- CREATE TABLE IF NOT EXISTS だけにすること（make init-test-db は何度でも流すため）。
 -- 港別の新しいテーブル（ports / port_company_codes / route_stops / departure_statuses）と
 -- その初期データ、routes.direction は Doctrine マイグレーション（app/migrations/Version20261001000000.php）で作る。
 -- ここには書かない（make init で init スクリプトとマイグレーションが両方走って二重に適用されるため）。

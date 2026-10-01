@@ -2,7 +2,7 @@
         shell-php shell-scraper \
         migrate migrate-diff fixtures cache-clear \
         test-php test-scraper lint-scraper \
-        init init-test-db reset-test-db
+        init init-test-db reset-test-db check-test-token
 
 DOCKER_COMPOSE = docker compose
 PHP_SERVICE    = php
@@ -11,6 +11,7 @@ MYSQL_SERVICE  = mysql
 
 # テスト用 DB は ${DB_NAME}_test<TEST_TOKEN>（app/config/packages/doctrine.yaml の dbname_suffix と揃える）
 TEST_TOKEN ?=
+export TEST_TOKEN
 
 # Default target
 help:
@@ -66,16 +67,21 @@ test-php: ## Run PHPUnit tests
 # 最初のマイグレーションは 01_schema.sql が作ったテーブルを ALTER するので、
 # 空の DB に migrate するだけでは初期化できない。01_schema.sql を流してから migrate する。
 # 02_seed.sql は入れない（テストは自分でデータを作る。港マスタはマイグレーションが入れる）。
-init-test-db: ## Create the PHPUnit test DB (idempotent)
+# TEST_TOKEN は DB 名（SQL の識別子）とシェルの文字列にそのまま入るので、英数字と _ だけに限る
+check-test-token:
+	@case "$$TEST_TOKEN" in *[!A-Za-z0-9_]*) \
+	  echo "TEST_TOKEN は英数字と _ だけにしてください" >&2; exit 1;; esac
+
+init-test-db: check-test-token ## Create the PHPUnit test DB (idempotent)
 	$(DOCKER_COMPOSE) exec -T $(MYSQL_SERVICE) sh -c '\
 	  export MYSQL_PWD="$$MYSQL_ROOT_PASSWORD"; DB="$${MYSQL_DATABASE}_test$(TEST_TOKEN)"; \
 	  mysql -uroot -e "CREATE DATABASE IF NOT EXISTS \`$$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; \
 	    GRANT ALL PRIVILEGES ON \`$$DB\`.* TO \`$$MYSQL_USER\`@\`%\`;" \
 	  && mysql -uroot "$$DB" < /docker-entrypoint-initdb.d/01_schema.sql'
-	$(DOCKER_COMPOSE) exec -e TEST_TOKEN=$(TEST_TOKEN) $(PHP_SERVICE) \
+	$(DOCKER_COMPOSE) exec -T -e TEST_TOKEN=$(TEST_TOKEN) $(PHP_SERVICE) \
 	  bin/console doctrine:migrations:migrate --env=test --no-interaction
 
-reset-test-db: ## Drop and recreate the PHPUnit test DB
+reset-test-db: check-test-token ## Drop and recreate the PHPUnit test DB
 	$(DOCKER_COMPOSE) exec -T $(MYSQL_SERVICE) sh -c '\
 	  export MYSQL_PWD="$$MYSQL_ROOT_PASSWORD"; DB="$${MYSQL_DATABASE}_test$(TEST_TOKEN)"; \
 	  mysql -uroot -e "DROP DATABASE IF EXISTS \`$$DB\`;"'
