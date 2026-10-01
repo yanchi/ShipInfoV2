@@ -174,7 +174,7 @@
 
 ### Tests for User Story 4
 
-- [ ] T032 [P] [US4] `scraper/tests/test_marue_ferry.py` の既存の検索サンプル（`HTML_SEARCH_HAS_SERVICE` など）を、実際の構造（会社名の列あり、`search_*.html` の fixture）に置き換える。今の挙動が変わるテストは、新しい仕様（他社運航 → `no_service`）に合わせて直す。テストを足す
+- [X] T032 [P] [US4] `scraper/tests/test_marue_ferry.py` の既存の検索サンプル（`HTML_SEARCH_HAS_SERVICE` など）を、実際の構造（会社名の列あり、`search_*.html` の fixture）に置き換える。今の挙動が変わるテストは、新しい仕様（他社運航 → `no_service`）に合わせて直す。テストを足す
   - POST の `startDate` が `YYYY年MM月DD日` になっている
   - 方向ごとの便有無（下りはマルエー運航、上りは他社運航 → 下りは船ステータス、上りは `no_service`）
   - 港別：船名あり → その船の船ステータス（US4 シナリオ1・8）
@@ -188,29 +188,29 @@
 
 ### Implementation for User Story 4
 
-- [ ] T033 [US4] `scraper/scraper/scrapers/marue_ferry.py` に便検索のヘルパーを作る
+- [X] T033 [US4] `scraper/scraper/scrapers/marue_ferry.py` に便検索のヘルパーを作る
   - `_format_search_date(d) -> "YYYY年MM月DD日"`
   - `_search(start_code, end_code, d) -> list[SearchRow] | None`（None = 取得・解析の失敗、`[]` = 便0件）：`SearchRow` は `ship_name`、`company_name`、`is_other_company`、`departure_at`、`arrival_at`。「YYYY年M月D日 HH:MM」を解析する。`table.s-result` が無ければ None を返して warning
   - 呼び出しごとに `settings.marue_search_delay_seconds` だけ待つ
-- [ ] T034 [US4] `scraper/scraper/scrapers/marue_ferry.py` の `fetch()` を書き直す
+- [X] T034 [US4] `scraper/scraper/scrapers/marue_ferry.py` の `fetch()` を書き直す
   - 港コードと寄港順を DB から読む
   - 方向 × 終点以外の港 × 日付（今日・明日は毎回、2〜3日先は、検索キー (route, port, departure_date) ごとに、そのキーの `departure_statuses` が無いか `checked_at` が `marue_far_search_interval_hours` より古ければ）で `_search()` して `self._searches` に持たせる
   - 鹿児島航路ページを取って、船ブロック（船名・タグ・抜粋・詳細ページの URL）を `self._ships` に持たせる
   - 各船の詳細ページを取って `self._ship_details` に持たせる
   - 戻り値は鹿児島航路ページの HTML に、今日の始発港2つの検索結果を正規化した文字列をつなげたもの（方向ごとの便有無が変わったら `raw_html_hash` が変わるように）
-- [ ] T035 [US4] `scraper/scraper/scrapers/marue_ferry.py` の `parse()` を方向ごとの判定に書き直す（research R10）
+- [X] T035 [US4] `scraper/scraper/scrapers/marue_ferry.py` の `parse()` を方向ごとの判定に書き直す（research R10）
   - 今日の「鹿児島→那覇」「那覇→鹿児島」の検索結果に、マルエーの行があればその船の船ステータス（船名で対応付け。無ければ `unknown`）
   - 他社運航のみ、または0件なら `no_service`
   - 検索に失敗（None）したら、今の安全側の挙動（船ステータスのうち一番重いもの）にして warning
   - `_check_service()` と古い Step 1 は消す
-- [ ] T036 [US4] `scraper/scraper/scrapers/marue_ferry.py` に `parse_departures()` を実装する（research R9）
+- [X] T036 [US4] `scraper/scraper/scrapers/marue_ferry.py` に `parse_departures()` を実装する（research R9）
   - 検索結果ごとにレコードを作る
   - 便を `(ship_name, route_id, arrival_at)` で特定して、船ごとに `arrival_at > now` の一番早い便を「今の便」にする
   - 今の便の行には船ステータス（この Phase では港別情報なし）と抜粋を入れて、それより後の便は `status=None`
   - 他社運航は `no_service` + `operated_by_company_id`（`ferry_companies.scraper_class = 'MarixLine'` の id）
   - 0件は `no_service`
   - 全部に `freeze_after_departure=True` と `replace_scope=(route_id, port_id, departure_date)`、`source_url` は `SEARCH_URL`
-- [ ] T037 [US4] `scraper/scraper/scrapers/marue_ferry.py` の docstring を、新しい処理の流れ（便検索 → 船 → 船ステータス、日付形式の注意）に書き直す
+- [X] T037 [US4] `scraper/scraper/scrapers/marue_ferry.py` の docstring を、新しい処理の流れ（便検索 → 船 → 船ステータス、日付形式の注意）に書き直す
 
 **Checkpoint**: `make test-scraper` が全部通る。`make scraper-run` のあと、マルエーの港別の行と、方向ごとの航路単位の行が入る → コミット
 

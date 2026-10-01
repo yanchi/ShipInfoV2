@@ -2,7 +2,7 @@ import enum
 import hashlib
 import json
 from abc import ABC, abstractmethod
-from datetime import date, datetime
+from datetime import datetime
 
 import structlog
 from sqlalchemy import delete, or_, select
@@ -170,7 +170,7 @@ class BaseScraper(ABC):
         def norm(v):
             if isinstance(v, enum.Enum):
                 return v.value
-            if isinstance(v, (datetime, date)):
+            if hasattr(v, "isoformat"):  # date / datetime（テストで差し替えたサブクラスも含む）
                 return v.isoformat()
             return v
 
