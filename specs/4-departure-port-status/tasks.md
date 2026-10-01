@@ -63,9 +63,9 @@
   - `_upsert_departures(records) -> tuple[int, int]`：data-model.md の更新ルール1〜5・7
     - `content_hash` は status・status_detail・ship_name・各日時・operated_by_company_id の SHA-256
     - ハッシュが同じなら `checked_at` だけ更新
-    - `freeze_after_departure=True` で既存行の `scheduled_departure_at < now` なら、その行は一切更新しない（`checked_at` も進めない）
+    - `freeze_after_departure=True` で既存行の `scheduled_departure_at < now` なら、その行は一切更新しない（`checked_at` も進めない）。既存行が無くて、受け取った `scheduled_departure_at < now` なら INSERT しない
     - `replace_scope` があれば、同じ (route_id, port_id, departure_date) で今回のレコードに無い ship_name の行を削除する。**ただし `scheduled_departure_at < now` の行は削除しない**
-  - `run()`：`_upsert()` のあとに、`with self.session.begin_nested():`（SAVEPOINT）の中で `parse_departures()` と `_upsert_departures()` を実行する。例外は SAVEPOINT の外で捕まえて、`scraper_log.error_message` に `departures: <msg>` を入れる。航路単位の結果は success のまま保存する（Session が失敗状態のまま残って、最後の commit が失敗しないこと）。SQLite のテストで SAVEPOINT が効くように、必要なら `scraper/tests/conftest.py` に pysqlite の SAVEPOINT 対応（SQLAlchemy ドキュメントの `do_begin` イベントのレシピ）を入れる
+  - `run()`：`_upsert()` のあとに `self.session.flush()` を明示的に呼ぶ（航路単位のエラーは今までどおり外側の except で failed にする）。そのあと `with self.session.begin_nested():`（SAVEPOINT）の中で `parse_departures()` と `_upsert_departures()` を実行する。例外は SAVEPOINT の外で捕まえて、`scraper_log.error_message` に `departures: <msg>` を入れる。航路単位の結果は success のまま保存する（Session が失敗状態のまま残って、最後の commit が失敗しないこと）。SQLite のテストで SAVEPOINT が効くように、必要なら `scraper/tests/conftest.py` に pysqlite の SAVEPOINT 対応（SQLAlchemy ドキュメントの `do_begin` イベントのレシピ）を入れる
   - `fetch()` / `parse()` のシグネチャは変えない
 - [ ] T014 `scraper/tests/test_base_departures.py` を作る。T013 のルールを全部テストする
   - 新規 INSERT
@@ -75,6 +75,8 @@
   - freeze した行は、`checked_at` も `scraped_at` も `content_hash` も変わらない（FR-014：表示中のステータスを最後に確認した時刻を保つ）
   - replace_scope で古い ship_name の行が消える
   - replace_scope でも、出港済みの行は消えない
+  - 既存行が無い出港済みのレコード（`freeze_after_departure=True`）は INSERT されない
+  - 航路単位の `_upsert()` の flush で起きたエラーは、港別のエラーとしては扱われず、今までどおり failed になる
   - `_upsert_departures` で DB エラー（例：一意制約違反）が起きても、航路単位の `operation_statuses` と `scraper_logs`（`error_message` 入り）がコミットされる
   - parse_departures の例外で航路単位が保存されて error_message が入る
 - [ ] T015 [P] バッジを `app/templates/status/_status_badge.html.twig` に切り出して、`app/templates/status/index.html.twig` と `app/templates/status/company.html.twig` から `include` する。表示される HTML は変えない。パーシャルの引数は次の2つ（3画面で共通）
@@ -266,7 +268,7 @@
   - `marix/downstream.html` で、名瀬以降の行の `departure_date` が始発日の翌日になる
   - 12/31 始発・1/1 出港の年またぎ（fixture の日付を書き換えて作る）
   - 一覧から消えた便の行が `departure_statuses` から消されない（FR-013、`_upsert_departures` を通して確認）
-- [ ] T043 [P] [US5] `scraper/tests/test_marue_ferry.py` に確定のテストを足す（US4 シナリオ9）。10/1 05:50 発の行が DB にある状態で、10/1 20:00 に船ステータスが `cancelled` に変わったデータで実行しても、その行の status は `operating` のまま、`checked_at` も出港前の最後の確認時刻のまま変わらない。さらに、出港後の検索でその便が返らなくなっても（結果0件や別の船）、その行は削除されない
+- [ ] T043 [P] [US5] `scraper/tests/test_marue_ferry.py` に確定のテストを足す（US4 シナリオ9）。10/1 05:50 発の行が DB にある状態で、10/1 20:00 に船ステータスが `cancelled` に変わったデータで実行しても、その行の status は `operating` のまま、`checked_at` も出港前の最後の確認時刻のまま変わらない。さらに、出港後の検索でその便が返らなくなっても（結果0件や別の船）、その行は削除されない。また、DB に行が無い状態で 10/1 10:00 に初めて実行したとき、10/1 05:50 発の行は作られない（港別ページでは「情報なし」）
 - [ ] T044 [P] [US5] `app/tests/Controller/StatusControllerTest.php` に表示のテストを足す
   - `scheduled_departure_at` が前日始発の便でも、その日の日付セクションに出る
   - `checked_at` が「n/j H:i時点」で出る

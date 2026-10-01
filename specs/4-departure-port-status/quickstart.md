@@ -8,6 +8,8 @@
 make up                 # TZ=Asia/Tokyo を反映するため scraper コンテナは作り直す
 docker compose up -d --force-recreate scraper
 make migrate            # ports / port_company_codes / route_stops / departure_statuses、routes.direction
+# テスト用 DB（*_test）にも適用する（make test-php の前に必須）
+docker compose exec php bin/console doctrine:migrations:migrate --env=test --no-interaction
 ```
 
 JST になったかの確認:

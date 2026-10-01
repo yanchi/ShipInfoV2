@@ -130,10 +130,11 @@ INDEX (`departure_date`, `port_id`)
 4. **マルエーの出港済みの行**（`freeze_after_departure` かつ既存行の `scheduled_departure_at` < 今）は、**一切更新しない**（FR-020）。`checked_at` も進めない
    - 出港後に受け取る船ステータスは次の便のもので、この行のステータスを確認したことにはならないため。`checked_at` は「表示しているステータスを最後に確認した時刻」（FR-014）のまま残す
    - 更新しないので、保存値と `content_hash` がずれることもない
+   - **既存行が無い出港済みの行**（`freeze_after_departure` かつ受け取った `scheduled_departure_at` < 今。例：デプロイ直後の初回実行）は **INSERT しない**。今の船ステータスは次の便のものかもしれないので、過去の便には当てはめない。行が無いので、港別ページでは「情報なし」になる（FR-013・FR-020）
 5. **マルエーの検索の取り直し**：同じ (route, port, departure_date) で今回の検索結果に無い `ship_name` の行は削除する。検索結果が正なので、船の入れ替えや「※下記参照」から船名への変化で古い行が残らないようにする
    - **ただし出港済みの行（`scheduled_departure_at` < 今）は削除しない**。出港後の検索で便が返らなくなっても、ルール4で確定した行を残すため（FR-020）
 6. マリックスは、一覧から消えた便の行を消さない（FR-013：最後のステータスを出し続ける）
-7. **トランザクション**：港別の処理（`parse_departures()` と `_upsert_departures()`）は SAVEPOINT（`session.begin_nested()`）の中で行う。失敗したら SAVEPOINT だけロールバックして、航路単位の更新と `scraper_logs` はそのままコミットされるようにする
+7. **トランザクション**：航路単位の `_upsert()` の後に `session.flush()` を明示的に呼んで、航路単位のエラーはここで（港別の try の外で）今までどおり表に出す。そのうえで、港別の処理（`parse_departures()` と `_upsert_departures()`）は SAVEPOINT（`session.begin_nested()`）の中で行う。`begin_nested()` は SAVEPOINT を作る前に保留中の変更を flush するので、先に flush しておかないと航路単位のエラーまで港別のエラーとして捕まえてしまうため。失敗したら SAVEPOINT だけロールバックして、航路単位の更新と `scraper_logs` はそのままコミットされるようにする
 
 ---
 
