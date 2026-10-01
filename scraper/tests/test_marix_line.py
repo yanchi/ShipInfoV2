@@ -728,3 +728,24 @@ def test_detail_row_is_removed_when_detail_shifts_date(db_session, marix_line_co
     assert _naze_rows(db_session, marix_line_company, ports) == [
         (date(2026, 10, 2), "クイーンコーラルクロス")
     ]
+
+
+@resp_mock.activate
+def test_detail_row_is_removed_when_delay_is_announced_after_departure_time(
+    db_session, marix_line_company
+):
+    """名瀬 10/1 05:50 発が、10/1 06:00 に「10/2 00:30 発」へ変更されたとき、10/1 の行は残らない。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages()
+    with patch("scraper.scrapers.base.datetime") as dt:
+        dt.now.return_value = datetime(2026, 10, 1, 0, 0)
+        _run_departures(db_session, marix_line_company)
+
+        dt.now.return_value = datetime(2026, 10, 1, 6, 0)
+        resp_mock.reset()
+        _mock_pages(down=_down_with_naze_delayed())
+        _run_departures(db_session, marix_line_company)
+
+    assert _naze_rows(db_session, marix_line_company, ports) == [
+        (date(2026, 10, 2), "クイーンコーラルクロス")
+    ]
