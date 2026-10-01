@@ -1,5 +1,5 @@
 {#
-    ステータスバッジ（トップ・会社詳細・港別の3画面で共通）
+    ステータスバッジ（トップ・会社詳細・港別の3画面で共通。specs/5-ui-readability/contracts/ui-status.md）
 
     引数:
       state:  App\Enum\DepartureDisplayStateEnum|null
@@ -10,25 +10,23 @@
 {%- set state = state|default(null) -%}
 {%- set status = status|default(null) -%}
 {%- if state is not null and state.value == 'scheduled' -%}
-    <span class="badge bg-light text-dark border border-secondary" style="border-style: dashed !important;">○ 運航予定</span>
+    <span class="badge badge-scheduled">○ 運航予定</span>
 {%- elseif state is not null and state.value == 'no_info' -%}
-    <span class="badge bg-secondary">情報なし</span>
-{%- elseif state is not null and state.value == 'no_service' -%}
-    <span class="badge bg-light text-dark border">— 便なし</span>
+    <span class="badge badge-muted">？ 情報なし</span>
+{%- elseif (state is not null and state.value == 'no_service') or (status is not null and status.value == 'no_service') -%}
+    <span class="status-none text-secondary">— 便なし</span>
 {%- elseif status is null -%}
-    <span class="badge bg-secondary">情報なし</span>
+    <span class="badge badge-muted">？ 情報なし</span>
 {%- elseif status.value == 'operating' -%}
     <span class="badge bg-success">✓ 通常運航</span>
 {%- elseif status.value == 'delayed' -%}
-    <span class="badge bg-warning text-dark">● 条件付・遅延</span>
+    <span class="badge bg-warning text-dark">▲ 条件付・遅延</span>
 {%- elseif status.value == 'cancelled' -%}
     <span class="badge bg-danger">✗ 欠航</span>
 {%- elseif status.value == 'suspended' -%}
-    <span class="badge bg-secondary">- 運休</span>
-{%- elseif status.value == 'no_service' -%}
-    <span class="badge bg-light text-dark border">— 便なし</span>
+    <span class="badge bg-secondary">■ 運休</span>
 {%- elseif status.value == 'unknown' -%}
-    <span class="badge bg-secondary">? 不明</span>
+    <span class="badge badge-muted">？ 不明</span>
 {%- else -%}
-    <span class="badge bg-secondary">? 情報なし</span>
+    <span class="badge badge-muted">？ 情報なし</span>
 {%- endif -%}

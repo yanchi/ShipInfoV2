@@ -15,4 +15,26 @@ final readonly class PortBoardDirection
         public array $rows,
     ) {
     }
+
+    /**
+     * 確認時刻を持つエントリーが全部同じ分（Y-m-d H:i）ならその時刻（最初のもの）。無いか違えば null。
+     */
+    public function commonCheckedAt(): ?\DateTimeInterface
+    {
+        $common = null;
+        foreach ($this->rows as $row) {
+            foreach ($row->entries as $entry) {
+                if ($entry->checkedAt === null) {
+                    continue;
+                }
+                if ($common === null) {
+                    $common = $entry->checkedAt;
+                } elseif ($entry->checkedAt->format('Y-m-d H:i') !== $common->format('Y-m-d H:i')) {
+                    return null;
+                }
+            }
+        }
+
+        return $common;
+    }
 }

@@ -12,11 +12,15 @@ use App\Enum\OperationStatusEnum;
 use App\Enum\RouteDirectionEnum;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Component\BrowserKit\Cookie as BrowserCookie;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\DomCrawler\Crawler;
 
 class StatusControllerTest extends WebTestCase
 {
+    /** ブラウザが同じサイトのフォームから送るときに付けるヘッダー（stateless の CSRF トークンの確認に使われる） */
+    private const SAME_ORIGIN = ['HTTP_SEC_FETCH_SITE' => 'same-origin'];
+
     private KernelBrowser $client;
 
     /** @var int[] テスト内で作成した会社ID（tearDown で関連データごと削除する） */
@@ -198,15 +202,78 @@ class StatusControllerTest extends WebTestCase
         $this->assertCount(0, $row->filter('.badge.bg-success'));
     }
 
+    /** 方向内の確認時刻が全部同じ分なら、方向の見出しに1回だけ出して、行には出さない（FR-006） */
     public function testPortsShowsCheckedAt(): void
     {
         $this->createPortBoardData();
 
         $crawler = $this->client->request('GET', '/ports');
 
-        $row      = $this->findPortRow($crawler, 0, '名瀬');
         $expected = (new \DateTimeImmutable('today'))->setTime(6, 0)->format('n/j H:i') . '時点';
-        $this->assertStringContainsString($expected, $row->text());
+        $heading  = $crawler->filter('section')->eq(0)->filter('h3')->first();
+        $this->assertSame($expected, trim($heading->filter('.checked-at')->text()));
+        $this->assertStringNotContainsString('時点', $this->findPortRow($crawler, 0, '名瀬')->text());
+    }
+
+    /** 確認時刻が違うエントリーがあれば見出しにまとめず、行ごとに出す */
+    public function testPortsShowsCheckedAtOnRowsWhenDifferent(): void
+    {
+        $this->createPortBoardData();
+        $this->updateTestDeparture(0, 'checkedAt', (new \DateTime('today'))->setTime(5, 0));
+
+        $crawler = $this->client->request('GET', '/ports');
+
+        $this->assertCount(0, $crawler->filter('section')->eq(0)->filter('h3')->first()->filter('.checked-at'));
+        $expected = (new \DateTimeImmutable('today'))->setTime(5, 0)->format('n/j H:i') . '時点';
+        $this->assertStringContainsString($expected, $this->findPortRow($crawler, 0, '名瀬')->text());
+    }
+
+    public function testPortsHasDateNavigation(): void
+    {
+        $this->createPortBoardData();
+
+        $crawler = $this->client->request('GET', '/ports');
+
+        $links = $crawler->filter('.date-nav a[href^="#d-"]');
+        $this->assertCount(4, $links);
+        $today = new \DateTimeImmutable('today');
+        for ($i = 0; $i < 4; $i++) {
+            $id = 'd-' . $today->modify("+{$i} days")->format('Y-m-d');
+            $this->assertSame('#' . $id, $links->eq($i)->attr('href'));
+            $this->assertCount(1, $crawler->filter("section#{$id}"));
+        }
+    }
+
+    public function testPortsFoldsLongDetail(): void
+    {
+        $this->createPortBoardData();
+        $long  = str_repeat('天候不良のため条件付きで運航します。', 5);
+        $short = '天候に注意';
+        $this->updateTestDeparture(0, 'statusDetail', $long);
+        $this->updateTestDeparture(3, 'statusDetail', $short);
+
+        $crawler = $this->client->request('GET', '/ports');
+
+        $details = $this->findPortRow($crawler, 0, '名瀬')->filter('details');
+        $this->assertCount(1, $details);
+        $this->assertSame(mb_substr($long, 0, 60) . '…', trim($details->filter('summary')->text()));
+        // 開いたときに先頭60文字が2回出ない
+        $this->assertSame(1, mb_substr_count($details->text(), mb_substr($long, 0, 60)));
+        $this->assertStringContainsString(mb_substr($long, 60), $details->text());
+        $later = $this->findPortRow($crawler, 3, '名瀬');
+        $this->assertCount(0, $later->filter('details'));
+        $this->assertStringContainsString('└ ' . $short, $later->text());
+    }
+
+    public function testPortsHasStatusLegend(): void
+    {
+        $crawler = $this->client->request('GET', '/ports');
+
+        $legend = $crawler->filter('details.status-legend');
+        $this->assertCount(1, $legend);
+        foreach (['✓ 通常運航', '○ 運航予定', '▲ 条件付・遅延', '✗ 欠航', '■ 運休', '— 便なし', '？ 情報なし', '？ 不明'] as $label) {
+            $this->assertStringContainsString($label, $legend->text());
+        }
     }
 
     /**
@@ -227,6 +294,179 @@ class StatusControllerTest extends WebTestCase
         $this->assertStringNotContainsString('港別テスト丸', $this->findPortRow($crawler, 1, '名瀬')->text());
     }
 
+    // ------------------------------------------------------------------
+    // /ports の絞り込み（US1）
+    // ------------------------------------------------------------------
+
+    public function testPortsFilterByPortAndDirection(): void
+    {
+        $this->createPortBoardData();
+        $naze = $this->portId('名瀬');
+
+        $crawler = $this->client->request('GET', "/ports?port={$naze}&dir=down");
+
+        $this->assertResponseIsSuccessful();
+        $rows = $crawler->filter('li.port-row');
+        $this->assertCount(4, $rows);
+        foreach ($rows as $row) {
+            $this->assertStringStartsWith('名瀬発', trim((new Crawler($row))->filter('.fw-bold')->text()));
+        }
+        $this->assertCount(4, $crawler->filter('section[id^="d-"]'));
+        $this->assertStringContainsString('名瀬発・下りのみ表示中', $crawler->filter('.filter-status')->text());
+        $this->assertCount(1, $crawler->filter('a[href="/ports?port=all"]'));
+        $this->assertCount(0, $crawler->selectButton('保存を解除'));
+        $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+    }
+
+    /** フォームの「この港を保存」→ POST /ports/filter → Cookie を書いて GET にリダイレクト（PRG） */
+    public function testPortsSaveWritesCookieAndRedirects(): void
+    {
+        $this->createPortBoardData();
+        $naze = $this->portId('名瀬');
+
+        $crawler = $this->client->request('GET', '/ports');
+        $form    = $crawler->selectButton('この港を保存')->form(['port' => (string) $naze, 'dir' => 'down']);
+        $this->client->submit($form, [], self::SAME_ORIGIN);
+
+        $this->assertResponseStatusCodeSame(303);
+        $response = $this->client->getResponse();
+        $this->assertSame("/ports?port={$naze}&dir=down", $response->headers->get('Location'));
+        $cookies = $response->headers->getCookies();
+        $this->assertCount(1, $cookies);
+        $this->assertSame('port_filter', $cookies[0]->getName());
+        $this->assertSame("port={$naze}&dir=down", $cookies[0]->getValue());
+
+        // 次に /ports を開くと保存した条件
+        $crawler = $this->client->request('GET', '/ports');
+        $this->assertCount(4, $crawler->filter('li.port-row'));
+        $this->assertCount(1, $crawler->selectButton('保存を解除'));
+    }
+
+    /** 「表示」は保存せず、条件の URL にリダイレクトするだけ */
+    public function testPortsShowRedirectsWithoutSaving(): void
+    {
+        $this->createPortBoardData();
+        $naze = $this->portId('名瀬');
+
+        $crawler = $this->client->request('GET', '/ports');
+        $this->client->submit($crawler->selectButton('表示')->form(['port' => (string) $naze, 'dir' => 'down']), [], self::SAME_ORIGIN);
+
+        $this->assertResponseStatusCodeSame(303);
+        $this->assertSame("/ports?port={$naze}&dir=down", $this->client->getResponse()->headers->get('Location'));
+        $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+    }
+
+    /** 他のサイトからの POST やトークンの無い POST では保存しない（CSRF） */
+    public function testPortsSaveFromOtherSiteIsIgnored(): void
+    {
+        $this->createPortBoardData();
+        $naze = $this->portId('名瀬');
+
+        $crawler = $this->client->request('GET', '/ports');
+        $form    = $crawler->selectButton('この港を保存')->form(['port' => (string) $naze, 'dir' => 'down']);
+        $this->client->submit($form, [], ['HTTP_SEC_FETCH_SITE' => 'cross-site']);
+        $this->assertResponseStatusCodeSame(303);
+        $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+
+        $this->client->request('POST', '/ports/filter', ['action' => 'save', 'port' => (string) $naze, 'dir' => 'down'], [], self::SAME_ORIGIN);
+        $this->assertResponseStatusCodeSame(303);
+        $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+    }
+
+    /** GET の save=1・clear=1 では Cookie を変えない（リンクで書き換えられないように） */
+    public function testPortsGetSaveAndClearAreIgnored(): void
+    {
+        foreach (['/ports?port=' . $this->portId('名瀬') . '&save=1', '/ports?clear=1'] as $url) {
+            $this->client->request('GET', $url);
+            $this->assertResponseIsSuccessful($url);
+            $this->assertSame([], $this->client->getResponse()->headers->getCookies(), $url);
+        }
+    }
+
+    public function testPortsAllKeepsSavedCookie(): void
+    {
+        $this->createPortBoardData();
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('名瀬')));
+
+        $crawler = $this->client->request('GET', '/ports?port=all');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertGreaterThan(4, $crawler->filter('li.port-row')->count());
+        $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+        $this->assertCount(1, $crawler->selectButton('保存を解除'));
+    }
+
+    public function testPortsClearRemovesCookie(): void
+    {
+        $this->createPortBoardData();
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('名瀬')));
+
+        $crawler = $this->client->request('GET', '/ports');
+        $this->client->submit($crawler->selectButton('保存を解除')->form(), [], self::SAME_ORIGIN);
+
+        $this->assertResponseStatusCodeSame(303);
+        $this->assertSame('/ports', $this->client->getResponse()->headers->get('Location'));
+        $cookies = $this->client->getResponse()->headers->getCookies();
+        $this->assertCount(1, $cookies);
+        $this->assertSame('port_filter', $cookies[0]->getName());
+        $this->assertTrue($cookies[0]->isCleared());
+    }
+
+    public function testPortsInvalidParamsReturn200(): void
+    {
+        foreach (['/ports?port=999', '/ports?dir=xxx'] as $url) {
+            $this->client->request('GET', $url);
+            $this->assertResponseIsSuccessful($url);
+        }
+    }
+
+    public function testPortsIsPrivateAndVariesByCookie(): void
+    {
+        $this->client->request('GET', '/ports');
+
+        $headers = $this->client->getResponse()->headers;
+        $this->assertTrue($headers->hasCacheControlDirective('private'));
+        $this->assertContains('Cookie', $this->client->getResponse()->getVary());
+    }
+
+    // ------------------------------------------------------------------
+    // /ports の異常の要約（US2）
+    // ------------------------------------------------------------------
+
+    public function testPortsAlertSummaryLinksToRow(): void
+    {
+        $this->createPortBoardData(OperationStatusEnum::Cancelled);
+        $anchor = sprintf('r-%s-down-%d', (new \DateTimeImmutable('tomorrow'))->format('Y-m-d'), $this->portId('名瀬'));
+
+        $crawler = $this->client->request('GET', '/ports');
+
+        $this->assertResponseIsSuccessful();
+        $link = $crawler->filter(".alert-summary a[href=\"#{$anchor}\"]");
+        $this->assertCount(1, $link);
+        $this->assertStringContainsString('名瀬発→', $link->text());
+        $this->assertStringContainsString('✗ 欠航', $link->text());
+        $this->assertCount(1, $crawler->filter("li#{$anchor} .port-entry.port-entry--alert.port-entry--cancelled"));
+    }
+
+    public function testPortsAlertSummaryShowsHiddenCountWhenFiltered(): void
+    {
+        $this->createPortBoardData(OperationStatusEnum::Cancelled);
+
+        $crawler = $this->client->request('GET', '/ports?port=' . $this->portId('鹿児島') . '&dir=down');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertMatchesRegularExpression('/絞り込みの外にも欠航・条件付などがあります（[1-9]\d*件）/u', $crawler->filter('.alert-summary')->text());
+    }
+
+    public function testPortsAlertSummaryWithoutAlerts(): void
+    {
+        $this->createPortBoardData();
+
+        $crawler = $this->client->request('GET', '/ports');
+
+        $this->assertStringContainsString('表示期間内に欠航・条件付の便はありません', $crawler->filter('.alert-summary')->text());
+    }
+
     public function testIndexLinksToPorts(): void
     {
         $crawler = $this->client->request('GET', '/');
@@ -237,10 +477,11 @@ class StatusControllerTest extends WebTestCase
 
     /**
      * 下りの寄港順（鹿児島→名瀬→那覇）を持つ2社と、名瀬発の港別ステータスを作る。
-     * - 今日: 運航会社が船あり・通常運航（05:50発・翌08:00着）、非運航会社が no_service
+     * - 今日: 運航会社が船あり・通常運航（05:50発・翌08:00着）、非運航会社が no_service。鹿児島発は非運航会社の no_service だけ
      * - 3日先: 運航会社が status null（運航予定）
+     * - $tomorrowStatus を渡すと、明日の名瀬発に運航会社のその status の行を足す
      */
-    private function createPortBoardData(): void
+    private function createPortBoardData(?OperationStatusEnum $tomorrowStatus = null): void
     {
         $em    = $this->entityManager();
         $ports = [];
@@ -270,11 +511,33 @@ class StatusControllerTest extends WebTestCase
         $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today), '港別テスト丸', OperationStatusEnum::Operating, (clone $today)->setTime(5, 50))
             ->setScheduledArrivalAt((clone $today)->modify('+1 day')->setTime(8, 0)));
         $em->persist($this->makeDeparture($routes[1], $ports['名瀬'], (clone $today), '', OperationStatusEnum::NoService, null));
+        $em->persist($this->makeDeparture($routes[1], $ports['鹿児島'], (clone $today), '', OperationStatusEnum::NoService, null));
         $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today)->modify('+3 days'), '港別テスト丸', null, (clone $today)->modify('+3 days')->setTime(5, 50)));
+        if ($tomorrowStatus !== null) {
+            $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today)->modify('+1 day'), '港別テスト丸', $tomorrowStatus, (clone $today)->modify('+1 day')->setTime(5, 50)));
+        }
 
         $em->persist($other);
         $this->persistCompany($operator);
         $this->createdCompanyIds[] = $other->getId();
+    }
+
+    /**
+     * createPortBoardData() で作った港別テスト丸の、$daysAhead 日後の行の1項目を書き換える。
+     */
+    private function updateTestDeparture(int $daysAhead, string $field, mixed $value): void
+    {
+        $this->entityManager()
+            ->createQuery("UPDATE App\\Entity\\DepartureStatus d SET d.{$field} = :value WHERE d.departureDate = :date AND d.shipName = :ship")
+            ->setParameter('value', $value)
+            ->setParameter('date', (new \DateTime('today'))->modify("+{$daysAhead} days"))
+            ->setParameter('ship', '港別テスト丸')
+            ->execute();
+    }
+
+    private function portId(string $name): int
+    {
+        return $this->entityManager()->getRepository(Port::class)->findOneBy(['name' => $name])->getId();
     }
 
     private function makeDeparture(Route $route, Port $port, \DateTime $date, string $ship, ?OperationStatusEnum $status, ?\DateTime $departureAt): DepartureStatus

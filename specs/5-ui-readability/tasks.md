@@ -29,8 +29,8 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 `master` から `5-ui-readability-ports` ブランチを切る。`make test-php` が全部通ることを確認してから始める
-- [ ] T002 `app/templates/base.html.twig` の `<head>` に `<style>` ブロックを追加して、このあとのタスクで使う共通の CSS クラスの置き場所を作る（アセットのビルド環境は入れない。plan.md の Structure Decision）。中身は T009・T028・T034・T035 で足す
+- [X] T001 `master` から `5-ui-readability-ports` ブランチを切る。`make test-php` が全部通ることを確認してから始める
+- [X] T002 `app/templates/base.html.twig` の `<head>` に `<style>` ブロックを追加して、このあとのタスクで使う共通の CSS クラスの置き場所を作る（アセットのビルド環境は入れない。plan.md の Structure Decision）。中身は T009・T028・T034・T035 で足す
 
 **Checkpoint**: ブランチと CSS の置き場所ができている → コミット
 
@@ -42,27 +42,27 @@
 
 **⚠️ CRITICAL**: この Phase が終わるまで US の実装を始めないこと
 
-- [ ] T003 [P] `app/src/View/PortBoardEntry.php` に `public ?int $companyId = null` を追加する（コンストラクタの引数の最後に足す）。`app/src/Service/PortBoardBuilder.php` で、エントリーを作る2か所（ルール2：`$s->getRoute()->getFerryCompany()->getId()`、ルール3：`$operator->getId()`）で値を入れる。ルール4・5は入れない。判定のロジックには触らない（research R13）
-- [ ] T004 `app/src/View/PortBoardEntry.php` に次のメソッドを追加する（T003 と同じファイルなので T003 の後に行う）（data-model.md・research R7）
+- [X] T003 [P] `app/src/View/PortBoardEntry.php` に `public ?int $companyId = null` を追加する（コンストラクタの引数の最後に足す）。`app/src/Service/PortBoardBuilder.php` で、エントリーを作る2か所（ルール2：`$s->getRoute()->getFerryCompany()->getId()`、ルール3：`$operator->getId()`）で値を入れる。ルール4・5は入れない。判定のロジックには触らない（research R13）
+- [X] T004 `app/src/View/PortBoardEntry.php` に次のメソッドを追加する（T003 と同じファイルなので T003 の後に行う）（data-model.md・research R7）
   - `isAlert(): bool` … `state === Status` かつ status が `Cancelled` / `Delayed` / `Suspended`
   - `isDeparted(\DateTimeInterface $now): bool` … `isAlert()` なら false。`departureAt` が null なら false。`departureAt < $now` かつ（`state === Scheduled` または status が `Operating`）なら true
   - `checkedAtDiffersFrom(?\DateTimeInterface $common): bool` … `checkedAt` が null なら false。`$common` が null なら true。それ以外は `Y-m-d H:i` で比べて違えば true
-- [ ] T005 [P] `app/src/View/PortBoardDirection.php` に `commonCheckedAt(): ?\DateTimeInterface` を追加する。`checkedAt` を持つエントリーの `Y-m-d H:i` が全部同じならその時刻（最初のもの）、1つも無いか違うものがあれば null（research R6）
-- [ ] T006 [P] `app/src/View/PortBoard.php` に `lastCheckedAt(): ?\DateTimeInterface`（ボード内の最大の `checkedAt`）を追加する
-- [ ] T007 [P] `app/tests/Service/PortBoardBuilderTest.php` とは別に `app/tests/View/PortBoardEntryTest.php` を作り、T004 の3メソッドをテストする
+- [X] T005 [P] `app/src/View/PortBoardDirection.php` に `commonCheckedAt(): ?\DateTimeInterface` を追加する。`checkedAt` を持つエントリーの `Y-m-d H:i` が全部同じならその時刻（最初のもの）、1つも無いか違うものがあれば null（research R6）
+- [X] T006 [P] `app/src/View/PortBoard.php` に `lastCheckedAt(): ?\DateTimeInterface`（ボード内の最大の `checkedAt`）を追加する
+- [X] T007 [P] `app/tests/Service/PortBoardBuilderTest.php` とは別に `app/tests/View/PortBoardEntryTest.php` を作り、T004 の3メソッドをテストする
   - `isAlert`：Cancelled / Delayed / Suspended は true、Operating・NoService・Scheduled・NoInfo は false
   - `isDeparted`：Operating で出港時刻の1分後 → true、1分前 → false、Scheduled で過ぎた → true、Delayed・Cancelled・Suspended で過ぎた → false、`departureAt` が null → false
   - `checkedAtDiffersFrom`：同じ分で秒だけ違う → false、分が違う → true、`$common` が null → true、自分の `checkedAt` が null → false
-- [ ] T008 [P] `app/tests/View/PortBoardTest.php` を作り、T005 の `commonCheckedAt()`（全部同じ分 → その時刻、1つ違う → null、checkedAt が無い → null）と T006 の `lastCheckedAt()` をテストする。あわせて `app/tests/Service/PortBoardBuilderTest.php` に、ルール2・3のエントリーに `companyId` が入り、ルール4・5は null になるテストを**追加**する（既存のテストは変えない）
-- [ ] T009 `app/templates/status/_status_badge.html.twig` を `contracts/ui-status.md` の表のとおりに直す
+- [X] T008 [P] `app/tests/View/PortBoardTest.php` を作り、T005 の `commonCheckedAt()`（全部同じ分 → その時刻、1つ違う → null、checkedAt が無い → null）と T006 の `lastCheckedAt()` をテストする。あわせて `app/tests/Service/PortBoardBuilderTest.php` に、ルール2・3のエントリーに `companyId` が入り、ルール4・5は null になるテストを**追加**する（既存のテストは変えない）
+- [X] T009 `app/templates/status/_status_badge.html.twig` を `contracts/ui-status.md` の表のとおりに直す
   - 記号を変える：条件付・遅延「●」→「▲」、運休「-」→「■」、情報なし・不明は「？」（全角）
   - 便なしはバッジにせず、灰色の文字だけ（`<span class="status-none text-secondary">— 便なし</span>`）
   - 運航予定は白地に破線の枠（今の `style` 属性をやめて、T002 の `<style>` に `.badge-scheduled` を作る）
   - 情報なし・不明は薄い灰の塗り（`bg-secondary-subtle text-dark`）。運休は濃い灰（`bg-secondary`）
   - 既存の `bg-success`（通常運航）のクラスは残す（`StatusControllerTest` が見ている）
-- [ ] T010 `app/templates/status/_port_entry.html.twig` を新しく作り、`ports.html.twig` の便の1件分（今の `.port-entry` の中身）を移す。引数は `entry`・`day`（日付）・`now`・`commonCheckedAt`。この Phase では見た目は今のままでよい（T032 で2段にする）。`ports.html.twig` からはこのパーシャルを `include` する
-- [ ] T011 `app/templates/status/ports.html.twig` の各日付の `<section>` に `id="d-{{ day.date|date('Y-m-d') }}"`、各行の `<li class="list-group-item port-row">` に `id="r-{{ day.date|date('Y-m-d') }}-{{ direction.direction.value }}-{{ row.port.id }}"` を付ける（contracts/http-routes.md のアンカー）
-- [ ] T012 `make test-php` を実行する。T009 で文言（「● 条件付・遅延」など）を見ているテストがあれば、新しい記号に合わせて直す
+- [X] T010 `app/templates/status/_port_entry.html.twig` を新しく作り、`ports.html.twig` の便の1件分（今の `.port-entry` の中身）を移す。引数は `entry`・`day`（日付）・`now`・`commonCheckedAt`。この Phase では見た目は今のままでよい（T032 で2段にする）。`ports.html.twig` からはこのパーシャルを `include` する
+- [X] T011 `app/templates/status/ports.html.twig` の各日付の `<section>` に `id="d-{{ day.date|date('Y-m-d') }}"`、各行の `<li class="list-group-item port-row">` に `id="r-{{ day.date|date('Y-m-d') }}-{{ direction.direction.value }}-{{ row.port.id }}"` を付ける（contracts/http-routes.md のアンカー）
+- [X] T012 `make test-php` を実行する。T009 で文言（「● 条件付・遅延」など）を見ているテストがあれば、新しい記号に合わせて直す
 
 **Checkpoint**: 表示用オブジェクトの追加メソッドとテストがある。ステータス表示が contracts/ui-status.md のとおり。既存テストが通る → コミット
 
@@ -74,10 +74,12 @@
 
 **Independent Test**: `/ports?port={和泊のID}&dir=down` で各日付に「和泊発→那覇」だけが出る。`save=1` で保存した後、`/ports` を開くと同じ絞り込みになる。`?port=all` では保存が残り、`?clear=1` で消える
 
+> **注**: 保存・解除は PR #33 のレビューで GET（`save=1`・`clear=1`）から `POST /ports/filter`（CSRF トークン・PRG）に変えた。下の T014・T018〜T022 の `save=1`・`clear=1` の記述は「PR1 レビュー対応」の T040a で置き換わっている
+
 ### Tests for User Story 1
 
-- [ ] T013 [P] [US1] `app/tests/View/PortFilterTest.php` を作り、`PortFilter` をテストする：`none()` は `isActive()` が false、港だけ・方向だけ・両方で `matches()` が正しい、`toQuery()` が `['port' => 5, 'dir' => 'down']` の形（null のキーは出さない）
-- [ ] T014 [P] [US1] `app/tests/Service/PortFilterResolverTest.php` を作り、contracts/http-routes.md の表の全行をテストする（Request を直接作って渡す）
+- [X] T013 [P] [US1] `app/tests/View/PortFilterTest.php` を作り、`PortFilter` をテストする：`none()` は `isActive()` が false、港だけ・方向だけ・両方で `matches()` が正しい、`toQuery()` が `['port' => 5, 'dir' => 'down']` の形（null のキーは出さない）
+- [X] T014 [P] [US1] `app/tests/Service/PortFilterResolverTest.php` を作り、contracts/http-routes.md の表の全行をテストする（Request を直接作って渡す）
   - パラメータ無し・Cookie 無し → `none()`、保存の指示なし
   - パラメータ無し・Cookie あり → Cookie の条件
   - `port=5&dir=down`・Cookie `port=3` → 港5・下り、Cookie は変えない、`hasSaved` は true
@@ -88,34 +90,34 @@
   - `port=999&dir=down`（save なし）→ 全港・下り、Cookie は変えない
   - Cookie の値が不正（存在しない港・`dir=xxx`）→ `none()`、Cookie を消す指示
   - `resolveFromCookie()`：`port=5&save=1` のクエリがあっても `redirectTo` は null で、Cookie の条件を返す。Cookie が不正なら消す指示
-- [ ] T015 [P] [US1] `app/tests/View/PortBoardTest.php` に `filter()` のテストを足す：港だけ → 各方向でその港の行だけ、方向だけ → その方向だけ、両方 → 1行、`none()` → 元と同じ。日付は常に全部残る
+- [X] T015 [P] [US1] `app/tests/View/PortBoardTest.php` に `filter()` のテストを足す：港だけ → 各方向でその港の行だけ、方向だけ → その方向だけ、両方 → 1行、`none()` → 元と同じ。日付は常に全部残る
 
 ### Implementation for User Story 1
 
-- [ ] T016 [P] [US1] `app/src/View/PortFilter.php` を作る（`final readonly class`、data-model.md の `PortFilter`）。`portId`・`direction`・`hasSaved`、`isActive()`・`matches(RouteDirectionEnum, Port)`・`toQuery()`・`static none()`
-- [ ] T017 [US1] `app/src/View/PortBoard.php` に `filter(PortFilter $filter): PortBoard` を追加する（research R5）。`PortBoardDay`・`PortBoardDirection` を作り直して、条件に合う方向・行だけを残す。条件に合う行が無い方向は落とす。日付は全部残す
-- [ ] T018 [US1] `app/src/Service/PortFilterResolver.php` を作る（data-model.md の「作り方」「保存」「検証」）
+- [X] T016 [P] [US1] `app/src/View/PortFilter.php` を作る（`final readonly class`、data-model.md の `PortFilter`）。`portId`・`direction`・`hasSaved`、`isActive()`・`matches(RouteDirectionEnum, Port)`・`toQuery()`・`static none()`
+- [X] T017 [US1] `app/src/View/PortBoard.php` に `filter(PortFilter $filter): PortBoard` を追加する（research R5）。`PortBoardDay`・`PortBoardDirection` を作り直して、条件に合う方向・行だけを残す。条件に合う行が無い方向は落とす。日付は全部残す
+- [X] T018 [US1] `app/src/Service/PortFilterResolver.php` を作る（data-model.md の「作り方」「保存」「検証」）
   - `resolve(Request $request, list<array{direction, departurePorts, arrivalPort}> $boardStops): PortFilterResolution`
   - 戻り値の `PortFilterResolution`（同じファイルか `app/src/View/` に置く）は `filter: PortFilter`、`redirectTo: ?string`、`cookie: ?Cookie`（書くときは値入り、消すときは `Cookie::create('port_filter')->withExpires(1)`、変えないときは null）
   - `resolveFromCookie(Request $request, list<…> $boardStops): PortFilterResolution` も作る（トップ用）。クエリ（`port`・`dir`・`save`・`clear`）は見ず、Cookie だけを読む。`redirectTo` は常に null。Cookie の値が不正なら、港別ページと同じく Cookie を消す指示（`cookie`）を返す
   - 港 ID の検証は `$boardStops` の `departurePorts` の ID で行う
   - Cookie は `port_filter`、値は `http_build_query($filter->toQuery())`、有効期限 1 年、`Path=/`、`SameSite=Lax`、`HttpOnly`（data-model.md の Cookie）
-- [ ] T019 [US1] `app/src/Controller/StatusController.php` の `ports()` を変える
+- [X] T019 [US1] `app/src/Controller/StatusController.php` の `ports()` を変える
   - `Request` を受け取り、`findBoardStops()` の結果を `PortFilterResolver::resolve()` に渡す
   - `redirectTo` があれば `RedirectResponse` を返し、`cookie` があればそれに付ける
   - 全港のボードを作ったあと `filter()` した結果を `board` として、`fullBoard`（全港）と `filter`・`boardStops` もテンプレートに渡す（`fullBoard` は Phase 4 で使う）
   - 表示のレスポンスにも `cookie`（不正な Cookie を消すとき）を付ける
   - レスポンスに `Cache-Control: private` と `Vary: Cookie` を付ける（research R15）
-- [ ] T020 [US1] `app/templates/status/ports.html.twig` の上部に絞り込みフォームを置く（`method="get"`、`action="/ports"`）
+- [X] T020 [US1] `app/templates/status/ports.html.twig` の上部に絞り込みフォームを置く（`method="get"`、`action="/ports"`）
   - 出発港の `<select name="port">`：「全港」（`all`）と、`boardStops` の出発港（下りの寄港順で重複なし）。今の `filter.portId` を選択済みにする
   - 方向の `<select name="dir">`：「両方向」（空）・「下り（那覇行き）」・「上り（鹿児島行き）」
   - ボタン2つ：「表示」（`save` なし）と「この港を保存」（`name="save" value="1"`）
   - JS は使わない（`onchange` での自動送信もしない。JS 無しで全機能が動くこと）
-- [ ] T021 [US1] `app/templates/status/ports.html.twig` に、絞り込み中の表示を置く（FR-004）
+- [X] T021 [US1] `app/templates/status/ports.html.twig` に、絞り込み中の表示を置く（FR-004）
   - `filter.isActive()` のとき「{港名}発のみ表示中」「下りのみ表示中」などと、「全港に戻す」（`/ports?port=all`）のリンク
   - `filter.hasSaved` のとき「保存を解除」（`/ports?clear=1`）のリンク
   - 絞り込みで行が無くなった**方向**は見出しも出さない。日付の `section` は常に全部出す（T034 の日付ボタンの飛び先を残すため）
-- [ ] T022 [US1] `app/tests/Controller/StatusControllerTest.php` に機能テストを足す
+- [X] T022 [US1] `app/tests/Controller/StatusControllerTest.php` に機能テストを足す
   - `/ports?port={港ID}&dir=down` → 各日付で、その港の下りの行だけ（`li.port-row` が日数分）
   - `/ports?port={港ID}&dir=down&save=1` → 302、`Location` に `save` が無い、`Set-Cookie: port_filter=...`。続けて `/ports` → 同じ絞り込み
   - `/ports?port=all`（Cookie あり）→ 全港表示、`Set-Cookie` が無い
@@ -131,13 +133,13 @@
 
 **Goal**: 港別ページの上部に、表示期間内の欠航・条件付・遅延・運休をまとめて出す。異常の行は一覧の中でも目立たせる
 
-**Independent Test**: 明日の名瀬発→那覇を `delayed` にしたデータで `/ports` を開くと、上部の要約に「10/2 名瀬発→那覇 ▲ 条件付・遅延」が出て、押すとその行に移動する。和泊に絞り込むと「他の港にも欠航・条件付などがあります（1件）」が出る
+**Independent Test**: 明日の名瀬発→那覇を `delayed` にしたデータで `/ports` を開くと、上部の要約に「10/2 名瀬発→那覇 ▲ 条件付・遅延」が出て、押すとその行に移動する。和泊に絞り込むと「絞り込みの外にも欠航・条件付などがあります（1件）」が出る
 
 **依存**: US1（`PortFilter`・`fullBoard`）
 
 ### Tests for User Story 2
 
-- [ ] T023 [P] [US2] `app/tests/Service/PortAlertSummaryBuilderTest.php` を作る
+- [X] T023 [P] [US2] `app/tests/Service/PortAlertSummaryBuilderTest.php` を作る
   - Cancelled・Delayed・Suspended の行が `alerts` に入る。Operating・Scheduled・NoInfo・NoService は入らない
   - 並び順が日付 → 方向（下り → 上り）→ 寄港順
   - 絞り込み中は、条件に合うものが `alerts`、合わないものの件数が `hiddenCount`
@@ -146,17 +148,17 @@
 
 ### Implementation for User Story 2
 
-- [ ] T024 [P] [US2] `app/src/View/PortAlert.php` と `app/src/View/PortAlertSummary.php` を作る（data-model.md）。`PortAlert::anchor()` は T011 の行の `id` と同じ形式
-- [ ] T025 [US2] `app/src/Service/PortAlertSummaryBuilder.php` を作る。`build(PortBoard $fullBoard, PortFilter $filter): PortAlertSummary`。全港のボードを走査して `isAlert()` のエントリーを集め、`$filter->matches()` で `alerts` と `hiddenCount` に分ける（research R4）
-- [ ] T026 [US2] `app/templates/status/_alert_summary.html.twig` を新しく作る。引数は `summary` と `linkPrefix`（港別ページでは空文字、トップでは `/ports?port=all`）
+- [X] T024 [P] [US2] `app/src/View/PortAlert.php` と `app/src/View/PortAlertSummary.php` を作る（data-model.md）。`PortAlert::anchor()` は T011 の行の `id` と同じ形式
+- [X] T025 [US2] `app/src/Service/PortAlertSummaryBuilder.php` を作る。`build(PortBoard $fullBoard, PortFilter $filter): PortAlertSummary`。全港のボードを走査して `isAlert()` のエントリーを集め、`$filter->matches()` で `alerts` と `hiddenCount` に分ける（research R4）
+- [X] T026 [US2] `app/templates/status/_alert_summary.html.twig` を新しく作る。引数は `summary` と `linkPrefix`（港別ページでは空文字、トップでは `/ports?port=all`）
   - `alerts` があれば、各項目を「{n/j（曜）} {港}発→{到着港} {バッジ} {会社}」の1行のリンク（`href="{{ linkPrefix }}#{{ alert.anchor }}"`）にする
   - 4件以上なら最初の3件を出し、残りは `<details><summary>ほか N 件</summary>…</details>` にする（research R16）
   - `alerts` が空で `hasData` が true → 「表示期間内に欠航・条件付の便はありません」
   - `hasData` が false → 何も出さない（FR-011）
-  - `hiddenCount > 0` → 「他の港にも欠航・条件付などがあります（N件）」と `/ports?port=all` へのリンク
-- [ ] T027 [US2] `StatusController::ports()` で `PortAlertSummaryBuilder` を呼び、`summary` をテンプレートに渡す。`ports.html.twig` の絞り込みフォームの下に `_alert_summary` を `include` する（`linkPrefix: ''`）
-- [ ] T028 [US2] 異常の行を目立たせる（FR-014、contracts/ui-status.md「異常の行」）。`_port_entry.html.twig` で `entry.isAlert()` のとき、行に `port-entry--alert` と status ごとのクラス（`--cancelled` / `--delayed` / `--suspended`）を付け、ステータスを太字にする。`base.html.twig` の `<style>` に、左の太い線（4px）と薄い背景（`--bs-danger-bg-subtle` など）を定義する
-- [ ] T029 [US2] `app/tests/Controller/StatusControllerTest.php` に機能テストを足す：明日の1行を `cancelled` にして `/ports` → 要約にその港名と `href="#r-…"` のリンク、行に `port-entry--alert`。その港以外に絞り込む → 「他の港にも」と件数。異常なし → 「表示期間内に欠航・条件付の便はありません」
+  - `hiddenCount > 0` → 「絞り込みの外にも欠航・条件付などがあります（N件）」と `/ports?port=all` へのリンク
+- [X] T027 [US2] `StatusController::ports()` で `PortAlertSummaryBuilder` を呼び、`summary` をテンプレートに渡す。`ports.html.twig` の絞り込みフォームの下に `_alert_summary` を `include` する（`linkPrefix: ''`）
+- [X] T028 [US2] 異常の行を目立たせる（FR-014、contracts/ui-status.md「異常の行」）。`_port_entry.html.twig` で `entry.isAlert()` のとき、行に `port-entry--alert` と status ごとのクラス（`--cancelled` / `--delayed` / `--suspended`）を付け、ステータスを太字にする。`base.html.twig` の `<style>` に、左の太い線（4px）と薄い背景（`--bs-danger-bg-subtle` など）を定義する
+- [X] T029 [US2] `app/tests/Controller/StatusControllerTest.php` に機能テストを足す：明日の1行を `cancelled` にして `/ports` → 要約にその港名と `href="#r-…"` のリンク、行に `port-entry--alert`。その港以外に絞り込む → 「絞り込みの外にも」と件数。異常なし → 「表示期間内に欠航・条件付の便はありません」
 
 **Checkpoint**: US2 の Independent Test が通る。`make test-php` が全部通る → コミット
 
@@ -170,21 +172,21 @@
 
 ### Tests for User Story 3
 
-- [ ] T030 [P] [US3] `app/tests/Controller/StatusControllerTest.php` の `testPortsShowsCheckedAt`（今は行に「時点」があることを見ている）を、方向の見出しに「{n/j H:i}時点」が1回出て、同じ時刻の行には出ないことを見るテストに直す。確認時刻が違う行だけ行に出るテストを足す
-- [ ] T031 [P] [US3] `app/tests/Controller/StatusControllerTest.php` に足す：日付ボタンが4つあり `href="#d-{Y-m-d}"`、各 `section` に同じ `id`。60文字を超える詳細文は `<details>` になり、60文字以下はならない。凡例（`<details>` の中に全ステータス）がある
+- [X] T030 [P] [US3] `app/tests/Controller/StatusControllerTest.php` の `testPortsShowsCheckedAt`（今は行に「時点」があることを見ている）を、方向の見出しに「{n/j H:i}時点」が1回出て、同じ時刻の行には出ないことを見るテストに直す。確認時刻が違う行だけ行に出るテストを足す
+- [X] T031 [P] [US3] `app/tests/Controller/StatusControllerTest.php` に足す：日付ボタンが4つあり `href="#d-{Y-m-d}"`、各 `section` に同じ `id`。60文字を超える詳細文は `<details>` になり、60文字以下はならない。凡例（`<details>` の中に全ステータス）がある
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] `app/templates/status/_port_entry.html.twig` を2段にする（FR-005・research R14）
+- [X] T032 [US3] `app/templates/status/_port_entry.html.twig` を2段にする（FR-005・research R14）
   - 1段目（`d-flex`）：出港時刻（`H:i発`、太字）とステータスのバッジ。出港時刻が無ければバッジだけ
   - 2段目（`small text-muted`）：船名／会社、着時刻（今の `arrivalText()` のまま）、確認時刻（`entry.checkedAtDiffersFrom(commonCheckedAt)` のときだけ「{n/j H:i}時点」）
   - 行の見出し（`.fw-bold` の「{港}発 → {到着港}」）は `ports.html.twig` の `li.port-row` に残す。375px で1段目が折り返す場合は、到着港を方向の見出しに任せて行は「{港}発」だけにする
-- [ ] T033 [US3] `app/templates/status/ports.html.twig` の方向の見出し（`h3`）の横に、`direction.commonCheckedAt()` があれば「{n/j H:i}時点」を出す（FR-006）
-- [ ] T034 [US3] 日付ボタン（FR-007・research R3）。`ports.html.twig` のフォームの上に、表示期間の日付を「n/j（曜）」のリンク（`href="#d-…"`）で横に並べる。`base.html.twig` の `<style>` に `.date-nav { position: sticky; top: 0; z-index: 10; background: var(--bs-body-bg); }` と `section[id^="d-"], li[id^="r-"] { scroll-margin-top: <日付ボタンの高さ>; }` を足す
-- [ ] T035 [US3] 出港済み（FR-008・contracts/ui-status.md）。`StatusController::ports()` で `now`（`new \DateTimeImmutable()`）を渡し、`_port_entry.html.twig` で `entry.isDeparted(now)` のとき `port-entry--departed`（不透明度 0.55）と「出港済み」の小さな文字を付ける
-- [ ] T036 [US3] 長い詳細文（FR-028・research R9）。`_port_entry.html.twig` で `entry.detail|length > 60` のとき `<details><summary>{{ entry.detail|slice(0, 60) }}…</summary>{{ entry.detail }}</details>`、それ以外は今の「└ {detail}」のまま
-- [ ] T037 [US6] `app/templates/status/_status_legend.html.twig` を新しく作る。`<details><summary>ステータスの見かた</summary>` の中に、contracts/ui-status.md の8種類を `_status_badge` で出し、それぞれに1行の説明を付ける（例：運航予定＝まだ運航状況が発表されていない便、情報なし＝情報を取得できていない）。`ports.html.twig` のフォームの下に `include` する（FR-026）
-- [ ] T038 [US3] 幅 375 × 667 で `/ports` を目視する（quickstart PR1 の 8・9・11・13）。横スクロールが無いこと、日付ボタン・要約（3件＋ほか）・最初の行がスクロールせずに見えること。収まらなければ T032 の「行は『{港}発』だけ」に切り替え、フォームを1行にまとめる
+- [X] T033 [US3] `app/templates/status/ports.html.twig` の方向の見出し（`h3`）の横に、`direction.commonCheckedAt()` があれば「{n/j H:i}時点」を出す（FR-006）
+- [X] T034 [US3] 日付ボタン（FR-007・research R3）。`ports.html.twig` のフォームの上に、表示期間の日付を「n/j（曜）」のリンク（`href="#d-…"`）で横に並べる。`base.html.twig` の `<style>` に `.date-nav { position: sticky; top: 0; z-index: 10; background: var(--bs-body-bg); }` と `section[id^="d-"], li[id^="r-"] { scroll-margin-top: <日付ボタンの高さ>; }` を足す
+- [X] T035 [US3] 出港済み（FR-008・contracts/ui-status.md）。`StatusController::ports()` で `now`（`new \DateTimeImmutable()`）を渡し、`_port_entry.html.twig` で `entry.isDeparted(now)` のとき `port-entry--departed`（不透明度 0.55）と「出港済み」の小さな文字を付ける
+- [X] T036 [US3] 長い詳細文（FR-028・research R9）。`_port_entry.html.twig` で `entry.detail|length > 60` のとき `<details><summary>{{ entry.detail|slice(0, 60) }}…</summary>{{ entry.detail }}</details>`、それ以外は今の「└ {detail}」のまま
+- [X] T037 [US6] `app/templates/status/_status_legend.html.twig` を新しく作る。`<details><summary>ステータスの見かた</summary>` の中に、contracts/ui-status.md の8種類を `_status_badge` で出し、それぞれに1行の説明を付ける（例：運航予定＝まだ運航状況が発表されていない便、情報なし＝情報を取得できていない）。`ports.html.twig` のフォームの下に `include` する（FR-026）
+- [X] T038 [US3] 幅 375 × 667 で `/ports` を目視する（quickstart PR1 の 8・9・11・13）。横スクロールが無いこと、日付ボタン・要約（3件＋ほか）・最初の行がスクロールせずに見えること。収まらなければ T032 の「行は『{港}発』だけ」に切り替え、フォームを1行にまとめる
 
 **Checkpoint**: US3 の Independent Test が通る。`make test-php` が全部通る → コミット
 
@@ -192,8 +194,17 @@
 
 ## PR1 の仕上げ
 
-- [ ] T039 quickstart.md の「PR1」の手順 1〜14 を全部実際に行う（ただし 13 の共通ヘッダーは PR3 なので無くてよい）
-- [ ] T040 `5-ui-readability-ports` を push して PR を作る。説明に spec の US1〜3・FR-024〜026 との対応、ステータスの記号の変更（●→▲、-→■）、トップと会社別のバッジも同じ部品なので変わること、を書く
+- [X] T039 quickstart.md の「PR1」の手順 1〜14 を全部実際に行う（ただし 13 の共通ヘッダーは PR3 なので無くてよい）
+- [X] T040 `5-ui-readability-ports` を push して PR を作る。説明に spec の US1〜3・FR-024〜026 との対応、ステータスの記号の変更（●→▲、-→■）、トップと会社別のバッジも同じ部品なので変わること、を書く
+
+## PR1 レビュー対応（PR #33）
+
+- [X] T040a (1) 保存・解除を `POST /ports/filter` にする。`symfony/security-csrf` を入れ、stateless の CSRF トークン（ID `port_filter`）で確かめる。どの操作も GET /ports へ 303（PRG）。GET の `save`・`clear` は無視する。`PortFilterResolver::submit()` を追加し、`resolve()` は GET だけを扱う。contracts/http-routes.md・research R1・data-model・plan・quickstart を更新
+- [X] T040b (2) 要約の「他の港にも〜」を「絞り込みの外にも〜」にする（方向だけで絞ったときにも合うように）。spec FR-013 なども合わせる
+- [X] T040c (3) 長い詳細文を開いたとき、本文は61文字目以降だけを出す（先頭60文字が2回出ないように）
+- [X] T040d (4) まだ使っていない `companyId`・`resolveFromCookie()`・`linkPrefix` を PR 本文に書く。`_alert_summary` の説明を `path('app_status_ports', {port: 'all'})` に直す
+- [X] T040e (5) 「〜のみ表示中」のラベルを `PortFilter::label()` に移す。テンプレートの変数名を `portFilter` にする
+- [X] T040f (6) 情報なし・不明のバッジを `.badge-muted`（CSS 変数）にする
 
 ---
 

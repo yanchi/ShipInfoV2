@@ -90,6 +90,7 @@ class PortBoardBuilder
                 arrivalAt: $s->getScheduledArrivalAt(),
                 detail: $s->getStatusDetail(),
                 checkedAt: $s->getCheckedAt(),
+                companyId: $s->getRoute()->getFerryCompany()->getId(),
             ), $services);
         }
 
@@ -105,6 +106,7 @@ class PortBoardBuilder
                 state: $date <= $today ? DepartureDisplayStateEnum::NoInfo : DepartureDisplayStateEnum::Scheduled,
                 companyName: $operator->getName(),
                 checkedAt: $s->getCheckedAt(),
+                companyId: $operator->getId(),
             )];
         }
 

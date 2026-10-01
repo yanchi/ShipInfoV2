@@ -6,8 +6,12 @@ use App\Repository\DepartureStatusRepository;
 use App\Repository\FerryCompanyRepository;
 use App\Repository\OperationStatusRepository;
 use App\Repository\RouteStopRepository;
+use App\Service\PortAlertSummaryBuilder;
 use App\Service\PortBoardBuilder;
+use App\Service\PortFilterResolver;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -45,22 +49,68 @@ class StatusController extends AbstractController
 
     #[Route('/ports', name: 'app_status_ports')]
     public function ports(
+        Request $request,
         RouteStopRepository $routeStopRepository,
         DepartureStatusRepository $departureStatusRepository,
         PortBoardBuilder $portBoardBuilder,
+        PortFilterResolver $portFilterResolver,
+        PortAlertSummaryBuilder $portAlertSummaryBuilder,
     ): Response {
-        $today = new \DateTimeImmutable('today');
+        $boardStops = $routeStopRepository->findBoardStops();
+        $resolution = $portFilterResolver->resolve($request, $boardStops);
 
-        $board = $portBoardBuilder->build(
-            $routeStopRepository->findBoardStops(),
+        $today     = new \DateTimeImmutable('today');
+        $fullBoard = $portBoardBuilder->build(
+            $boardStops,
             $departureStatusRepository->findForBoard($today, self::PORT_BOARD_DAYS),
             $today,
             self::PORT_BOARD_DAYS,
         );
 
-        return $this->render('status/ports.html.twig', [
-            'board' => $board,
-            'today' => $today,
+        $response = $this->render('status/ports.html.twig', [
+            'board'       => $fullBoard->filter($resolution->filter),
+            'fullBoard'   => $fullBoard,
+            'portFilter'  => $resolution->filter,
+            'summary'     => $portAlertSummaryBuilder->build($fullBoard, $resolution->filter),
+            'portOptions' => $portFilterResolver->departurePorts($boardStops),
+            'today'       => $today,
+            'now'         => new \DateTimeImmutable(),
         ]);
+
+        if ($resolution->cookie !== null) {
+            $response->headers->setCookie($resolution->cookie);
+        }
+
+        return $this->varyByCookie($response);
+    }
+
+    /** 港別ページの絞り込みフォーム。表示・保存・保存を解除のどれも GET /ports にリダイレクトする（PRG） */
+    #[Route('/ports/filter', name: 'app_status_ports_filter', methods: ['POST'])]
+    public function portsFilter(
+        Request $request,
+        RouteStopRepository $routeStopRepository,
+        PortFilterResolver $portFilterResolver,
+    ): Response {
+        $resolution = $portFilterResolver->submit(
+            $request,
+            $routeStopRepository->findBoardStops(),
+            $this->isCsrfTokenValid(PortFilterResolver::COOKIE_NAME, (string) $request->request->get('_token')),
+        );
+
+        $response = new RedirectResponse($resolution->redirectTo ?? $this->generateUrl('app_status_ports'), Response::HTTP_SEE_OTHER);
+        if ($resolution->cookie !== null) {
+            $response->headers->setCookie($resolution->cookie);
+        }
+
+        return $this->varyByCookie($response);
+    }
+
+    /** Cookie で中身が変わるページを共有キャッシュに載せない（research R15） */
+    private function varyByCookie(Response $response): Response
+    {
+        $response->setPrivate();
+        $response->setVary('Cookie', false);
+
+        return $response;
     }
 }
