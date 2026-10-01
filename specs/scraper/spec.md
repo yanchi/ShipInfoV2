@@ -2,7 +2,7 @@
 
 **Feature**: `scraper`
 **Created**: 2026-03-07
-**Status**: Draft
+**Status**: Implemented（2-marue-fetch-update / 3-no-service-status の変更を反映済み）
 
 ## 対象フェリー会社
 
@@ -23,51 +23,50 @@
 
 **Independent Test**: `make scraper-run` 実行後に `operation_statuses` テーブルにマルエーフェリーのレコードが存在すること。
 
-**サイト構造**（実サイト確認済み 2026-03-07）:
-```html
-<!-- 異常あり（条件付・欠航等）の場合 -->
-<div class="status-archive">
-  <h3>フェリーあけぼの鹿児島 - 名瀬 - 亀徳 - 和泊 - 与論 - 本部 - 那覇</h3>
-  <h4>■3/6(金)下り便…条件付き運航</h4>
-  <div class="status-detail">
-    <div class="tag-list"><span class="tag-conditionally">条件付運航</span></div>
-    <p>3月6日(金)18:00鹿児島新港発/下り便「フェリーあけぼの」は...</p>
-    <p>・条件付寄港地 : 和泊港、与論港</p>
-  </div>
-  <p>2026年03月07日更新</p>
-</div>
+> **取得方式**: 当初は `/status/` ページの h3/h4 解析方式だったが、[2-marue-fetch-update](../2-marue-fetch-update/spec.md) で2ステップ方式に変更済み。便なし日の扱いは [3-no-service-status](../3-no-service-status/spec.md) を参照。
 
-<!-- 通常運航の場合（status-detail なし） -->
-<div class="status-archive">
-  <h3>フェリー波之上鹿児島 - 名瀬 - 亀徳 - ...</h3>
-  <h4>通常運航致しております。</h4>
-  <p>2026年03月07日更新</p>
-</div>
+**取得フロー**（実サイト確認済み 2026-03-08）:
+
+1. **Step 1 — 本日便の有無確認**: `POST https://www.aline-ferry.com/search/result.php`（`startDate=今日, startPort=50, endPort=83`）
+   - `table.s-result tbody tr` が1行以上 → 便あり → Step 2 へ
+   - 0行 → 便なし → 上り・下り両航路を `no_service`（`status_detail = null`）で記録して終了
+   - `table.s-result` 自体がない → サイト構造変更とみなし warning を出して「便あり」（安全側）で Step 2 へ
+2. **Step 2 — 詳細ステータス取得**: `GET https://www.aline-ferry.com/kagoshima/`
+
+```html
+<a href="...">
+  <div class="route-head">
+    <div class="ferry-name">フェリーあけぼの</div>
+    <div class="route-detail">鹿児島 - 名瀬 - ...</div>
+  </div>
+  <div class="tag-list">
+    <span class="tag-normal">通常運航</span>
+  </div>
+  <div class="situation-excerpt">通常運航致しております。</div>
+</a>
 ```
 
-ステータス判定ロジック（h4 テキストから）:
-- h4 に `…` がある場合（例: `■3/6(金)下り便…条件付き運航`）: `…` 以降のキーワードで判定
-- h4 に `…` がない場合（例: `通常運航致しております。`）: h4 全体のキーワードで判定
-- 日付がない h4 の場合: `valid_date = today`
-
-キーワードと状態のマッピング:
+ステータス判定（`div.tag-list span` のテキストから）:
 - `欠航` → `cancelled`
 - `条件付` → `delayed`
 - `遅延` / `スケジュール変更` → `delayed`
 - `運休` → `suspended`
 - `通常` → `operating`
 
-航路マッチング（h3/h4 テキスト + route.origin_port → route.id）:
-- h3 は船名 + 寄港地リストを含む（例: `フェリーあけぼの鹿児島 - 名瀬 - 亀徳 - ...`）
-- h4 の「下り便」/「上り便」で方向を判定し、`origin_port`（鹿児島/那覇）に対応する航路を選択
-- 方向不明（通常運航の一括告知等）は上り・下り両方に同じデータを適用
-- 同一 `route_id + valid_date` の重複は最初のもの優先
+その他のルール:
+- 複数船のステータスが混在する場合は最も深刻なものを採用（`cancelled` > `suspended` > `delayed` > `operating`）し、warning を記録
+- 採用したステータスを上り・下り両航路に適用
+- `status_detail` は `div.situation-excerpt` のテキスト（`operating` の場合は `null`）
+- `valid_date` は常に `date.today()`（POST の `startDate` と同値）
+- `raw_html_hash` は鹿児島ページの HTML で計算（便なし時は空文字列のハッシュ）
+- 船ブロックを1件も解析できない場合はサイト構造変更とみなし例外 → `scraper_logs` に `failed`
 
 **Acceptance Scenarios**:
 
 1. **Given** マルエーフェリーのサイトが正常な場合、**When** スクレイパーを実行、**Then** 各便の運航状況が `operation_statuses` テーブルに保存される
-2. **Given** 同じHTMLを2回スクレイピング、**When** `raw_html_hash` が一致、**Then** 重複レコードは作成されない
-3. **Given** サイトが503を返す場合、**When** スクレイパーを実行、**Then** リトライ（最大3回）後に `scraper_logs` にエラーが記録される
+2. **Given** 検索エンドポイントで本日便が0件、**When** スクレイパーを実行、**Then** 上り・下り両航路が `no_service` で保存される
+3. **Given** 同じHTMLを2回スクレイピング、**When** `raw_html_hash` が一致、**Then** 重複レコードは作成されない
+4. **Given** サイトが503を返す場合、**When** スクレイパーを実行、**Then** リトライ（最大3回）後に `scraper_logs` にエラーが記録される
 
 ---
 
@@ -113,10 +112,15 @@ CSSクラスと状態のマッピング（`div.status_single_cover` のクラス
 
 日付: `div.info2` 内の最初の `YYYY年M月D日` パターンを `valid_date` として使用
 
+本日便がない航路の扱い（[3-no-service-status](../3-no-service-status/spec.md)）:
+- HTML 内に「本日日付 + その航路の出発港発」のブロックがない → `no_service`（`status_detail = null`）
+- ブロックはあるのに解析できなかった → パース不具合の可能性として warning を出し `unknown`
+
 **Acceptance Scenarios**:
 
 1. **Given** マリックスラインのサイトが正常な場合、**When** スクレイパーを実行、**Then** 各便の運航状況が保存される
 2. **Given** `.status_single.alert` の便、**When** `.exp` が「欠航」、**Then** status が `cancelled` で保存される
+3. **Given** 本日出発の便がない航路、**When** スクレイパーを実行、**Then** その航路が `no_service` で保存される
 
 ---
 
@@ -141,7 +145,7 @@ CSSクラスと状態のマッピング（`div.status_single_cover` のクラス
 - ネットワークタイムアウト/5xx: `requests + urllib3 Retry` により最大3回リトライ（backoff_factor=1.0）
 - 日付解析の失敗:
   - MarixLine: warning ログを残してそのレコードをスキップ
-  - MarueFerry: h4 から日付が取れない場合は `valid_date = today` を使用
+  - MarueFerry: 日付は解析せず常に `valid_date = today` を使用
 - `ferry_companies` テーブルに登録されていない会社: `SCRAPER_REGISTRY` に存在しない場合はスキップ
 
 ---
@@ -174,7 +178,7 @@ CSSクラスと状態のマッピング（`div.status_single_cover` のクラス
 | 4 | マリックスライン | 那覇〜鹿児島（上り） | 那覇 | 鹿児島 | 上り |
 
 方向の判定ロジック:
-- **マルエーフェリー**: h4 テキストの「下り便」/「上り便」で判定。方向不明（通常運航の一括告知等）は上り・下り両方に同じデータを適用
+- **マルエーフェリー**: 方向別には判定しない。鹿児島航路ページで採用したステータスを上り・下り両方に適用
 - **マリックスライン**: div.info2 の「鹿児島X発」→ 下り、「那覇X発」→ 上り
 
 ※ `origin_port` カラムで上り・下りを区別（鹿児島発 = 下り、那覇発 = 上り）

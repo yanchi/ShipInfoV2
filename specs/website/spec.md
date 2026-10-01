@@ -2,7 +2,7 @@
 
 **Feature**: `website`
 **Created**: 2026-03-07
-**Status**: Draft
+**Status**: Implemented（US1・US2。US3 航路別詳細ページは未着手）
 
 ---
 
@@ -119,11 +119,15 @@
 
 | DB値 | 表示ラベル | 色 |
 |---|---|---|
-| `operating` | 通常運航 | 緑 |
-| `delayed` | 条件付・遅延 | 黄 |
-| `cancelled` | 欠航 | 赤 |
-| `suspended` | 運休 | グレー |
-| `unknown` | 情報なし | グレー |
+| `operating` | ✓ 通常運航 | 緑（`bg-success`） |
+| `delayed` | ● 条件付・遅延 | 黄（`bg-warning`） |
+| `cancelled` | ✗ 欠航 | 赤（`bg-danger`） |
+| `suspended` | - 運休 | グレー（`bg-secondary`） |
+| `no_service` | — 便なし | 白枠（`bg-light` + `border`） |
+| `unknown` | ? 不明 | グレー（`bg-secondary`） |
+| （レコードなし） | 情報なし | グレー（`bg-secondary`） |
+
+`no_service` は「その日は便が設定されていない」状態で、`cancelled`（欠航）とは区別して表示する（[3-no-service-status](../3-no-service-status/spec.md)）。
 
 ### 技術要件
 

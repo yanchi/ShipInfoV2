@@ -2,7 +2,7 @@
 
 **Feature Branch**: `2-marue-fetch-update`
 **Created**: 2026-03-08
-**Status**: Draft
+**Status**: Implemented
 **Input**: User description: "マルエーフェリーの情報取得処理変更：検索エンドポイントへのPOSTで本日の運航有無を確認し、鹿児島航路ページからステータス詳細を取得する"
 
 ## 背景
@@ -34,7 +34,7 @@
 
 **Why this priority**: 運航の有無はステータス取得より前に確定させる必要があり、最も基礎的な判定ロジック。
 
-**Independent Test**: `make scraper-run` 実行後に `operation_statuses` テーブルへマルエーフェリーのレコードが保存され、便なしの日に `cancelled` 相当のステータスが記録されること。
+**Independent Test**: `make scraper-run` 実行後に `operation_statuses` テーブルへマルエーフェリーのレコードが保存され、便なしの日に `no_service` ステータスが記録されること（当初は `cancelled` 相当としていたが、[3-no-service-status](../3-no-service-status/spec.md) で `no_service` に分離）。
 
 **Acceptance Scenarios**:
 
