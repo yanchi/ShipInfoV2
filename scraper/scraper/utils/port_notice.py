@@ -7,11 +7,13 @@
 - 文（「。」と改行）ごとに見る。仮定・案内の文（「場合」「ことがあります」「可能性」「問い合わせ」）は除外
 - 抜港 → skip、港変更・寄港地変更・「A港からB港へ／に」→ change（B が変更先）、条件付 → conditional
 - 対象の港は読点で区切った節ごとに決める
-  - キーワードのある節：キーワードより前の港（「与論港は抜港して那覇港へ」なら与論だけ）。
-    前に港が無ければ後ろの港（「条件付寄港地: 和泊港」）
+  - キーワードのある節：キーワードの直前の港と、それに「・」「と」でつながる港
+    （「与論港は抜港して那覇港へ」なら与論だけ、「鹿児島新港を出港後与論港は抜港」も与論だけ）。
+    前に港が無ければ直後から同じようにたどる（「条件付寄港地: 和泊港」）
   - 港名だけの節（「和泊港、与論港は条件付寄港」の「和泊港」）：隣のキーワードの節にまとめる
   - それ以外の節（「鹿児島新港を出港し」など）の港は対象にしない
-  - 「鹿児島新港発の便は」のように、すぐ後ろに発・着・向け・行きが付く港は便の説明なので対象にしない
+  - 「鹿児島新港発の便は」「鹿児島航路は」のように、すぐ後ろに発・着・向け・行き・航路が付く港は
+    便・航路の説明なので対象にしない
 - 1つの港に複数あれば skip > change > conditional
 """
 
@@ -27,14 +29,16 @@ from scraper.utils.ports import PortResolver
 
 BOILERPLATE_MARKER = "台風の影響や"
 _HYPOTHETICAL = ("場合", "ことがあります", "可能性", "問い合わせ")
-_CHANGE_ROUTE = re.compile(
-    r"([^\s、。・,，:：]+?港)から([^\s、。・,，:：]+?港)(?:へ|に)"
-)
+# 港名は漢字・カタカナだけで書かれる。ひらがなを含めると「鹿児島新港を出港後亀徳港から」のように
+# 前の文まで巻き込んで、変更元の港を取り違えるため
+_CHANGE_ROUTE = re.compile(r"([一-龥々ァ-ヶー]+?港)から([一-龥々ァ-ヶー]+?港)(?:へ|に)")
 _PRIORITY = {"skip": 3, "change": 2, "conditional": 1}
-# 港名の直後にこれが付いていたら、便の出発地・行き先の説明（「鹿児島新港発の便」）
-_VOYAGE_SUFFIXES = ("発", "着", "向け", "行き", "行")
+# 港名の直後にこれが付いていたら、便・航路の説明（「鹿児島新港発の便」「鹿児島航路」）
+_VOYAGE_SUFFIXES = ("発", "着", "向け", "行き", "行", "航路")
 # 港名を取り除いたあとにこれしか残らない節は「港名だけの節」
 _PORT_LIST_REST = re.compile(r"^[\s・と及び]*$")
+# 並んだ港名のあいだにこれしか無ければ、同じ扱いの港の列挙（「和泊港・与論港」）
+_LIST_GAP = re.compile(r"^[\s・と及び]*$")
 
 
 @dataclass(frozen=True)
@@ -105,7 +109,7 @@ def _keyword_pos(text: str, kind: str) -> int | None:
         positions = [text.find("港変更"), text.find("寄港地変更")]
         m = _CHANGE_ROUTE.search(text)
         if m:
-            positions.append(m.end())
+            positions.append(m.end(1))  # 「から」の位置。変更元の港がその直前に来る
     else:
         positions = [text.find("条件付")]
     positions = [p for p in positions if p >= 0]
@@ -136,17 +140,15 @@ def _sentence_notices(sentence: str, resolver: PortResolver) -> list[PortNotice]
         kinds = _kinds(clause)
         hits = _port_hits(clause, resolver)
         if len(kinds) == 1:
-            pos = _keyword_pos(clause, kinds[0])
-            before = [port for start, port in hits if start < pos]
-            targets = before or [port for start, port in hits if start > pos]
+            targets = _keyword_ports(clause, hits, _keyword_pos(clause, kinds[0]))
             last = (kinds[0], pending + targets)
             groups.append(last)
             pending = []
         elif not kinds and hits and _is_port_list(clause, resolver):
             if last is not None:
-                last[1].extend(port for _, port in hits)
+                last[1].extend(port for _, _, port in hits)
             else:
-                pending.extend(port for _, port in hits)
+                pending.extend(port for _, _, port in hits)
         else:
             # 1つの節に複数の種類（判断できない）、または港名以外の文がある節 → まとめを切る
             pending = []
@@ -168,13 +170,40 @@ def _sentence_notices(sentence: str, resolver: PortResolver) -> list[PortNotice]
     return notices
 
 
-def _port_hits(clause: str, resolver: PortResolver) -> list[tuple[int, Port]]:
-    """節の中の港を (位置, 港) で返す。「〇〇港発」「〇〇港向け」など便の説明に出てくる港は除く。"""
+def _port_hits(clause: str, resolver: PortResolver) -> list[tuple[int, int, Port]]:
+    """節の中の港を (開始, 終了, 港) で返す。「〇〇港発」「〇〇航路」など便・航路の説明に出てくる港は除く。"""
     return [
-        (start, port)
+        (start, end, port)
         for start, end, port in resolver.find_occurrences(clause)
         if not clause.startswith(_VOYAGE_SUFFIXES, end)
     ]
+
+
+def _keyword_ports(
+    clause: str, hits: list[tuple[int, int, Port]], pos: int
+) -> list[Port]:
+    """キーワードの対象の港：キーワードの直前の港と、それに「・」「と」でつながる港。
+
+    「鹿児島新港を出港後与論港は抜港」の鹿児島のように、あいだに別の言葉が入る港は含めない。
+    キーワードより前に港が無ければ、直後の港から同じようにたどる（「条件付寄港地: 和泊港・与論港」）。
+    """
+    before = [h for h in hits if h[1] <= pos]
+    if before:
+        chain = [before[-1]]
+        for h in reversed(before[:-1]):
+            if not _LIST_GAP.match(clause[h[1] : chain[-1][0]]):
+                break
+            chain.append(h)
+        return [port for _, _, port in reversed(chain)]
+    after = [h for h in hits if h[0] >= pos]
+    if not after:
+        return []
+    chain = [after[0]]
+    for h in after[1:]:
+        if not _LIST_GAP.match(clause[chain[-1][1] : h[0]]):
+            break
+        chain.append(h)
+    return [port for _, _, port in chain]
 
 
 def _is_port_list(clause: str, resolver: PortResolver) -> bool:
