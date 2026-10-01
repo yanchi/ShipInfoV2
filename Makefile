@@ -2,11 +2,15 @@
         shell-php shell-scraper \
         migrate migrate-diff fixtures cache-clear \
         test-php test-scraper lint-scraper \
-        init
+        init init-test-db reset-test-db
 
 DOCKER_COMPOSE = docker compose
 PHP_SERVICE    = php
 SCRAPER_SERVICE = scraper
+MYSQL_SERVICE  = mysql
+
+# テスト用 DB は ${DB_NAME}_test<TEST_TOKEN>（app/config/packages/doctrine.yaml の dbname_suffix と揃える）
+TEST_TOKEN ?=
 
 # Default target
 help:
@@ -59,6 +63,24 @@ cache-clear: ## Clear Symfony cache
 test-php: ## Run PHPUnit tests
 	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) bin/phpunit
 
+# 最初のマイグレーションは 01_schema.sql が作ったテーブルを ALTER するので、
+# 空の DB に migrate するだけでは初期化できない。01_schema.sql を流してから migrate する。
+# 02_seed.sql は入れない（テストは自分でデータを作る。港マスタはマイグレーションが入れる）。
+init-test-db: ## Create the PHPUnit test DB (idempotent)
+	$(DOCKER_COMPOSE) exec -T $(MYSQL_SERVICE) sh -c '\
+	  export MYSQL_PWD="$$MYSQL_ROOT_PASSWORD"; DB="$${MYSQL_DATABASE}_test$(TEST_TOKEN)"; \
+	  mysql -uroot -e "CREATE DATABASE IF NOT EXISTS \`$$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; \
+	    GRANT ALL PRIVILEGES ON \`$$DB\`.* TO \`$$MYSQL_USER\`@\`%\`;" \
+	  && mysql -uroot "$$DB" < /docker-entrypoint-initdb.d/01_schema.sql'
+	$(DOCKER_COMPOSE) exec -e TEST_TOKEN=$(TEST_TOKEN) $(PHP_SERVICE) \
+	  bin/console doctrine:migrations:migrate --env=test --no-interaction
+
+reset-test-db: ## Drop and recreate the PHPUnit test DB
+	$(DOCKER_COMPOSE) exec -T $(MYSQL_SERVICE) sh -c '\
+	  export MYSQL_PWD="$$MYSQL_ROOT_PASSWORD"; DB="$${MYSQL_DATABASE}_test$(TEST_TOKEN)"; \
+	  mysql -uroot -e "DROP DATABASE IF EXISTS \`$$DB\`;"'
+	$(MAKE) init-test-db
+
 # ─── Python scraper ─────────────────────────────────────────────
 
 shell-scraper: ## Open shell in scraper container
@@ -84,6 +106,7 @@ init: ## First-time project setup
 	@sleep 15
 	$(MAKE) composer-install
 	$(MAKE) migrate
+	$(MAKE) init-test-db
 	@echo ""
 	@echo "Setup complete!"
 	@echo "  API:        http://localhost:8080/api"
