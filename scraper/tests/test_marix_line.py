@@ -749,3 +749,64 @@ def test_detail_row_is_removed_when_delay_is_announced_after_departure_time(
     assert _naze_rows(db_session, marix_line_company, ports) == [
         (date(2026, 10, 2), "クイーンコーラルクロス")
     ]
+
+
+OTHER_DOWN_URL = "https://marixline.com/service/downstream20261001/"
+
+
+def _add_other_voyage_naze_row(db_session, company, ports, ship_name, departure_at):
+    """10/1 始発の別の便（一覧には出ていない）の、10/2 名瀬の行を入れる。"""
+    down, _ = _routes(db_session, company)
+    db_session.add(
+        DepartureStatus(
+            route_id=down.id,
+            port_id=ports["名瀬"].id,
+            departure_date=date(2026, 10, 2),
+            ship_name=ship_name,
+            status="operating",
+            scheduled_departure_at=departure_at,
+            source_url=OTHER_DOWN_URL,
+            content_hash="x" * 64,
+        )
+    )
+    db_session.commit()
+
+
+@resp_mock.activate
+def test_shifted_voyage_keeps_other_voyage_fallback_row(db_session, marix_line_company):
+    """出港日がずれた便が、ずれた先の日付にある別の便の予備ルートの行を消さない（#28）。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _add_other_voyage_naze_row(db_session, marix_line_company, ports, "", None)
+
+    _mock_pages(down=_down_with_naze_delayed())
+    with patch("scraper.scrapers.base.datetime") as dt:
+        dt.now.return_value = datetime(2026, 10, 1, 0, 0)
+        _run_departures(db_session, marix_line_company)
+
+    assert _naze_rows(db_session, marix_line_company, ports) == [
+        (date(2026, 10, 2), ""),
+        (date(2026, 10, 2), "クイーンコーラルクロス"),
+    ]
+
+
+@resp_mock.activate
+def test_shifted_voyage_keeps_other_voyage_detail_row(db_session, marix_line_company):
+    """出港日がずれた便が、ずれた先の日付にある別の便の詳細ページの行を消さない（#28）。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _add_other_voyage_naze_row(
+        db_session,
+        marix_line_company,
+        ports,
+        "クイーンコーラルプラス",
+        datetime(2026, 10, 2, 5, 50),
+    )
+
+    _mock_pages(down=_down_with_naze_delayed())
+    with patch("scraper.scrapers.base.datetime") as dt:
+        dt.now.return_value = datetime(2026, 10, 1, 0, 0)
+        _run_departures(db_session, marix_line_company)
+
+    assert _naze_rows(db_session, marix_line_company, ports) == [
+        (date(2026, 10, 2), "クイーンコーラルクロス"),
+        (date(2026, 10, 2), "クイーンコーラルプラス"),
+    ]

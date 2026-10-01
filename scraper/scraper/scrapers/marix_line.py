@@ -327,10 +327,10 @@ class MarixLine(BaseScraper):
                     "operated_by_company_id": None,
                     "source_url": url,
                     "freeze_after_departure": False,
-                    # 予備ルートで作った行（船名なし）を、詳細ページが取れたときに消すため
-                    "replace_scope": (route.id, stop.port_id, departure_date),
-                    # 遅延で出港日がずれたとき、同じ便の前の日付の行（予備ルート・詳細ページとも）を消すため
-                    # （詳細ページの URL は便ごとに一つ：/service/downstream20260930/）
+                    # 日付で消すと、出港日がずれて同じ日付になった別の便の行まで消えるので使わない（#28）
+                    "replace_scope": None,
+                    # 同じ便の、今回書かなかった行（予備ルートの行、遅延で前の日付になった行）を消すため
+                    # （詳細ページの URL は便ごとに一つ：/service/downstream20260930/。予備ルートの行も同じ URL）
                     "replace_source": (route.id, stop.port_id, url),
                 }
             )
