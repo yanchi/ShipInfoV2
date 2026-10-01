@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  php-tests:
+    name: PHPUnit
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: test
+      APP_SECRET: ci-secret
+      APP_SHARE_DIR: var/share
+      DEFAULT_URI: http://localhost
+      # テスト環境では doctrine.yaml の dbname_suffix で shipinfo_test に繋がる
+      DATABASE_URL: mysql://root:password@127.0.0.1:3306/shipinfo?serverVersion=8.0&charset=utf8mb4
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: shipinfo_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, intl
+          coverage: none
+
+      # .env は git 管理外だが bootEnv が読むので空で作っておく（値は上の env で渡す）
+      - name: Create .env
+        working-directory: app
+        run: touch .env
+
+      - name: Install Composer dependencies
+        working-directory: app
+        run: composer install --no-interaction --prefer-dist
+
+      # 最初のマイグレーションは 01_schema.sql のテーブルを ALTER するので、先にスキーマを流す（Makefile の init-test-db と同じ）
+      - name: Load base schema
+        run: mysql -h127.0.0.1 -uroot -ppassword shipinfo_test < docker/mysql/init/01_schema.sql
+
+      - name: Run migrations
+        working-directory: app
+        run: php bin/console doctrine:migrations:migrate --no-interaction
+
+      - name: Run PHPUnit
+        working-directory: app
+        run: php bin/phpunit
+
+  python-tests:
+    name: pytest
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scraper/requirements*.txt
+
+      # mysqlclient のビルドに必要
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends default-libmysqlclient-dev pkg-config
+
+      - name: Install dependencies
+        working-directory: scraper
+        run: pip install -r requirements-dev.txt
+
+      - name: Run pytest
+        working-directory: scraper
+        run: python -m pytest tests/ -v
