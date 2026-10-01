@@ -136,7 +136,7 @@
 - **Controller**: `App\Controller\StatusController`
 - **テンプレート**: `templates/status/`
 - **CSSフレームワーク**: Bootstrap 5（CDN経由）
-- **DBアクセス**: `OperationStatusRepository` 経由（生SQLは使わない）
+- **DBアクセス**: `OperationStatusRepository` 経由（Controller / Twig からクエリを直接書かない）。基本は DQL / QueryBuilder を使い、DQL で表現しにくい集約（最新レコード取得の `MAX(scraped_at)` サブクエリ等）に限り Repository 内で raw SQL を許容する。raw SQL ではプレースホルダによるパラメータバインドを必須とする
 
 ---
 
