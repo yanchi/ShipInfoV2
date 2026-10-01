@@ -952,3 +952,90 @@ def test_departed_row_is_not_created_on_first_run(db_session, marue_with_ports):
     )
 
     assert naze_rows(db_session, company, ports) == []
+
+
+@resp_mock.activate
+def test_overnight_voyage_keeps_ship_status_off_next_voyage(
+    db_session, marue_with_ports
+):
+    """日付が変わってから着くまでの上りの便（今日以降の検索に出ない）が走っている間は、
+    船ステータスを次の便の行に付けない。"""
+    company, ports = marue_with_ports
+    _, up = routes_of(db_session, company)
+    # 前日の実行で記録した、10/1 21:20 名瀬発 → 10/2 08:30 鹿児島着の波之上
+    db_session.add(
+        DepartureStatus(
+            route_id=up.id,
+            port_id=ports["名瀬"].id,
+            departure_date=date(2026, 10, 1),
+            ship_name="フェリー波之上",
+            status="cancelled",
+            scheduled_departure_at=datetime(2026, 10, 1, 21, 20),
+            scheduled_arrival_at=datetime(2026, 10, 2, 8, 30),
+            content_hash="x" * 64,
+            scraped_at=datetime(2026, 10, 1, 20, 0),
+            checked_at=datetime(2026, 10, 1, 20, 0),
+        )
+    )
+    db_session.commit()
+    # 波之上の次の便は 10/3 鹿児島発の下り
+    mock_search(
+        {
+            (KAGOSHIMA, NAHA, "2026年10月03日"): search_html(
+                [marue("フェリー波之上", "2026年10月3日 18:00", "2026年10月4日 19:00")]
+            ),
+        }
+    )
+    mock_kagoshima(kagoshima_html(naminoue=("欠航", "台風接近のため欠航いたします。")))
+
+    scraper = MarueFerry(db_session, company.id)
+    with fixed_now(datetime(2026, 10, 2, 2, 0)):
+        scraper.parse(scraper.fetch())
+        departures = scraper.parse_departures()
+
+    down, _ = routes_of(db_session, company)
+    row = find(departures, down, ports["鹿児島"], date(2026, 10, 3))
+    assert row["status"] is None  # 運航予定（走っている便の「欠航」は付けない）
+
+
+@resp_mock.activate
+def test_arrived_recorded_voyage_does_not_block_next_voyage(
+    db_session, marue_with_ports
+):
+    """着いた後の便は候補にならず、次の便に船ステータスが付く。"""
+    company, ports = marue_with_ports
+    _, up = routes_of(db_session, company)
+    db_session.add(
+        DepartureStatus(
+            route_id=up.id,
+            port_id=ports["名瀬"].id,
+            departure_date=date(2026, 10, 1),
+            ship_name="フェリー波之上",
+            status="operating",
+            scheduled_departure_at=datetime(2026, 10, 1, 21, 20),
+            scheduled_arrival_at=datetime(2026, 10, 2, 8, 30),
+            content_hash="x" * 64,
+            scraped_at=datetime(2026, 10, 1, 20, 0),
+            checked_at=datetime(2026, 10, 1, 20, 0),
+        )
+    )
+    db_session.commit()
+    mock_search(
+        {
+            (KAGOSHIMA, NAHA, "2026年10月03日"): search_html(
+                [marue("フェリー波之上", "2026年10月3日 18:00", "2026年10月4日 19:00")]
+            ),
+        }
+    )
+    mock_kagoshima(kagoshima_html(naminoue=("欠航", "台風接近のため欠航いたします。")))
+
+    scraper = MarueFerry(db_session, company.id)
+    with fixed_now(datetime(2026, 10, 2, 9, 0)):
+        scraper.parse(scraper.fetch())
+        departures = scraper.parse_departures()
+
+    down, _ = routes_of(db_session, company)
+    assert (
+        find(departures, down, ports["鹿児島"], date(2026, 10, 3))["status"]
+        == OperationStatusEnum.cancelled
+    )

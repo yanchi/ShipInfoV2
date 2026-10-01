@@ -6,7 +6,12 @@
 - 対象は鹿児島航路ページの抜粋と、船別詳細ページの h4 の後〜定型の注意書き（「台風の影響や」の段落）の手前
 - 文（「。」と改行）ごとに見る。仮定・案内の文（「場合」「ことがあります」「可能性」「問い合わせ」）は除外
 - 抜港 → skip、港変更・寄港地変更・「A港からB港へ／に」→ change（B が変更先）、条件付 → conditional
-- 「鹿児島新港発の便は」のように、すぐ後ろに発・着・向け・行きが付く港は便の説明なので対象にしない
+- 対象の港は読点で区切った節ごとに決める
+  - キーワードのある節：キーワードより前の港（「与論港は抜港して那覇港へ」なら与論だけ）。
+    前に港が無ければ後ろの港（「条件付寄港地: 和泊港」）
+  - 港名だけの節（「和泊港、与論港は条件付寄港」の「和泊港」）：隣のキーワードの節にまとめる
+  - それ以外の節（「鹿児島新港を出港し」など）の港は対象にしない
+  - 「鹿児島新港発の便は」のように、すぐ後ろに発・着・向け・行きが付く港は便の説明なので対象にしない
 - 1つの港に複数あれば skip > change > conditional
 """
 
@@ -17,6 +22,7 @@ from dataclasses import dataclass
 
 from bs4 import BeautifulSoup
 
+from scraper.db.models import Port
 from scraper.utils.ports import PortResolver
 
 BOILERPLATE_MARKER = "台風の影響や"
@@ -27,6 +33,8 @@ _CHANGE_ROUTE = re.compile(
 _PRIORITY = {"skip": 3, "change": 2, "conditional": 1}
 # 港名の直後にこれが付いていたら、便の出発地・行き先の説明（「鹿児島新港発の便」）
 _VOYAGE_SUFFIXES = ("発", "着", "向け", "行き", "行")
+# 港名を取り除いたあとにこれしか残らない節は「港名だけの節」
+_PORT_LIST_REST = re.compile(r"^[\s・と及び]*$")
 
 
 @dataclass(frozen=True)
@@ -82,19 +90,30 @@ def _sentences(text: str) -> list[str]:
 
 
 def _kinds(text: str) -> list[str]:
-    kinds = []
-    if "抜港" in text:
-        kinds.append("skip")
-    if "港変更" in text or "寄港地変更" in text or _CHANGE_ROUTE.search(text):
-        kinds.append("change")
-    if "条件付" in text:
-        kinds.append("conditional")
-    return kinds
+    return [
+        kind
+        for kind in ("skip", "change", "conditional")
+        if _keyword_pos(text, kind) is not None
+    ]
+
+
+def _keyword_pos(text: str, kind: str) -> int | None:
+    """節の中でその種類のキーワードが出てくる位置（無ければ None）。"""
+    if kind == "skip":
+        positions = [text.find("抜港")]
+    elif kind == "change":
+        positions = [text.find("港変更"), text.find("寄港地変更")]
+        m = _CHANGE_ROUTE.search(text)
+        if m:
+            positions.append(m.end())
+    else:
+        positions = [text.find("条件付")]
+    positions = [p for p in positions if p >= 0]
+    return min(positions) if positions else None
 
 
 def _sentence_notices(sentence: str, resolver: PortResolver) -> list[PortNotice]:
-    kinds = _kinds(sentence)
-    if not kinds:
+    if not _kinds(sentence):
         return []
 
     # 「A港からB港へ」の B は変更先なので、港別情報の対象から外す
@@ -107,25 +126,35 @@ def _sentence_notices(sentence: str, resolver: PortResolver) -> list[PortNotice]
         if src is not None:
             change_to[src.id] = m.group(2)
 
-    if len(kinds) == 1:
-        clauses = [(sentence, kinds[0])]
-    else:
-        # 「与論港は抜港、和泊港は条件付寄港」のように種類が混ざる文は読点で分けて、
-        # 種類の無い節の港は次の種類のある節にまとめる
-        clauses = []
-        pending = ""
-        for clause in re.split(r"[、，,]", sentence):
-            clause_kinds = _kinds(clause)
-            if len(clause_kinds) == 1:
-                clauses.append((pending + clause, clause_kinds[0]))
-                pending = ""
-            elif not clause_kinds:
-                pending += clause + "、"
-            # 1つの節に複数の種類 → 判断できないので使わない
+    # 節ごとに (種類, 対象の港) を作る
+    groups: list[tuple[str, list[Port]]] = []
+    pending: list[Port] = []  # キーワードの節より前にある「港名だけの節」の港
+    last: tuple[str, list[Port]] | None = (
+        None  # 直前のキーワードの節（後ろに続く港名だけの節をまとめる）
+    )
+    for clause in re.split(r"[、，,]", sentence):
+        kinds = _kinds(clause)
+        hits = _port_hits(clause, resolver)
+        if len(kinds) == 1:
+            pos = _keyword_pos(clause, kinds[0])
+            before = [port for start, port in hits if start < pos]
+            targets = before or [port for start, port in hits if start > pos]
+            last = (kinds[0], pending + targets)
+            groups.append(last)
+            pending = []
+        elif not kinds and hits and _is_port_list(clause, resolver):
+            if last is not None:
+                last[1].extend(port for _, port in hits)
+            else:
+                pending.extend(port for _, port in hits)
+        else:
+            # 1つの節に複数の種類（判断できない）、または港名以外の文がある節 → まとめを切る
+            pending = []
+            last = None
 
     notices = []
-    for clause, kind in clauses:
-        for port in _target_ports(clause, resolver):
+    for kind, ports in groups:
+        for port in ports:
             if port.id in destinations:
                 continue
             notices.append(
@@ -139,13 +168,18 @@ def _sentence_notices(sentence: str, resolver: PortResolver) -> list[PortNotice]
     return notices
 
 
-def _target_ports(clause: str, resolver: PortResolver) -> list:
-    """港別情報の対象になる港。「〇〇港発」「〇〇港向け」など便の説明に出てくる港は除く。"""
-    result = []
-    seen: set[int] = set()
-    for _, end, port in resolver.find_occurrences(clause):
-        if clause.startswith(_VOYAGE_SUFFIXES, end) or port.id in seen:
-            continue
-        seen.add(port.id)
-        result.append(port)
-    return result
+def _port_hits(clause: str, resolver: PortResolver) -> list[tuple[int, Port]]:
+    """節の中の港を (位置, 港) で返す。「〇〇港発」「〇〇港向け」など便の説明に出てくる港は除く。"""
+    return [
+        (start, port)
+        for start, end, port in resolver.find_occurrences(clause)
+        if not clause.startswith(_VOYAGE_SUFFIXES, end)
+    ]
+
+
+def _is_port_list(clause: str, resolver: PortResolver) -> bool:
+    """港名だけの節か（「和泊港・与論港」など）。"""
+    rest = clause
+    for start, end, _ in sorted(resolver.find_occurrences(clause), reverse=True):
+        rest = rest[:start] + rest[end:]
+    return bool(_PORT_LIST_REST.match(rest))

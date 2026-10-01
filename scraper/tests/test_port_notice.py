@@ -127,3 +127,29 @@ def test_voyage_description_ports_are_not_targets(resolver, text, expected):
     """「〇〇港発の便」のように便を説明しているだけの港には判定を付けない。"""
     found = _names(extract_port_notices(text, resolver), resolver)
     assert {name: n.kind for name, n in found.items()} == expected
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        (
+            "鹿児島新港を出港し、名瀬港・亀徳港に寄港後、与論港は抜港して那覇港へ向かいます。",
+            {"与論": "skip"},
+        ),
+        ("与論港は抜港して那覇港へ向かいます", {"与論": "skip"}),
+        (
+            "和泊港、与論港は条件付寄港となります",
+            {"和泊": "conditional", "与論": "conditional"},
+        ),
+        (
+            "条件付寄港地: 和泊港、与論港、亀徳港",
+            {"和泊": "conditional", "与論": "conditional", "亀徳": "conditional"},
+        ),
+        ("名瀬港に寄港後、和泊港は条件付寄港", {"和泊": "conditional"}),
+        ("港変更：亀徳港から平土野港へ", {"亀徳": "change"}),
+    ],
+)
+def test_only_ports_tied_to_keyword_are_targets(resolver, text, expected):
+    """キーワードと結びついた港だけを対象にし、航路の説明に出てくるだけの港は判定しない。"""
+    found = _names(extract_port_notices(text, resolver), resolver)
+    assert {name: n.kind for name, n in found.items()} == expected

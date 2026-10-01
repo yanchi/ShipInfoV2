@@ -378,19 +378,23 @@ class MarueFerry(BaseScraper):
         self._notices: dict[str, list[PortNotice]] = {}
 
         # 船ごとに「まだ着いていない一番早い便」(route_id, arrival_at) を決める（research R9）
+        # 候補は今回の検索結果と、前回までに記録した行（DB）。上りの便は始発日の途中港を全部出てから
+        # 翌朝に鹿児島へ着くので、日付が変わってから着くまでの間は、走っている便が今日以降の検索結果に
+        # 出てこない。DB の行も見ないと、船ステータスが次の便に付いてしまう
+        candidates: list[tuple[str, int, datetime]] = [
+            (row.ship_name, route_id, row.arrival_at)
+            for (route_id, _, _), rows in searches.items()
+            for row in rows or []
+            if not row.is_other_company and row.arrival_at is not None
+        ]
+        candidates.extend(self._recorded_voyages(now))
         current_voyage: dict[str, tuple[int, datetime]] = {}
-        for (route_id, _, _), rows in searches.items():
-            for row in rows or []:
-                if (
-                    row.is_other_company
-                    or row.arrival_at is None
-                    or row.arrival_at <= now
-                ):
-                    continue
-                voyage = (route_id, row.arrival_at)
-                cur = current_voyage.get(row.ship_name)
-                if cur is None or voyage[1] < cur[1]:
-                    current_voyage[row.ship_name] = voyage
+        for ship_name, route_id, arrival_at in candidates:
+            if arrival_at <= now:
+                continue
+            cur = current_voyage.get(ship_name)
+            if cur is None or arrival_at < cur[1]:
+                current_voyage[ship_name] = (route_id, arrival_at)
 
         records: list[dict] = []
         for (route_id, port_id, d), rows in searches.items():
@@ -452,6 +456,26 @@ class MarueFerry(BaseScraper):
 
         self._log.info("parsed_departures", records=len(records))
         return records
+
+    def _recorded_voyages(self, now: datetime) -> list[tuple[str, int, datetime]]:
+        """前回までに記録した、まだ着いていない便の (船名, route_id, 下船日時)。"""
+        route_ids = [r.id for r in self._load_routes() if r]
+        if not route_ids:
+            return []
+        rows = self.session.execute(
+            select(
+                DepartureStatus.ship_name,
+                DepartureStatus.route_id,
+                DepartureStatus.scheduled_arrival_at,
+            )
+            .where(
+                DepartureStatus.route_id.in_(route_ids),
+                DepartureStatus.ship_name != "",
+                DepartureStatus.scheduled_arrival_at > now,
+            )
+            .distinct()
+        ).all()
+        return [(r.ship_name, r.route_id, r.scheduled_arrival_at) for r in rows]
 
     def _current_voyage_status(
         self, ship_name: str, ships: dict[str, ShipInfo], route_id: int, port_id: int
