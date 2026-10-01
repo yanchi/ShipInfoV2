@@ -18,9 +18,9 @@
 **コミット**: 各 Phase の Checkpoint でコミットする（constitution V）。
 
 **共通の注意**:
-- `PortBoardBuilder` の判定ルールは変えない（SC-009）。既存の `app/tests/Service/PortBoardBuilderTest.php` は1行も変えずに通ること
+- `PortBoardBuilder` の判定ルールは変えない（SC-009）。`app/tests/Service/PortBoardBuilderTest.php` の既存のテストメソッドは変えずに通ること（テストメソッドの追加はよい）
 - `StatusControllerTest` の港別の行の探し方（`li.port-row` の中の `.fw-bold` が「{港名}発」で始まる）は残す。テンプレートを変えるときは、この2つのクラスと文言を残す
-- 今日の日付・現在時刻は Controller で作って渡す（テストで固定できるように）
+- 表示用オブジェクトのメソッドは、現在時刻を引数（`$now`）で受け取る（単体テストで時刻を固定できるように）。Controller はその場で `new \DateTimeImmutable()` を作って渡す。機能テストでは「出港済み」の表示は確かめない
 - テストは `make test-php` で全部通ること
 
 ---
@@ -43,7 +43,7 @@
 **⚠️ CRITICAL**: この Phase が終わるまで US の実装を始めないこと
 
 - [ ] T003 [P] `app/src/View/PortBoardEntry.php` に `public ?int $companyId = null` を追加する（コンストラクタの引数の最後に足す）。`app/src/Service/PortBoardBuilder.php` で、エントリーを作る2か所（ルール2：`$s->getRoute()->getFerryCompany()->getId()`、ルール3：`$operator->getId()`）で値を入れる。ルール4・5は入れない。判定のロジックには触らない（research R13）
-- [ ] T004 [P] `app/src/View/PortBoardEntry.php` に次のメソッドを追加する（data-model.md・research R7）
+- [ ] T004 `app/src/View/PortBoardEntry.php` に次のメソッドを追加する（T003 と同じファイルなので T003 の後に行う）（data-model.md・research R7）
   - `isAlert(): bool` … `state === Status` かつ status が `Cancelled` / `Delayed` / `Suspended`
   - `isDeparted(\DateTimeInterface $now): bool` … `isAlert()` なら false。`departureAt` が null なら false。`departureAt < $now` かつ（`state === Scheduled` または status が `Operating`）なら true
   - `checkedAtDiffersFrom(?\DateTimeInterface $common): bool` … `checkedAt` が null なら false。`$common` が null なら true。それ以外は `Y-m-d H:i` で比べて違えば true
@@ -60,7 +60,7 @@
   - 運航予定は白地に破線の枠（今の `style` 属性をやめて、T002 の `<style>` に `.badge-scheduled` を作る）
   - 情報なし・不明は薄い灰の塗り（`bg-secondary-subtle text-dark`）。運休は濃い灰（`bg-secondary`）
   - 既存の `bg-success`（通常運航）のクラスは残す（`StatusControllerTest` が見ている）
-- [ ] T010 `app/templates/status/_port_entry.html.twig` を新しく作り、`ports.html.twig` の便の1件分（今の `.port-entry` の中身）を移す。引数は `entry`・`day`（日付）・`now`・`commonCheckedAt`。この Phase では見た目は今のままでよい（T024 で2段にする）。`ports.html.twig` からはこのパーシャルを `include` する
+- [ ] T010 `app/templates/status/_port_entry.html.twig` を新しく作り、`ports.html.twig` の便の1件分（今の `.port-entry` の中身）を移す。引数は `entry`・`day`（日付）・`now`・`commonCheckedAt`。この Phase では見た目は今のままでよい（T032 で2段にする）。`ports.html.twig` からはこのパーシャルを `include` する
 - [ ] T011 `app/templates/status/ports.html.twig` の各日付の `<section>` に `id="d-{{ day.date|date('Y-m-d') }}"`、各行の `<li class="list-group-item port-row">` に `id="r-{{ day.date|date('Y-m-d') }}-{{ direction.direction.value }}-{{ row.port.id }}"` を付ける（contracts/http-routes.md のアンカー）
 - [ ] T012 `make test-php` を実行する。T009 で文言（「● 条件付・遅延」など）を見ているテストがあれば、新しい記号に合わせて直す
 
@@ -87,6 +87,7 @@
   - `clear=1` → 「Cookie を消して `/ports` へリダイレクト」の指示
   - `port=999&dir=down`（save なし）→ 全港・下り、Cookie は変えない
   - Cookie の値が不正（存在しない港・`dir=xxx`）→ `none()`、Cookie を消す指示
+  - `resolveFromCookie()`：`port=5&save=1` のクエリがあっても `redirectTo` は null で、Cookie の条件を返す。Cookie が不正なら消す指示
 - [ ] T015 [P] [US1] `app/tests/View/PortBoardTest.php` に `filter()` のテストを足す：港だけ → 各方向でその港の行だけ、方向だけ → その方向だけ、両方 → 1行、`none()` → 元と同じ。日付は常に全部残る
 
 ### Implementation for User Story 1
@@ -96,6 +97,7 @@
 - [ ] T018 [US1] `app/src/Service/PortFilterResolver.php` を作る（data-model.md の「作り方」「保存」「検証」）
   - `resolve(Request $request, list<array{direction, departurePorts, arrivalPort}> $boardStops): PortFilterResolution`
   - 戻り値の `PortFilterResolution`（同じファイルか `app/src/View/` に置く）は `filter: PortFilter`、`redirectTo: ?string`、`cookie: ?Cookie`（書くときは値入り、消すときは `Cookie::create('port_filter')->withExpires(1)`、変えないときは null）
+  - `resolveFromCookie(Request $request, list<…> $boardStops): PortFilterResolution` も作る（トップ用）。クエリ（`port`・`dir`・`save`・`clear`）は見ず、Cookie だけを読む。`redirectTo` は常に null。Cookie の値が不正なら、港別ページと同じく Cookie を消す指示（`cookie`）を返す
   - 港 ID の検証は `$boardStops` の `departurePorts` の ID で行う
   - Cookie は `port_filter`、値は `http_build_query($filter->toQuery())`、有効期限 1 年、`Path=/`、`SameSite=Lax`、`HttpOnly`（data-model.md の Cookie）
 - [ ] T019 [US1] `app/src/Controller/StatusController.php` の `ports()` を変える
@@ -112,7 +114,7 @@
 - [ ] T021 [US1] `app/templates/status/ports.html.twig` に、絞り込み中の表示を置く（FR-004）
   - `filter.isActive()` のとき「{港名}発のみ表示中」「下りのみ表示中」などと、「全港に戻す」（`/ports?port=all`）のリンク
   - `filter.hasSaved` のとき「保存を解除」（`/ports?clear=1`）のリンク
-  - 絞り込みで行が無くなった方向・日付は見出しも出さない
+  - 絞り込みで行が無くなった**方向**は見出しも出さない。日付の `section` は常に全部出す（T034 の日付ボタンの飛び先を残すため）
 - [ ] T022 [US1] `app/tests/Controller/StatusControllerTest.php` に機能テストを足す
   - `/ports?port={港ID}&dir=down` → 各日付で、その港の下りの行だけ（`li.port-row` が日数分）
   - `/ports?port={港ID}&dir=down&save=1` → 302、`Location` に `save` が無い、`Set-Cookie: port_filter=...`。続けて `/ports` → 同じ絞り込み
@@ -209,7 +211,7 @@
 - [ ] T042 [US4] `StatusController::index()` を変える（research R12）
   - `findBoardStops()`・`findForBoard($today, PORT_BOARD_DAYS)` で全港4日分のボードを作る
   - `PortAlertSummaryBuilder::build($fullBoard, PortFilter::none())` で要約を作る
-  - `PortFilterResolver` で Cookie だけを読み（クエリは見ない。トップでは `save`・`clear` を受け付けない）、保存した港があれば `$fullBoard->filter($filter)` の今日（`days[0]`）を `savedToday` として渡す。無ければ null
+  - `PortFilterResolver::resolveFromCookie()`（T018）で Cookie だけを読み（クエリは見ないので、`/?port=5&save=1` でもリダイレクトしない）、`cookie` があれば（不正な Cookie を消すとき）レスポンスに付ける。保存した港があれば `$fullBoard->filter($filter)` の今日（`days[0]`）を `savedToday` として渡す。無ければ null
   - 会社一覧は今の `findTodayByAllCompanies()` のまま
   - レスポンスに `Cache-Control: private` と `Vary: Cookie` を付ける
 - [ ] T043 [US4] `app/templates/status/index.html.twig` を FR-015 の順に組み直す
@@ -222,6 +224,8 @@
   - `testIndexLinksToPorts`（`a[href="/ports"]` が1つ）を、「自分の港の便を見る」ボタンがあることを見るテストに直す
   - Cookie なし → 要約がある、ボタンがある、「今日の便」の見出しが無い
   - Cookie `port_filter` に港 → その港の今日の行がある、ボタンが無い
+  - `/?port=5&save=1` → 200（リダイレクトしない）、`Set-Cookie` が無い
+  - Cookie の値が不正 → 200、ボタンが出る、Cookie を消す `Set-Cookie`
   - 要約のリンクが `/ports?port=all#r-` で始まる
   - 全航路 `no_service` の会社が「本日運航なし」の1行になり、カードにならない
   - レスポンスヘッダーに `private` と `Vary: Cookie`
@@ -246,7 +250,7 @@
 ### Tests for User Story 5
 
 - [ ] T047 [P] [US5] `app/tests/View/PortBoardTest.php` に `forCompany()` のテストを足す：その会社の Status・Scheduled のエントリーだけが残る、他社のエントリーと NoInfo・NoService のエントリーは落ちる、エントリーが無くなった行・方向は落ちる
-- [ ] T048 [P] [US5] `app/tests/Repository/OperationStatusRepositoryTest.php` に `findUpcomingByCompany()` のテストを足す（今日〜3日先だけ、昨日は入らない、無効な航路は入らない）。`findRecentByCompany` のテスト2件（108行目・133行目のメソッド）を削除する
+- [ ] T048 [P] [US5] `app/tests/Repository/OperationStatusRepositoryTest.php` に `findUpcomingByCompany()` のテストを足す（今日〜3日先だけ、昨日は入らない、無効な航路は入らない）。`findRecentByCompany` のテスト2件（`testFindRecentByCompanyReturnsArray`・`testFindRecentByCompanyReturnsAtMostNDays`）を削除する
 
 ### Implementation for User Story 5
 
@@ -324,7 +328,7 @@
 PR1（5-ui-readability-ports）
   Phase 1 Setup
      ↓
-  Phase 2 Foundational（T003〜T008 は並行可 → T009 → T010 → T011 → T012）
+  Phase 2 Foundational（T003 → T004。T005〜T008 は T003・T004 と並行可 → T009 → T010 → T011 → T012）
      ↓
   Phase 3 US1（絞り込み）
      ↓
@@ -346,7 +350,8 @@ PR2（5-ui-readability-top）     PR3（5-ui-readability-company）
 
 **Phase 2**:
 ```
-T003 companyId / T004 PortBoardEntry のメソッド / T005 commonCheckedAt / T006 lastCheckedAt
+T003 companyId → T004 PortBoardEntry のメソッド（同じファイルなので順番に）
+T005 commonCheckedAt / T006 lastCheckedAt
 T007 PortBoardEntryTest / T008 PortBoardTest・Builder の companyId のテスト
 ```
 
