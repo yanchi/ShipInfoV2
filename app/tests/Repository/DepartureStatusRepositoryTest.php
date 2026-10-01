@@ -79,4 +79,42 @@ class DepartureStatusRepositoryTest extends KernelTestCase
         $this->assertSame('港別リポジトリテスト会社', $first->getOperatedByCompany()->getName());
         $this->assertSame(RouteDirectionEnum::Down, $first->getRoute()->getDirection());
     }
+
+    public function testFindForBoardExcludesInactiveRoutes(): void
+    {
+        $port = $this->em->getRepository(Port::class)->findOneBy(['name' => '名瀬']);
+        $this->assertNotNull($port, 'ports の初期データがありません（マイグレーションを確認）');
+
+        $company = (new FerryCompany())->setName('港別リポジトリテスト会社')->setActive(true);
+        $this->em->persist($company);
+        $today = new \DateTimeImmutable('today');
+        foreach (['有効' => true, '無効' => false] as $label => $active) {
+            $route = (new Route())
+                ->setFerryCompany($company)
+                ->setName("港別リポジトリテスト航路（{$label}）")
+                ->setDirection(RouteDirectionEnum::Down)
+                ->setActive($active);
+            $this->em->persist($route);
+            $this->em->persist((new DepartureStatus())
+                ->setRoute($route)
+                ->setPort($port)
+                ->setDepartureDate(\DateTime::createFromImmutable($today))
+                ->setShipName("{$label}の船")
+                ->setStatus(OperationStatusEnum::Operating)
+                ->setContentHash(str_repeat('a', 64)));
+        }
+        $this->em->flush();
+        $this->companyId = $company->getId();
+        $this->em->clear();
+
+        $ships = array_map(
+            static fn (DepartureStatus $d) => $d->getShipName(),
+            array_values(array_filter(
+                $this->repository->findForBoard($today, 4),
+                fn (DepartureStatus $d) => $d->getRoute()->getFerryCompany()->getId() === $this->companyId,
+            )),
+        );
+
+        $this->assertSame(['有効の船'], $ships);
+    }
 }

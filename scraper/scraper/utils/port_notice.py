@@ -6,6 +6,7 @@
 - 対象は鹿児島航路ページの抜粋と、船別詳細ページの h4 の後〜定型の注意書き（「台風の影響や」の段落）の手前
 - 文（「。」と改行）ごとに見る。仮定・案内の文（「場合」「ことがあります」「可能性」「問い合わせ」）は除外
 - 抜港 → skip、港変更・寄港地変更・「A港からB港へ／に」→ change（B が変更先）、条件付 → conditional
+- 「鹿児島新港発の便は」のように、すぐ後ろに発・着・向け・行きが付く港は便の説明なので対象にしない
 - 1つの港に複数あれば skip > change > conditional
 """
 
@@ -24,6 +25,8 @@ _CHANGE_ROUTE = re.compile(
     r"([^\s、。・,，:：]+?港)から([^\s、。・,，:：]+?港)(?:へ|に)"
 )
 _PRIORITY = {"skip": 3, "change": 2, "conditional": 1}
+# 港名の直後にこれが付いていたら、便の出発地・行き先の説明（「鹿児島新港発の便」）
+_VOYAGE_SUFFIXES = ("発", "着", "向け", "行き", "行")
 
 
 @dataclass(frozen=True)
@@ -122,7 +125,7 @@ def _sentence_notices(sentence: str, resolver: PortResolver) -> list[PortNotice]
 
     notices = []
     for clause, kind in clauses:
-        for port in resolver.find_all(clause):
+        for port in _target_ports(clause, resolver):
             if port.id in destinations:
                 continue
             notices.append(
@@ -134,3 +137,15 @@ def _sentence_notices(sentence: str, resolver: PortResolver) -> list[PortNotice]
                 )
             )
     return notices
+
+
+def _target_ports(clause: str, resolver: PortResolver) -> list:
+    """港別情報の対象になる港。「〇〇港発」「〇〇港向け」など便の説明に出てくる港は除く。"""
+    result = []
+    seen: set[int] = set()
+    for _, end, port in resolver.find_occurrences(clause):
+        if clause.startswith(_VOYAGE_SUFFIXES, end) or port.id in seen:
+            continue
+        seen.add(port.id)
+        result.append(port)
+    return result

@@ -40,7 +40,17 @@ class PortResolver:
         return None
 
     def find_all(self, text: str | None) -> list[Port]:
-        """文中に出てくる港を、重複なしで出現順に返す。
+        """文中に出てくる港を、重複なしで出現順に返す。"""
+        result: list[Port] = []
+        seen: set[int] = set()
+        for _, _, port in self.find_occurrences(text):
+            if port.id not in seen:
+                seen.add(port.id)
+                result.append(port)
+        return result
+
+    def find_occurrences(self, text: str | None) -> list[tuple[int, int, Port]]:
+        """文中の港の出現を (開始位置, 終了位置, 港) で出現順に返す。
 
         長い別名から順に文中の位置を確保していくので、「鹿児島新港」の中の「鹿児島」を
         二重に数えたりはしない。
@@ -48,7 +58,7 @@ class PortResolver:
         if not text:
             return []
         taken = [False] * len(text)
-        hits: list[tuple[int, Port]] = []
+        hits: list[tuple[int, int, Port]] = []
         for alias, port in self._aliases:
             start = 0
             while True:
@@ -59,13 +69,7 @@ class PortResolver:
                 if not any(taken[idx:end]):
                     for i in range(idx, end):
                         taken[i] = True
-                    hits.append((idx, port))
+                    hits.append((idx, end, port))
                 start = idx + 1
         hits.sort(key=lambda x: x[0])
-        result: list[Port] = []
-        seen: set[int] = set()
-        for _, port in hits:
-            if port.id not in seen:
-                seen.add(port.id)
-                result.append(port)
-        return result
+        return hits

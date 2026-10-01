@@ -112,3 +112,18 @@ def test_mixed_kinds_in_one_sentence(resolver):
 
 def test_ports_not_on_route_only(resolver):
     assert extract_port_notices("茶花港は抜港", resolver) == []
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("10月1日鹿児島新港発のフェリー波之上は与論港を抜港致します", {"与論": "skip"}),
+        ("本日那覇港発の便は名瀬港から古仁屋港へ変更", {"名瀬": "change"}),
+        ("那覇港向けの便は和泊港に条件付寄港します", {"和泊": "conditional"}),
+        ("鹿児島行きの便は与論港は抜港", {"与論": "skip"}),
+    ],
+)
+def test_voyage_description_ports_are_not_targets(resolver, text, expected):
+    """「〇〇港発の便」のように便を説明しているだけの港には判定を付けない。"""
+    found = _names(extract_port_notices(text, resolver), resolver)
+    assert {name: n.kind for name, n in found.items()} == expected
