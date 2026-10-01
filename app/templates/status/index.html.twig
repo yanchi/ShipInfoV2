@@ -13,6 +13,9 @@
     {% if savedToday %}
         <section class="saved-today mb-4">
             <h2 class="h5 mb-2">{{ portFilter.label(portOptions) }}の今日の便</h2>
+            {% if savedToday.directions is empty %}
+                <p class="text-muted small">条件に合う便はありません。</p>
+            {% endif %}
             {% for direction in savedToday.directions %}
                 {%- set commonCheckedAt = direction.commonCheckedAt -%}
                 <h3 class="h6 text-muted mt-2 mb-2 d-flex flex-wrap column-gap-2">
@@ -34,7 +37,7 @@
                     </ul>
                 </div>
             {% endfor %}
-            <a href="{{ path('app_status_ports') }}" class="saved-today-more">この港の4日分を見る →</a>
+            <a href="{{ path('app_status_ports') }}" class="saved-today-more">4日分を見る →</a>
         </section>
     {% else %}
         {# FR-017: 港別ページへの導線はボタン相当の大きさで #}

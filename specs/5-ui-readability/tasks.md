@@ -243,6 +243,7 @@
   - 既存の会社カードのテスト（グリッド・カードの中身）は、運航する会社について通ること
 - [X] T045 [US4] quickstart.md の「PR2」の手順 1〜4 を実際に行い、375 × 667 で要約と保存した港の便がスクロールせずに見えることを確認する
 - [X] T046 [US4] push して PR を作る。説明に US4・FR-015〜018 との対応を書く
+- [X] T046a PR #34 のレビュー対応：保存した条件に合う行が無いときに「条件に合う便はありません。」を出す。`testIndexIgnoresSaveQuery` を `testIndexIgnoresQuery` にして、クエリで絞り込まないことも確かめる。4日分のボードを作る処理を `buildFullBoard()` にまとめる。リンクの文言を「4日分を見る →」にする。`PORT_BOARD_DAYS` をクラスの先頭に移す
 
 **Checkpoint**: US4 の Independent Test が通る。`make test-php` が全部通る → コミット
 
@@ -280,6 +281,7 @@
   - `routeSummaries` があれば、航路ごとに「{航路名} {バッジ} {詳細文}」の1行（詳細文は T036 と同じく60文字で畳む）
   - `state` が `Services` → 方向ごとに `_port_entry` で各行（`li.port-row` と `.fw-bold` の「{港}発 → {到着港}」）
   - `NoService` → 「— 便なし」の1行、`NoInfo` → 「？ 情報なし」の1行
+- [ ] T054a [US5] **TODO（PR #34 レビュー）** トップの会社カードと会社別ページの航路の行は、航路単位の情報（`operation_statuses`）をそのまま出しているので、前日に始発港を出た便が今日途中の港を出る会社でも「— 便なし」になる（例：マリックスの航路単位の情報は `no_service` なのに、和泊を今日 12:00 に出る便がある）。カードは出ているのに中身が「便なし」で、矛盾して見える。航路単位の `no_service` の見せ方（「始発港発の便なし」と書く、港別ボードに便があれば出さない、など）を決めて直す。PR3 より前にリリースするなら、先にこれだけ直す
 - [ ] T055 [US5] `app/tests/Controller/StatusControllerTest.php` に足す：今日〜3日先の見出しが出て昨日が無い、便のある日に `li.port-row` が出る、`no_service` の行だけの日が「便なし」、行が無い日が「情報なし」、航路の要約行が出る日・出ない日。既存の `testCompanyPage*`（200・404）が通ること
 
 **Checkpoint**: US5 の Independent Test が通る。`make test-php` が全部通る → コミット

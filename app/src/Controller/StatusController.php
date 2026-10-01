@@ -13,6 +13,7 @@ use App\Repository\RouteStopRepository;
 use App\Service\PortAlertSummaryBuilder;
 use App\Service\PortBoardBuilder;
 use App\Service\PortFilterResolver;
+use App\View\PortBoard;
 use App\View\PortBoardDay;
 use App\View\PortFilter;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -23,24 +24,26 @@ use Symfony\Component\Routing\Attribute\Route;
 
 class StatusController extends AbstractController
 {
+    /** 港別ページ・トップのボードに出す日数（今日〜3日先） */
+    private const PORT_BOARD_DAYS = 4;
+
+    public function __construct(
+        private readonly DepartureStatusRepository $departureStatusRepository,
+        private readonly PortBoardBuilder $portBoardBuilder,
+    ) {
+    }
+
     #[Route('/', name: 'app_status_index')]
     public function index(
         Request $request,
         OperationStatusRepository $operationStatusRepository,
         RouteStopRepository $routeStopRepository,
-        DepartureStatusRepository $departureStatusRepository,
-        PortBoardBuilder $portBoardBuilder,
         PortFilterResolver $portFilterResolver,
         PortAlertSummaryBuilder $portAlertSummaryBuilder,
     ): Response {
         $today      = new \DateTimeImmutable('today');
         $boardStops = $routeStopRepository->findBoardStops();
-        $fullBoard  = $portBoardBuilder->build(
-            $boardStops,
-            $departureStatusRepository->findForBoard($today, self::PORT_BOARD_DAYS),
-            $today,
-            self::PORT_BOARD_DAYS,
-        );
+        $fullBoard  = $this->buildFullBoard($boardStops, $today);
 
         // トップはクエリを見ず Cookie だけを読む（保存・リダイレクトはしない）
         $resolution = $portFilterResolver->resolveFromCookie($request, $boardStops);
@@ -126,15 +129,10 @@ class StatusController extends AbstractController
         ]);
     }
 
-    /** 港別ページに出す日数（今日〜3日先） */
-    private const PORT_BOARD_DAYS = 4;
-
     #[Route('/ports', name: 'app_status_ports')]
     public function ports(
         Request $request,
         RouteStopRepository $routeStopRepository,
-        DepartureStatusRepository $departureStatusRepository,
-        PortBoardBuilder $portBoardBuilder,
         PortFilterResolver $portFilterResolver,
         PortAlertSummaryBuilder $portAlertSummaryBuilder,
     ): Response {
@@ -142,12 +140,7 @@ class StatusController extends AbstractController
         $resolution = $portFilterResolver->resolve($request, $boardStops);
 
         $today     = new \DateTimeImmutable('today');
-        $fullBoard = $portBoardBuilder->build(
-            $boardStops,
-            $departureStatusRepository->findForBoard($today, self::PORT_BOARD_DAYS),
-            $today,
-            self::PORT_BOARD_DAYS,
-        );
+        $fullBoard = $this->buildFullBoard($boardStops, $today);
 
         $response = $this->render('status/ports.html.twig', [
             'board'       => $fullBoard->filter($resolution->filter),
@@ -185,6 +178,21 @@ class StatusController extends AbstractController
         }
 
         return $this->varyByCookie($response);
+    }
+
+    /**
+     * 全港・今日〜3日先のボード。
+     *
+     * @param list<array{direction: \App\Enum\RouteDirectionEnum, departurePorts: list<\App\Entity\Port>, arrivalPort: \App\Entity\Port}> $boardStops
+     */
+    private function buildFullBoard(array $boardStops, \DateTimeImmutable $today): PortBoard
+    {
+        return $this->portBoardBuilder->build(
+            $boardStops,
+            $this->departureStatusRepository->findForBoard($today, self::PORT_BOARD_DAYS),
+            $today,
+            self::PORT_BOARD_DAYS,
+        );
     }
 
     /** Cookie で中身が変わるページを共有キャッシュに載せない（research R15） */

@@ -514,15 +514,33 @@ class StatusControllerTest extends WebTestCase
         $this->assertCount(0, $crawler->filter('a.ports-cta'));
     }
 
-    /** トップはクエリを見ない（保存もリダイレクトもしない） */
-    public function testIndexIgnoresSaveQuery(): void
+    /** トップはクエリを見ない（絞り込みも保存もリダイレクトもしない） */
+    public function testIndexIgnoresQuery(): void
     {
         $this->createPortBoardData();
 
-        $this->client->request('GET', '/?port=' . $this->portId('名瀬') . '&save=1');
+        $crawler = $this->client->request('GET', '/?port=' . $this->portId('名瀬') . '&dir=down&save=1');
 
         $this->assertResponseIsSuccessful();
         $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+        $this->assertCount(0, $crawler->filter('.saved-today'));
+        $this->assertCount(1, $crawler->filter('a.ports-cta'));
+    }
+
+    /** 保存した条件に合う行が無い（その方向では出発港にならない港）ときは、空の箱ではなく文言を出す */
+    public function testIndexSavedFilterWithoutRowsShowsMessage(): void
+    {
+        $this->createPortBoardData();
+        // テストデータは下りの航路だけなので、「鹿児島発・上り」は港も方向も正しいが、合う行が無い
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('鹿児島') . '&dir=up'));
+
+        $crawler = $this->client->request('GET', '/');
+
+        $this->assertResponseIsSuccessful();
+        $saved = $crawler->filter('.saved-today');
+        $this->assertCount(1, $saved);
+        $this->assertCount(0, $saved->filter('.card'));
+        $this->assertStringContainsString('条件に合う便はありません。', $saved->text());
     }
 
     public function testIndexClearsInvalidCookie(): void
