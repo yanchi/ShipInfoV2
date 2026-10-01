@@ -15,9 +15,9 @@
 
 **Purpose**: 実行環境と設定、テスト用の実ページの保存
 
-- [ ] T001 `docker-compose.yml` の `scraper` サービスの `environment` に `TZ: Asia/Tokyo` を追加する（research R6）。`docker compose up -d --force-recreate scraper` のあと、`docker compose exec scraper python -c "import datetime; print(datetime.datetime.now())"` がホストの JST と一致することを確認する
-- [ ] T002 [P] `scraper/scraper/config.py` の `Settings` に `marue_search_days_ahead: int`（環境変数 `MARUE_SEARCH_DAYS_AHEAD`、既定 3）、`marue_far_search_interval_hours: int`（`MARUE_FAR_SEARCH_INTERVAL_HOURS`、既定 6）、`marue_search_delay_seconds: float`（`MARUE_SEARCH_DELAY_SECONDS`、既定 0.5）を追加する（research R8）
-- [ ] T003 [P] 実サイトのページを取得して `scraper/tests/fixtures/` に保存する（UTF-8）。GET は `curl -s <URL> -o <保存先>`、マルエーの検索は `curl -s -X POST https://www.aline-ferry.com/search/result.php --data-urlencode "startDate=YYYY年MM月DD日" --data "startPort=<コード>&endPort=<コード>" -o <保存先>` で取る（日付は必ず `YYYY年MM月DD日` 形式）
+- [X] T001 `docker-compose.yml` の `scraper` サービスの `environment` に `TZ: Asia/Tokyo` を追加する（research R6）。`docker compose up -d --force-recreate scraper` のあと、`docker compose exec scraper python -c "import datetime; print(datetime.datetime.now())"` がホストの JST と一致することを確認する
+- [X] T002 [P] `scraper/scraper/config.py` の `Settings` に `marue_search_days_ahead: int`（環境変数 `MARUE_SEARCH_DAYS_AHEAD`、既定 3）、`marue_far_search_interval_hours: int`（`MARUE_FAR_SEARCH_INTERVAL_HOURS`、既定 6）、`marue_search_delay_seconds: float`（`MARUE_SEARCH_DELAY_SECONDS`、既定 0.5）を追加する（research R8）
+- [X] T003 [P] 実サイトのページを取得して `scraper/tests/fixtures/` に保存する（UTF-8）。GET は `curl -s <URL> -o <保存先>`、マルエーの検索は `curl -s -X POST https://www.aline-ferry.com/search/result.php --data-urlencode "startDate=YYYY年MM月DD日" --data "startPort=<コード>&endPort=<コード>" -o <保存先>` で取る（日付は必ず `YYYY年MM月DD日` 形式）
   - `marix/list.html`：`https://marixline.com/service/`
   - `marix/upstream_conditional.html`：一覧からリンクされている上り便の詳細ページ（与論・和泊が条件付の例。手に入らなければ取得した詳細ページの `div.single` の class を書き換えて作る）
   - `marix/downstream.html`：一覧からリンクされている下り便の詳細ページ

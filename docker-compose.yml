@@ -65,6 +65,7 @@ services:
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
       SCRAPER_INTERVAL_MINUTES: "${SCRAPER_INTERVAL_MINUTES:-30}"
+      TZ: Asia/Tokyo
     depends_on:
       mysql:
         condition: service_healthy
