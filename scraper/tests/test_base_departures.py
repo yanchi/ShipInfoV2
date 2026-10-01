@@ -184,6 +184,45 @@ def test_freeze_keeps_departed_row_untouched(db_session, setup):
     assert (row.status, row.checked_at, row.scraped_at, row.content_hash) == before
 
 
+def test_freeze_uses_new_departure_time_when_delayed(db_session, setup):
+    """18:00 発で記録した便が 21:00 発に遅れた → 18:00 を過ぎても、まだ港にいるので更新する。"""
+    scraper, _, route, port = setup
+    old_dep = datetime.now() - timedelta(minutes=30)
+    new_dep = datetime.now() + timedelta(hours=2)
+    rec = _rec(route, port, scheduled_departure_at=old_dep, freeze_after_departure=True)
+    db_session.add(
+        DepartureStatus(
+            route_id=route.id,
+            port_id=port.id,
+            departure_date=rec["departure_date"],
+            ship_name=rec["ship_name"],
+            status="operating",
+            scheduled_departure_at=old_dep,
+            content_hash=scraper._departure_hash(rec),
+            scraped_at=old_dep - timedelta(hours=1),
+            checked_at=old_dep - timedelta(hours=1),
+        )
+    )
+    db_session.commit()
+
+    _, updated = scraper._upsert_departures(
+        [
+            dict(
+                rec,
+                scheduled_departure_at=new_dep,
+                status=OperationStatusEnum.delayed,
+                status_detail="遅延",
+            )
+        ]
+    )
+    db_session.commit()
+
+    row = _rows(db_session)[0]
+    assert updated == 1
+    assert row.status == "delayed"
+    assert row.scheduled_departure_at == new_dep
+
+
 def test_freeze_does_not_insert_departed_row(db_session, setup):
     """既存行が無い出港済みのレコードは INSERT しない（デプロイ直後の初回実行など）。"""
     scraper, _, route, port = setup

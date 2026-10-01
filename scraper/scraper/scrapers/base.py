@@ -204,6 +204,7 @@ class BaseScraper(ABC):
         2. content_hash が同じ → checked_at だけ更新
         3. content_hash が違う → 内容と scraped_at・checked_at を更新
         4. freeze_after_departure で出港済み → 既存行は一切更新しない。既存行が無ければ INSERT しない
+           （出港済みかは今回の出港予定で判定する。遅延で後ろにずれた便は、まだ更新する）
         5. replace_scope があれば、そのキーで今回に無い ship_name の行を消す（出港済みの行は残す）
         """
         now = datetime.now()
@@ -237,11 +238,11 @@ class BaseScraper(ABC):
             ).scalar_one_or_none()
 
             if existing is not None:
-                if (
-                    freeze
-                    and existing.scheduled_departure_at is not None
-                    and existing.scheduled_departure_at < now
-                ):
+                # 出港したかは、今回取れた出港予定（遅延で後ろにずれていればそちら）で判定する
+                departure_at = (
+                    rec.get("scheduled_departure_at") or existing.scheduled_departure_at
+                )
+                if freeze and departure_at is not None and departure_at < now:
                     continue  # 出港済みで確定（checked_at も進めない）
                 if existing.content_hash == content_hash:
                     existing.checked_at = now

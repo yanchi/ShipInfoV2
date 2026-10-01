@@ -380,14 +380,15 @@ class MarueFerry(BaseScraper):
         # 船ごとに「まだ着いていない一番早い便」(route_id, arrival_at) を決める（research R9）
         # 候補は今回の検索結果と、前回までに記録した行（DB）。上りの便は始発日の途中港を全部出てから
         # 翌朝に鹿児島へ着くので、日付が変わってから着くまでの間は、走っている便が今日以降の検索結果に
-        # 出てこない。DB の行も見ないと、船ステータスが次の便に付いてしまう
+        # 出てこない。DB の行も見ないと、船ステータスが次の便に付いてしまう。
+        # ただし検索に出てくる便は検索の時刻を正とする（出港済みの行は確定していて、遅延前の時刻のまま残るため）
         candidates: list[tuple[str, int, datetime]] = [
             (row.ship_name, route_id, row.arrival_at)
             for (route_id, _, _), rows in searches.items()
             for row in rows or []
             if not row.is_other_company and row.arrival_at is not None
         ]
-        candidates.extend(self._recorded_voyages(now))
+        candidates.extend(self._recorded_voyages(now, candidates))
         current_voyage: dict[str, tuple[int, datetime]] = {}
         for ship_name, route_id, arrival_at in candidates:
             if arrival_at <= now:
@@ -457,8 +458,15 @@ class MarueFerry(BaseScraper):
         self._log.info("parsed_departures", records=len(records))
         return records
 
-    def _recorded_voyages(self, now: datetime) -> list[tuple[str, int, datetime]]:
-        """前回までに記録した、まだ着いていない便の (船名, route_id, 下船日時)。"""
+    def _recorded_voyages(
+        self, now: datetime, searched: list[tuple[str, int, datetime]]
+    ) -> list[tuple[str, int, datetime]]:
+        """前回までに記録した、まだ着いていない便の (船名, route_id, 下船日時)。
+
+        同じ船・同じ航路で下船日時が24時間以内なら同じ便とみなす（1往復に2日以上かかるので、
+        同じ航路を1日に2回走ることはない）。今回の検索に出てくる便は検索のほうを使い、
+        記録した行どうしで時刻が違えば、最後に確認した行の時刻を使う。
+        """
         route_ids = [r.id for r in self._load_routes() if r]
         if not route_ids:
             return []
@@ -467,15 +475,36 @@ class MarueFerry(BaseScraper):
                 DepartureStatus.ship_name,
                 DepartureStatus.route_id,
                 DepartureStatus.scheduled_arrival_at,
+                func.max(DepartureStatus.checked_at).label("checked_at"),
             )
             .where(
                 DepartureStatus.route_id.in_(route_ids),
                 DepartureStatus.ship_name != "",
                 DepartureStatus.scheduled_arrival_at > now,
             )
-            .distinct()
+            .group_by(
+                DepartureStatus.ship_name,
+                DepartureStatus.route_id,
+                DepartureStatus.scheduled_arrival_at,
+            )
+            .order_by(func.max(DepartureStatus.checked_at).desc())
         ).all()
-        return [(r.ship_name, r.route_id, r.scheduled_arrival_at) for r in rows]
+
+        same_voyage = timedelta(hours=24)
+        accepted = list(searched)
+        result: list[tuple[str, int, datetime]] = []
+        for r in rows:
+            if any(
+                ship == r.ship_name
+                and route_id == r.route_id
+                and abs(arrival - r.scheduled_arrival_at) < same_voyage
+                for ship, route_id, arrival in accepted
+            ):
+                continue
+            voyage = (r.ship_name, r.route_id, r.scheduled_arrival_at)
+            accepted.append(voyage)
+            result.append(voyage)
+        return result
 
     def _current_voyage_status(
         self, ship_name: str, ships: dict[str, ShipInfo], route_id: int, port_id: int
