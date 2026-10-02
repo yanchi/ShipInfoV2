@@ -45,9 +45,11 @@ class Route
     #[ORM\Column(type: 'datetime')]
     private ?\DateTimeInterface $updatedAt = null;
 
+    /** @var Collection<int, OperationStatus> */
     #[ORM\OneToMany(mappedBy: 'route', targetEntity: OperationStatus::class)]
     private Collection $operationStatuses;
 
+    /** @var Collection<int, RouteStop> */
     #[ORM\OneToMany(mappedBy: 'route', targetEntity: RouteStop::class)]
     #[ORM\OrderBy(['stopOrder' => 'ASC'])]
     private Collection $stops;

@@ -60,6 +60,7 @@ make test-scraper  # pytestテスト
 make cs-php        # PHPのコードスタイルチェック（PHP-CS-Fixer）
 make cs-fix-php    # PHPのコードスタイル自動修正
 make lint-php      # Twig・YAML・DIコンテナのlintとDoctrineスキーマの検証
+make phpstan       # PHPStan（level 7、Symfony・Doctrine・PHPUnit拡張つき）
 make audit         # 依存パッケージの脆弱性チェック（composer audit・pip-audit）
 make lint-scraper  # Pythonのlint・フォーマットチェック（ruff）
 make format-scraper # Pythonの自動フォーマット（ruff format）

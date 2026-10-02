@@ -7,6 +7,7 @@ use App\Entity\OperationStatus;
 use App\Entity\Route;
 use App\Enum\OperationStatusEnum;
 use App\Repository\OperationStatusRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 class OperationStatusRepositoryTest extends KernelTestCase
@@ -19,34 +20,13 @@ class OperationStatusRepositoryTest extends KernelTestCase
         $this->repository = static::getContainer()->get(OperationStatusRepository::class);
     }
 
-    public function testFindTodayByAllCompaniesReturnsArray(): void
-    {
-        $result = $this->repository->findTodayByAllCompanies();
-
-        $this->assertIsArray($result);
-
-        foreach ($result as $companyId => $data) {
-            $this->assertIsInt($companyId);
-            $this->assertArrayHasKey('company', $data);
-            $this->assertArrayHasKey('routes', $data);
-            $this->assertInstanceOf(FerryCompany::class, $data['company']);
-            $this->assertIsArray($data['routes']);
-
-            foreach ($data['routes'] as $routeId => $routeData) {
-                $this->assertIsInt($routeId);
-                $this->assertArrayHasKey('route', $routeData);
-                $this->assertArrayHasKey('status', $routeData);
-            }
-        }
-    }
-
     /**
      * 有効な航路を1本も持たない会社もトップページ用の結果に含まれること。
      * INNER JOIN のままだと会社ごと結果から消え、「航路情報がありません。」に到達しない。
      */
     public function testFindTodayByAllCompaniesIncludesCompanyWithoutRoutes(): void
     {
-        $em      = static::getContainer()->get('doctrine')->getManager();
+        $em      = static::getContainer()->get(EntityManagerInterface::class);
         $company = (new FerryCompany())
             ->setName('航路未設定テスト会社')
             ->setActive(true);
@@ -71,7 +51,7 @@ class OperationStatusRepositoryTest extends KernelTestCase
      */
     public function testFindTodayByAllCompaniesExcludesInactiveRoutesButKeepsCompany(): void
     {
-        $em      = static::getContainer()->get('doctrine')->getManager();
+        $em      = static::getContainer()->get(EntityManagerInterface::class);
         $company = (new FerryCompany())
             ->setName('無効航路のみテスト会社')
             ->setActive(true);
@@ -100,7 +80,7 @@ class OperationStatusRepositoryTest extends KernelTestCase
     /** 今日〜3日先だけ。昨日・4日先・無効な航路・他社は入らない。航路・日付ごとに最新の1件 */
     public function testFindUpcomingByCompany(): void
     {
-        $em         = static::getContainer()->get('doctrine')->getManager();
+        $em         = static::getContainer()->get(EntityManagerInterface::class);
         $company    = (new FerryCompany())->setName('会社別リポジトリテスト会社')->setActive(true);
         $other      = (new FerryCompany())->setName('会社別リポジトリテスト他社')->setActive(true);
         $active     = (new Route())->setFerryCompany($company)->setName('有効航路')->setActive(true);

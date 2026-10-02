@@ -57,6 +57,13 @@ jobs:
         working-directory: app
         run: vendor/bin/php-cs-fixer check --diff
 
+      # phpstan.dist.neon が test 環境のコンテナ情報（var/cache/test）を読むので、先にキャッシュを作る
+      - name: PHPStan
+        working-directory: app
+        run: |
+          php bin/console cache:warmup --env=test --quiet
+          vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
       # ローカル（docker-compose.yml の --default-time-zone）と同じ日本時間にする。
       # サービスコンテナは command を変えられないので、ここで設定する（以降の接続から効く）
       - name: Set MySQL time zone

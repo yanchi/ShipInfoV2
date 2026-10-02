@@ -26,7 +26,7 @@ class DepartureStatusRepositoryTest extends KernelTestCase
     {
         self::bootKernel();
         $this->repository = static::getContainer()->get(DepartureStatusRepository::class);
-        $this->em         = static::getContainer()->get('doctrine')->getManager();
+        $this->em         = static::getContainer()->get(EntityManagerInterface::class);
     }
 
     protected function tearDown(): void
@@ -240,7 +240,7 @@ class DepartureStatusRepositoryTest extends KernelTestCase
 
         $result = $this->repository->findLatestCheckedAtByCompany($today);
 
-        $this->assertSame($today->setTime(7, 30)->format('Y-m-d H:i:s'), $result[$main->getId()]->format('Y-m-d H:i:s'));
+        $this->assertSame($today->setTime(7, 30)->format('Y-m-d H:i:s'), $result[(int) $main->getId()]->format('Y-m-d H:i:s'));
         $this->assertArrayNotHasKey($inactive->getId(), $result);
         $this->assertArrayNotHasKey($old->getId(), $result);
     }

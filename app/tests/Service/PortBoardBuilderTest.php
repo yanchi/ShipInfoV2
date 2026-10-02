@@ -301,7 +301,11 @@ class PortBoardBuilderTest extends TestCase
         $this->fail("row not found: {$dayIndex} {$direction->value} {$portName}");
     }
 
-    /** @param list<PortBoardRow> $rows */
+    /**
+     * @param list<PortBoardRow> $rows
+     *
+     * @return list<string>
+     */
     private function portNames(array $rows): array
     {
         return array_map(static fn (PortBoardRow $r) => $r->port->getName(), $rows);

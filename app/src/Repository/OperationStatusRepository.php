@@ -47,17 +47,20 @@ class OperationStatusRepository extends ServiceEntityRepository
         $routeIds = [];
 
         foreach ($ferryCompanies as $company) {
-            $result[$company->getId()] = [
+            // DB から読んだエンティティなので ID は必ずある
+            $companyId          = (int) $company->getId();
+            $result[$companyId] = [
                 'company' => $company,
                 'routes'  => [],
             ];
             foreach ($company->getRoutes() as $route) {
                 if ($route->isActive()) {
-                    $result[$company->getId()]['routes'][$route->getId()] = [
+                    $routeId                                = (int) $route->getId();
+                    $result[$companyId]['routes'][$routeId] = [
                         'route'  => $route,
                         'status' => null,
                     ];
-                    $routeIds[] = $route->getId();
+                    $routeIds[] = $routeId;
                 }
             }
         }
@@ -95,8 +98,8 @@ class OperationStatusRepository extends ServiceEntityRepository
             $statuses = $this->findBy(['id' => $ids]);
 
             foreach ($statuses as $status) {
-                $routeId   = $status->getRoute()->getId();
-                $companyId = $status->getRoute()->getFerryCompany()->getId();
+                $routeId   = (int) $status->getRoute()->getId();
+                $companyId = (int) $status->getRoute()->getFerryCompany()->getId();
                 if (isset($result[$companyId]['routes'][$routeId])) {
                     $result[$companyId]['routes'][$routeId]['status'] = $status;
                 }

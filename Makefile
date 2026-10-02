@@ -1,7 +1,7 @@
 .PHONY: help up up-tools down build logs logs-php logs-scraper \
         shell-php shell-scraper \
         migrate migrate-diff fixtures cache-clear \
-        test-php test-scraper lint-scraper format-scraper cs-php cs-fix-php lint-php audit \
+        test-php test-scraper lint-scraper format-scraper cs-php cs-fix-php lint-php phpstan audit \
         init init-test-db reset-test-db check-test-token
 
 DOCKER_COMPOSE = docker compose
@@ -69,6 +69,10 @@ cs-php: ## Check PHP code style (PHP-CS-Fixer, no changes)
 
 cs-fix-php: ## Fix PHP code style (PHP-CS-Fixer)
 	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) vendor/bin/php-cs-fixer fix
+
+phpstan: ## Run PHPStan static analysis
+	$(DOCKER_COMPOSE) exec -T -e TEST_TOKEN=$(TEST_TOKEN) $(PHP_SERVICE) bin/console cache:warmup --env=test --quiet
+	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) vendor/bin/phpstan analyse --memory-limit=1G
 
 # schema:validate はテスト DB で見る（01_schema.sql + マイグレーションで作るので CI・本番と同じ形になる）
 lint-php: check-test-token ## Lint Twig/YAML/DI container and validate Doctrine mapping
