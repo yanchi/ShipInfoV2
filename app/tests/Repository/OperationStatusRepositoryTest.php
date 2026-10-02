@@ -127,7 +127,7 @@ class OperationStatusRepositoryTest extends KernelTestCase
         $em->flush();
 
         try {
-            $result = $this->repository->findUpcomingByCompany($company, 4);
+            $result = $this->repository->findUpcomingByCompany($company, $today, 4);
 
             $this->assertSame([$today->format('Y-m-d'), $today->modify('+3 days')->format('Y-m-d')], array_keys($result));
             $this->assertCount(1, $result[$today->format('Y-m-d')]);

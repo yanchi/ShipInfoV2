@@ -23,6 +23,12 @@ final readonly class PortBoardEntry
     ) {
     }
 
+    /** 便がある（発表済み・運航予定）。情報なし・便なしは便として数えない */
+    public function isDeparture(): bool
+    {
+        return \in_array($this->state, [DepartureDisplayStateEnum::Status, DepartureDisplayStateEnum::Scheduled], true);
+    }
+
     /** 欠航・条件付・遅延・運休（異常の要約に入れ、行を目立たせる） */
     public function isAlert(): bool
     {

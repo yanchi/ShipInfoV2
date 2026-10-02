@@ -43,7 +43,7 @@
                 </ul>
             {% endif %}
 
-            {% if day.state.value == 'services' %}
+            {% if day.state is same as constant('App\\Enum\\CompanyDayStateEnum::Services') %}
                 {% for direction in day.board.directions %}
                     {%- set commonCheckedAt = direction.commonCheckedAt -%}
                     <h3 class="h6 text-muted mt-3 mb-2 d-flex flex-wrap column-gap-2">
@@ -65,7 +65,7 @@
                         </ul>
                     </div>
                 {% endfor %}
-            {% elseif day.state.value == 'no_service' %}
+            {% elseif day.state is same as constant('App\\Enum\\CompanyDayStateEnum::NoService') %}
                 <p class="company-day-state">{{ include('status/_status_badge.html.twig', {state: constant('App\\Enum\\DepartureDisplayStateEnum::NoService')}) }}</p>
             {% else %}
                 <p class="company-day-state">{{ include('status/_status_badge.html.twig', {state: constant('App\\Enum\\DepartureDisplayStateEnum::NoInfo')}) }}</p>

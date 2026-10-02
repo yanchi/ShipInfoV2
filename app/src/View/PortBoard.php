@@ -2,8 +2,6 @@
 
 namespace App\View;
 
-use App\Enum\DepartureDisplayStateEnum;
-
 /**
  * 港別運航情報ページのビューモデル（今日〜n日先）。
  */
@@ -70,8 +68,7 @@ final readonly class PortBoard
                 foreach ($direction->rows as $row) {
                     $entries = array_values(array_filter(
                         $row->entries,
-                        static fn (PortBoardEntry $e) => $e->companyId === $companyId
-                            && \in_array($e->state, [DepartureDisplayStateEnum::Status, DepartureDisplayStateEnum::Scheduled], true),
+                        static fn (PortBoardEntry $e) => $e->companyId === $companyId && $e->isDeparture(),
                     ));
                     if ($entries !== []) {
                         $rows[] = new PortBoardRow($row->port, $entries);

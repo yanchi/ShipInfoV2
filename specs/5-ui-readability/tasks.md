@@ -332,6 +332,7 @@
 - [X] T066 全ステータスを出したページをグレースケール（開発者ツールの「Emulate vision deficiencies → Achromatopsia」）で見て、記号と文言だけで区別できることを確認する（SC-007）
 - [X] T067 quickstart.md の「PR3」の手順を全部実際に行う（スクレイパーを止めてから。終わったら `make scraper-run` と `docker compose start scraper` で戻す）
 - [X] T068 push して PR を作る。説明に US5・US6 との対応、削除した `findRecentByCompany()` とそのテスト、「← トップへ戻る」を消したことを書く
+- [X] T068a PR #35 のレビュー対応：無効な会社のページは 404 にする。古さの判定を `DataFreshnessChecker`（Service）に出し、閾値の時間数を戻り値 `staleHours` で文言にも使う。Twig は `SiteExtension` と `SiteRuntime`（`RuntimeExtensionInterface`）に分ける。`findUpcomingByCompany()` は「今日」を引数で受け取る。「便がある」の判定を `PortBoardEntry::isDeparture()` にまとめる。テンプレートの Enum の比較を `is same as constant(...)` にする
 
 ---
 

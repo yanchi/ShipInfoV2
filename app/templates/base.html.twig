@@ -70,7 +70,7 @@
         {% if freshness.isStale %}
             <div class="container mt-2">
                 <div class="site-freshness alert alert-warning py-2 small mb-0" role="alert">
-                    情報が古い可能性があります（{{ freshness.staleCompanies|join('、') }} の情報が2時間以上更新されていません）
+                    情報が古い可能性があります（{{ freshness.staleCompanies|join('、') }} の情報が{{ freshness.staleHours }}時間以上更新されていません）
                     {%- if freshness.checkedAt %}。最終確認 {{ freshness.checkedAt|date('n/j H:i') }}{% endif %}
                 </div>
             </div>

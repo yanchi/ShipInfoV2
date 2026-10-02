@@ -107,14 +107,14 @@ class OperationStatusRepository extends ServiceEntityRepository
     }
 
     /**
-     * 会社別ページ用: 今日〜$days-1 日先の、その会社の有効な航路の運航状況（航路・日付ごとに最新の1件）。
-     * 情報がある日・航路だけを返す。
+     * 会社別ページ用: $today〜$days-1 日先の、その会社の有効な航路の運航状況（航路・日付ごとに最新の1件）。
+     * 情報がある日・航路だけを返す。$today は呼び出し側から受け取る（ボードと同じ日付にそろえるため）。
      *
      * @return array<string, list<OperationStatus>> [Y-m-d => 航路 ID 順]
      */
-    public function findUpcomingByCompany(FerryCompany $company, int $days): array
+    public function findUpcomingByCompany(FerryCompany $company, \DateTimeImmutable $today, int $days): array
     {
-        $today = new \DateTimeImmutable('today');
+        $today = $today->setTime(0, 0);
         $to    = $today->modify(sprintf('+%d days', $days - 1));
 
         $sql = "

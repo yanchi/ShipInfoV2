@@ -115,6 +115,8 @@ CSRF トークンは `symfony/security-csrf` の stateless トークンを使う
 
 全ページで使うので、Twig 拡張 `SiteExtension` の関数（`site_freshness()`）で base レイアウトから呼ぶ。`SiteExtension` はリクエストの中で結果を覚えておき、同じクエリを2回走らせない（PR #31 レビュー）。
 
+**更新（PR #35 レビュー）**: 古さの判定はロジックなので Service（`DataFreshnessChecker`）に出し、Twig は `SiteExtension`（関数の定義）と `SiteRuntime`（中身、`RuntimeExtensionInterface`）に分けた。結果を覚えておくのは `DataFreshnessChecker`（`ResetInterface` で kernel.reset のときに忘れる）。閾値の2時間は `DataFreshnessChecker::STALE_AFTER_HOURS` だけに書き、警告の文言は戻り値の `staleHours` を出す。
+
 **Rationale**:
 - サイト全体の `MAX(checked_at)` だと、1社のスクレイパーが止まっても、もう1社が動いていれば警告が出ない。その間、止まった会社の古い「通常運航」が表示され続ける（PR #31 レビュー）
 - `checked_at` は出港前の行ならスクレイパーが実行のたびに更新するので、スクレイパーが止まれば止まった時刻のまま残る。2 時間経てば4回分の失敗になる

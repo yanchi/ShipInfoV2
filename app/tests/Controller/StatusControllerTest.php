@@ -271,6 +271,17 @@ class StatusControllerTest extends WebTestCase
         $this->assertCount(1, $today->filter('li.port-row'));
     }
 
+    /** 無効な会社は 404（港別ボードにも共通ヘッダーにも出ないため） */
+    public function testCompanyPageReturns404ForInactiveCompany(): void
+    {
+        $company = (new FerryCompany())->setName('無効テスト会社')->setActive(false);
+        $id      = $this->persistCompany($company);
+
+        $this->client->request('GET', "/company/{$id}");
+
+        $this->assertResponseStatusCodeSame(404);
+    }
+
     public function testCompanyPageReturns404ForNonExistentId(): void
     {
         $this->client->request('GET', '/company/999999');

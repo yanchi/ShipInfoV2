@@ -1,33 +1,35 @@
 <?php
 
-namespace App\Tests\Twig;
+namespace App\Tests\Service;
 
 use App\Entity\FerryCompany;
 use App\Repository\DepartureStatusRepository;
 use App\Repository\FerryCompanyRepository;
-use App\Twig\SiteExtension;
+use App\Service\DataFreshnessChecker;
 use PHPUnit\Framework\TestCase;
 
-class SiteExtensionTest extends TestCase
+class DataFreshnessCheckerTest extends TestCase
 {
     public function testFreshWhenAllCompaniesAreRecent(): void
     {
         $older = new \DateTimeImmutable('-70 minutes');
-        $ext   = $this->extension([1 => new \DateTimeImmutable('-30 minutes'), 2 => $older]);
+        $checker   = $this->checker([1 => new \DateTimeImmutable('-30 minutes'), 2 => $older]);
 
-        $freshness = $ext->freshness();
+        $freshness = $checker->check();
 
         $this->assertFalse($freshness['isStale']);
         $this->assertSame([], $freshness['staleCompanies']);
+        // 警告の文言に出す時間数は判定の閾値と同じ
+        $this->assertSame(DataFreshnessChecker::STALE_AFTER_HOURS, $freshness['staleHours']);
         // 表示するのは一番古い会社の時刻
         $this->assertEquals($older, $freshness['checkedAt']);
     }
 
     public function testStaleWhenOneCompanyIsOld(): void
     {
-        $ext = $this->extension([1 => new \DateTimeImmutable('-30 minutes'), 2 => new \DateTimeImmutable('-3 hours')]);
+        $checker = $this->checker([1 => new \DateTimeImmutable('-30 minutes'), 2 => new \DateTimeImmutable('-3 hours')]);
 
-        $freshness = $ext->freshness();
+        $freshness = $checker->check();
 
         $this->assertTrue($freshness['isStale']);
         $this->assertSame(['マリックスライン'], $freshness['staleCompanies']);
@@ -37,9 +39,9 @@ class SiteExtensionTest extends TestCase
     public function testStaleWhenCompanyHasNoRows(): void
     {
         $recent = new \DateTimeImmutable('-30 minutes');
-        $ext    = $this->extension([1 => $recent]);
+        $checker    = $this->checker([1 => $recent]);
 
-        $freshness = $ext->freshness();
+        $freshness = $checker->check();
 
         $this->assertTrue($freshness['isStale']);
         $this->assertSame(['マリックスライン'], $freshness['staleCompanies']);
@@ -52,13 +54,10 @@ class SiteExtensionTest extends TestCase
         $departures->expects($this->once())->method('findLatestCheckedAtByCompany')->willReturn([]);
         $companies = $this->createMock(FerryCompanyRepository::class);
         $companies->expects($this->once())->method('findBoardCompanies')->willReturn([]);
-        $companies->expects($this->once())->method('findActive')->willReturn([]);
-        $ext = new SiteExtension($departures, $companies);
+        $checker = new DataFreshnessChecker($departures, $companies);
 
-        $ext->freshness();
-        $ext->freshness();
-        $ext->companies();
-        $ext->companies();
+        $checker->check();
+        $checker->check();
     }
 
     public function testResetForgetsResults(): void
@@ -67,22 +66,22 @@ class SiteExtensionTest extends TestCase
         $departures->expects($this->exactly(2))->method('findLatestCheckedAtByCompany')->willReturn([]);
         $companies = $this->createMock(FerryCompanyRepository::class);
         $companies->method('findBoardCompanies')->willReturn([]);
-        $ext = new SiteExtension($departures, $companies);
+        $checker = new DataFreshnessChecker($departures, $companies);
 
-        $ext->freshness();
-        $ext->reset();
-        $ext->freshness();
+        $checker->check();
+        $checker->reset();
+        $checker->check();
     }
 
     /** @param array<int, \DateTimeImmutable> $latest */
-    private function extension(array $latest): SiteExtension
+    private function checker(array $latest): DataFreshnessChecker
     {
         $departures = $this->createStub(DepartureStatusRepository::class);
         $departures->method('findLatestCheckedAtByCompany')->willReturn($latest);
         $companies = $this->createStub(FerryCompanyRepository::class);
         $companies->method('findBoardCompanies')->willReturn([$this->company(1, 'マルエーフェリー'), $this->company(2, 'マリックスライン')]);
 
-        return new SiteExtension($departures, $companies);
+        return new DataFreshnessChecker($departures, $companies);
     }
 
     private function company(int $id, string $name): FerryCompany

@@ -135,7 +135,8 @@ class StatusController extends AbstractController
         CompanyDaysBuilder $companyDaysBuilder,
     ): Response {
         $company = $ferryCompanyRepository->find($id);
-        if ($company === null) {
+        // 無効な会社は港別ボードにも共通ヘッダーにも出ないので、ページも出さない
+        if ($company === null || !$company->isActive()) {
             throw $this->createNotFoundException("フェリー会社 ID:{$id} は存在しません。");
         }
 
@@ -148,7 +149,7 @@ class StatusController extends AbstractController
                 $company->getId(),
                 $this->buildFullBoard($routeStopRepository->findBoardStops(), $today, $statuses),
                 $statuses,
-                $operationStatusRepository->findUpcomingByCompany($company, self::PORT_BOARD_DAYS),
+                $operationStatusRepository->findUpcomingByCompany($company, $today, self::PORT_BOARD_DAYS),
             ),
             'now'     => new \DateTimeImmutable(),
         ]);

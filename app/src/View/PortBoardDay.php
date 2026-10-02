@@ -2,7 +2,6 @@
 
 namespace App\View;
 
-use App\Enum\DepartureDisplayStateEnum;
 use App\Enum\RouteDirectionEnum;
 
 final readonly class PortBoardDay
@@ -28,8 +27,7 @@ final readonly class PortBoardDay
             }
             foreach ($d->rows as $row) {
                 foreach ($row->entries as $entry) {
-                    if ($entry->companyId === $companyId
-                        && \in_array($entry->state, [DepartureDisplayStateEnum::Status, DepartureDisplayStateEnum::Scheduled], true)) {
+                    if ($entry->companyId === $companyId && $entry->isDeparture()) {
                         return true;
                     }
                 }
