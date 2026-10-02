@@ -13,3 +13,9 @@ include = ["scraper*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+# ruff 0.4 のときのデフォルトに固定する（0.16 でデフォルトが増え、DTZ など方針と合わないルールが入ったため）。
+# 時刻はすべて日本時間の naive な datetime で扱う（CLAUDE.md）ので、DTZ は使わない。
+# ルールを増やすときは、ここに足していく
+select = ["E4", "E7", "E9", "F"]

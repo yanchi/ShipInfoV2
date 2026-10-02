@@ -54,9 +54,11 @@ def fixed_now(now: datetime = NOW):
         def now(cls, tz=None):
             return now
 
-    with patch("scraper.scrapers.marue_ferry.date", _Date), patch(
-        "scraper.scrapers.marue_ferry.datetime", _DateTime
-    ), patch("scraper.scrapers.base.datetime", _DateTime):
+    with (
+        patch("scraper.scrapers.marue_ferry.date", _Date),
+        patch("scraper.scrapers.marue_ferry.datetime", _DateTime),
+        patch("scraper.scrapers.base.datetime", _DateTime),
+    ):
         yield
 
 
