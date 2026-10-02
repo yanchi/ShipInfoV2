@@ -1,7 +1,7 @@
 .PHONY: help up up-tools down build logs logs-php logs-scraper \
         shell-php shell-scraper \
         migrate migrate-diff fixtures cache-clear \
-        test-php test-scraper lint-scraper format-scraper cs-php cs-fix-php \
+        test-php test-scraper lint-scraper format-scraper cs-php cs-fix-php lint-php audit \
         init init-test-db reset-test-db check-test-token
 
 DOCKER_COMPOSE = docker compose
@@ -70,6 +70,13 @@ cs-php: ## Check PHP code style (PHP-CS-Fixer, no changes)
 cs-fix-php: ## Fix PHP code style (PHP-CS-Fixer)
 	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) vendor/bin/php-cs-fixer fix
 
+# schema:validate はテスト DB で見る（01_schema.sql + マイグレーションで作るので CI・本番と同じ形になる）
+lint-php: check-test-token ## Lint Twig/YAML/DI container and validate Doctrine mapping
+	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) bin/console lint:twig templates
+	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) bin/console lint:yaml config --parse-tags
+	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) bin/console lint:container
+	$(DOCKER_COMPOSE) exec -T -e TEST_TOKEN=$(TEST_TOKEN) $(PHP_SERVICE) bin/console doctrine:schema:validate --env=test
+
 # 最初のマイグレーションは 01_schema.sql が作ったテーブルを ALTER するので、
 # 空の DB に migrate するだけでは初期化できない。01_schema.sql を流してから migrate する。
 # 02_seed.sql は入れない（テストは自分でデータを作る。港マスタはマイグレーションが入れる）。
@@ -110,6 +117,12 @@ lint-scraper: ## Lint and check formatting of Python code with ruff
 
 format-scraper: ## Format Python code with ruff
 	$(DOCKER_COMPOSE) exec $(SCRAPER_SERVICE) ruff format scraper/ tests/
+
+# ─── Security ───────────────────────────────────────────────────
+
+audit: ## Check PHP and Python dependencies for known vulnerabilities
+	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) composer audit
+	$(DOCKER_COMPOSE) exec $(SCRAPER_SERVICE) pip-audit -r requirements.txt -r requirements-dev.txt
 
 # ─── First-time setup ───────────────────────────────────────────
 
