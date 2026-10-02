@@ -55,7 +55,7 @@ class Route
     public function __construct()
     {
         $this->operationStatuses = new ArrayCollection();
-        $this->stops = new ArrayCollection();
+        $this->stops             = new ArrayCollection();
     }
 
     #[ORM\PrePersist]
@@ -71,25 +71,102 @@ class Route
         $this->updatedAt = new \DateTime();
     }
 
-    public function getId(): ?int { return $this->id; }
-    public function getFerryCompany(): ?FerryCompany { return $this->ferryCompany; }
-    public function setFerryCompany(?FerryCompany $ferryCompany): static { $this->ferryCompany = $ferryCompany; return $this; }
-    public function getName(): string { return $this->name; }
-    public function setName(string $name): static { $this->name = $name; return $this; }
-    public function getOriginPort(): ?string { return $this->originPort; }
-    public function setOriginPort(?string $originPort): static { $this->originPort = $originPort; return $this; }
-    public function getDestinationPort(): ?string { return $this->destinationPort; }
-    public function setDestinationPort(?string $destinationPort): static { $this->destinationPort = $destinationPort; return $this; }
-    public function getDirection(): ?RouteDirectionEnum { return $this->direction; }
-    public function setDirection(?RouteDirectionEnum $direction): static { $this->direction = $direction; return $this; }
-    public function isActive(): bool { return $this->active; }
-    public function setActive(bool $active): static { $this->active = $active; return $this; }
-    public function getCreatedAt(): ?\DateTimeInterface { return $this->createdAt; }
-    public function getUpdatedAt(): ?\DateTimeInterface { return $this->updatedAt; }
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getFerryCompany(): ?FerryCompany
+    {
+        return $this->ferryCompany;
+    }
+
+    public function setFerryCompany(?FerryCompany $ferryCompany): static
+    {
+        $this->ferryCompany = $ferryCompany;
+
+        return $this;
+    }
+
+    public function getName(): string
+    {
+        return $this->name;
+    }
+
+    public function setName(string $name): static
+    {
+        $this->name = $name;
+
+        return $this;
+    }
+
+    public function getOriginPort(): ?string
+    {
+        return $this->originPort;
+    }
+
+    public function setOriginPort(?string $originPort): static
+    {
+        $this->originPort = $originPort;
+
+        return $this;
+    }
+
+    public function getDestinationPort(): ?string
+    {
+        return $this->destinationPort;
+    }
+
+    public function setDestinationPort(?string $destinationPort): static
+    {
+        $this->destinationPort = $destinationPort;
+
+        return $this;
+    }
+
+    public function getDirection(): ?RouteDirectionEnum
+    {
+        return $this->direction;
+    }
+
+    public function setDirection(?RouteDirectionEnum $direction): static
+    {
+        $this->direction = $direction;
+
+        return $this;
+    }
+
+    public function isActive(): bool
+    {
+        return $this->active;
+    }
+
+    public function setActive(bool $active): static
+    {
+        $this->active = $active;
+
+        return $this;
+    }
+
+    public function getCreatedAt(): ?\DateTimeInterface
+    {
+        return $this->createdAt;
+    }
+
+    public function getUpdatedAt(): ?\DateTimeInterface
+    {
+        return $this->updatedAt;
+    }
 
     /** @return Collection<int, OperationStatus> */
-    public function getOperationStatuses(): Collection { return $this->operationStatuses; }
+    public function getOperationStatuses(): Collection
+    {
+        return $this->operationStatuses;
+    }
 
     /** @return Collection<int, RouteStop> */
-    public function getStops(): Collection { return $this->stops; }
+    public function getStops(): Collection
+    {
+        return $this->stops;
+    }
 }

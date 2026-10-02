@@ -40,13 +40,44 @@ class Port
         $this->updatedAt = new \DateTime();
     }
 
-    public function getId(): ?int { return $this->id; }
-    public function getName(): string { return $this->name; }
-    public function setName(string $name): static { $this->name = $name; return $this; }
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getName(): string
+    {
+        return $this->name;
+    }
+
+    public function setName(string $name): static
+    {
+        $this->name = $name;
+
+        return $this;
+    }
+
     /** @return list<string> */
-    public function getAliases(): array { return $this->aliases; }
+    public function getAliases(): array
+    {
+        return $this->aliases;
+    }
+
     /** @param list<string> $aliases */
-    public function setAliases(array $aliases): static { $this->aliases = $aliases; return $this; }
-    public function getCreatedAt(): ?\DateTimeInterface { return $this->createdAt; }
-    public function getUpdatedAt(): ?\DateTimeInterface { return $this->updatedAt; }
+    public function setAliases(array $aliases): static
+    {
+        $this->aliases = $aliases;
+
+        return $this;
+    }
+
+    public function getCreatedAt(): ?\DateTimeInterface
+    {
+        return $this->createdAt;
+    }
+
+    public function getUpdatedAt(): ?\DateTimeInterface
+    {
+        return $this->updatedAt;
+    }
 }

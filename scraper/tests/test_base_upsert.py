@@ -6,6 +6,7 @@ BaseScraper._upsert のDBレベル動作テスト。
 - HTMLが変わったときは既存レコードを更新
 - created / updated カウントが正確に返る
 """
+
 import hashlib
 from datetime import date, datetime
 
@@ -20,6 +21,7 @@ from scraper.scrapers.base import BaseScraper
 # テスト用の最小限 BaseScraper 実装
 # ---------------------------------------------------------------------------
 
+
 class _StubScraper(BaseScraper):
     """_upsert のみテストするためのスタブ実装。"""
 
@@ -33,6 +35,7 @@ class _StubScraper(BaseScraper):
 # ---------------------------------------------------------------------------
 # フィクスチャ
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def company_and_route(db_session):
@@ -70,6 +73,7 @@ def scraper(db_session, company_and_route):
 # ---------------------------------------------------------------------------
 # テスト
 # ---------------------------------------------------------------------------
+
 
 def test_upsert_creates_new_record(db_session, scraper, company_and_route):
     """存在しない route_id + valid_date に対して新規レコードが作成される。"""

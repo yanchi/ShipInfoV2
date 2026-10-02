@@ -47,7 +47,7 @@ class PortBoardBuilder
         }
 
         $boardDays = [];
-        for ($i = 0; $i < $days; $i++) {
+        for ($i = 0; $i < $days; ++$i) {
             $date       = $today->modify("+{$i} days");
             $directions = [];
             foreach ($boardStops as $stops) {
@@ -66,6 +66,7 @@ class PortBoardBuilder
 
     /**
      * @param list<DepartureStatus> $statuses
+     *
      * @return list<PortBoardEntry>
      */
     private function entries(array $statuses, \DateTimeImmutable $date, \DateTimeImmutable $today): array

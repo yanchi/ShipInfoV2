@@ -81,6 +81,7 @@ class StatusController extends AbstractController
      * だから港別ボードの便（発表済み・運航予定）も見る。航路が無い会社・情報なしの航路がある会社はカードのまま。
      *
      * @param array<int, array{company: FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: ?OperationStatus}>}> $companies
+     *
      * @return array{0: list<array{company: FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: ?OperationStatus}>}>, 1: list<FerryCompany>}
      */
     private function splitIdleCompanies(array $companies, ?PortBoardDay $today): array
@@ -107,6 +108,7 @@ class StatusController extends AbstractController
      * 航路単位では no_service でも、今日その方向の便が途中の港を出る航路（会社カードで「— 便なし」と出さない。tasks T054a）。
      *
      * @param list<array{company: FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: ?OperationStatus}>}> $companies
+     *
      * @return array<int, true> [routeId => true]
      */
     private function routesDepartingMidway(array $companies, ?PortBoardDay $today): array
@@ -151,7 +153,7 @@ class StatusController extends AbstractController
                 $statuses,
                 $operationStatusRepository->findUpcomingByCompany($company, $today, self::PORT_BOARD_DAYS),
             ),
-            'now'     => new \DateTimeImmutable(),
+            'now' => new \DateTimeImmutable(),
         ]);
     }
 

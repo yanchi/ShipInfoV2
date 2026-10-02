@@ -94,7 +94,7 @@ class AppFixtures extends Fixture
         }
 
         [$marueDown, $marueUp, $marixDown, $marixUp] = $routeEntities;
-        $ports = $this->loadPorts($manager, $marue, $routeEntities);
+        $ports                                       = $this->loadPorts($manager, $marue, $routeEntities);
         $this->loadDepartures($manager, $ports, $marix, $marueDown, $marueUp, $marixDown, $marixUp);
 
         $manager->flush();
@@ -104,6 +104,7 @@ class AppFixtures extends Fixture
      * 港・マルエーの港コード・寄港順を入れる。
      *
      * @param Route[] $routes
+     *
      * @return array<string, Port>
      */
     private function loadPorts(ObjectManager $manager, FerryCompany $marue, array $routes): array

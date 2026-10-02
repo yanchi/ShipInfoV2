@@ -114,6 +114,7 @@ class CompanyDaysBuilderTest extends TestCase
     /**
      * @param list<DepartureStatus> $statuses
      * @param array<string, list<OperationStatus>> $summaries
+     *
      * @return list<CompanyDay>
      */
     private function build(int $companyId, array $statuses, array $summaries = []): array

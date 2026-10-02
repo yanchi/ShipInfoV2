@@ -36,11 +36,11 @@ class FerryCompanyRepositoryTest extends KernelTestCase
     /** 有効で、direction のある有効な航路を持つ会社だけ。航路が2本あっても1回だけ */
     public function testFindBoardCompanies(): void
     {
-        $board          = $this->company('対象', true, [[true, RouteDirectionEnum::Down], [true, RouteDirectionEnum::Up]]);
-        $inactive       = $this->company('無効な会社', false, [[true, RouteDirectionEnum::Down]]);
-        $inactiveRoute  = $this->company('無効な航路だけ', true, [[false, RouteDirectionEnum::Down]]);
-        $noDirection    = $this->company('方向なし', true, [[true, null]]);
-        $noRoutes       = $this->company('航路なし', true, []);
+        $board         = $this->company('対象', true, [[true, RouteDirectionEnum::Down], [true, RouteDirectionEnum::Up]]);
+        $inactive      = $this->company('無効な会社', false, [[true, RouteDirectionEnum::Down]]);
+        $inactiveRoute = $this->company('無効な航路だけ', true, [[false, RouteDirectionEnum::Down]]);
+        $noDirection   = $this->company('方向なし', true, [[true, null]]);
+        $noRoutes      = $this->company('航路なし', true, []);
         $this->em->clear();
 
         $ids = array_map(static fn (FerryCompany $c) => $c->getId(), $this->repository->findBoardCompanies());

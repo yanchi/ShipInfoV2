@@ -25,7 +25,7 @@ class OperationStatusRepository extends ServiceEntityRepository
      * 航路の絞り込みは WHERE ではなく JOIN の WITH 句で行う必要がある
      * （WHERE に置くと LEFT JOIN で NULL になった行が除外され INNER JOIN と同じ挙動になる）。
      *
-     * @return array<int, array{company: \App\Entity\FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: OperationStatus|null}>}>
+     * @return array<int, array{company: FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: OperationStatus|null}>}>
      */
     public function findTodayByAllCompanies(): array
     {
@@ -33,14 +33,14 @@ class OperationStatusRepository extends ServiceEntityRepository
 
         $qb = $this->getEntityManager()->createQueryBuilder();
         $qb->select('fc', 'r')
-            ->from(\App\Entity\FerryCompany::class, 'fc')
+            ->from(FerryCompany::class, 'fc')
             ->leftJoin('fc.routes', 'r', 'WITH', 'r.active = :active')
             ->where('fc.active = :active')
             ->setParameter('active', true)
             ->orderBy('fc.id', 'ASC')
             ->addOrderBy('r.id', 'ASC');
 
-        /** @var \App\Entity\FerryCompany[] $ferryCompanies */
+        /** @var FerryCompany[] $ferryCompanies */
         $ferryCompanies = $qb->getQuery()->getResult();
 
         $result   = [];
@@ -68,7 +68,7 @@ class OperationStatusRepository extends ServiceEntityRepository
 
         $conn         = $this->getEntityManager()->getConnection();
         $placeholders = implode(',', array_fill(0, count($routeIds), '?'));
-        $sql = "
+        $sql          = "
             SELECT os.*
             FROM operation_statuses os
             INNER JOIN (
@@ -91,7 +91,7 @@ class OperationStatusRepository extends ServiceEntityRepository
         $rows = $conn->executeQuery($sql, $params)->fetchAllAssociative();
 
         if (!empty($rows)) {
-            $ids      = array_map(static fn(array $row): int => (int) $row['id'], $rows);
+            $ids      = array_map(static fn (array $row): int => (int) $row['id'], $rows);
             $statuses = $this->findBy(['id' => $ids]);
 
             foreach ($statuses as $status) {
@@ -117,7 +117,7 @@ class OperationStatusRepository extends ServiceEntityRepository
         $today = $today->setTime(0, 0);
         $to    = $today->modify(sprintf('+%d days', $days - 1));
 
-        $sql = "
+        $sql = '
             SELECT os.id
             FROM operation_statuses os
             INNER JOIN routes r ON r.id = os.route_id
@@ -133,7 +133,7 @@ class OperationStatusRepository extends ServiceEntityRepository
             WHERE os.valid_date BETWEEN :from AND :to
               AND r.ferry_company_id = :company
               AND r.active = 1
-        ";
+        ';
         $ids = $this->getEntityManager()->getConnection()->executeQuery($sql, [
             'from'    => $today->format('Y-m-d'),
             'to'      => $to->format('Y-m-d'),
