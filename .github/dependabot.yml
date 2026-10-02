@@ -14,6 +14,11 @@ updates:
         patterns: ["twig/*"]
       doctrine:
         patterns: ["doctrine/*"]
+    ignore:
+      # Symfony は 7.4 LTS で止める（8.x へは計画して上げる。CLAUDE.md の「Symfony 7.4 LTS」）。
+      # Dependabot は composer.json の 7.4.* も書き換えて 8.x の PR を作るので、メジャーは無視する
+      - dependency-name: "symfony/*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: pip
     directory: /scraper
