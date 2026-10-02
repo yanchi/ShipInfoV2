@@ -1,7 +1,7 @@
 .PHONY: help up up-tools down build logs logs-php logs-scraper \
         shell-php shell-scraper \
         migrate migrate-diff fixtures cache-clear \
-        test-php test-scraper lint-scraper \
+        test-php test-scraper lint-scraper format-scraper cs-php cs-fix-php \
         init init-test-db reset-test-db check-test-token
 
 DOCKER_COMPOSE = docker compose
@@ -64,6 +64,12 @@ cache-clear: ## Clear Symfony cache
 test-php: ## Run PHPUnit tests
 	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) bin/phpunit
 
+cs-php: ## Check PHP code style (PHP-CS-Fixer, no changes)
+	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) vendor/bin/php-cs-fixer check --diff
+
+cs-fix-php: ## Fix PHP code style (PHP-CS-Fixer)
+	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) vendor/bin/php-cs-fixer fix
+
 # 最初のマイグレーションは 01_schema.sql が作ったテーブルを ALTER するので、
 # 空の DB に migrate するだけでは初期化できない。01_schema.sql を流してから migrate する。
 # 02_seed.sql は入れない（テストは自分でデータを作る。港マスタはマイグレーションが入れる）。
@@ -98,8 +104,12 @@ scraper-run: ## Run scraper once immediately
 test-scraper: ## Run Python tests (pytest)
 	$(DOCKER_COMPOSE) exec $(SCRAPER_SERVICE) python -m pytest tests/ -v
 
-lint-scraper: ## Lint Python code with ruff
+lint-scraper: ## Lint and check formatting of Python code with ruff
 	$(DOCKER_COMPOSE) exec $(SCRAPER_SERVICE) ruff check scraper/ tests/
+	$(DOCKER_COMPOSE) exec $(SCRAPER_SERVICE) ruff format --check scraper/ tests/
+
+format-scraper: ## Format Python code with ruff
+	$(DOCKER_COMPOSE) exec $(SCRAPER_SERVICE) ruff format scraper/ tests/
 
 # ─── First-time setup ───────────────────────────────────────────
 

@@ -75,7 +75,7 @@ class DepartureStatus
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
-        $now = new \DateTime();
+        $now             = new \DateTime();
         $this->createdAt = $now;
         $this->updatedAt = $now;
         $this->scrapedAt ??= $now;
@@ -88,33 +88,174 @@ class DepartureStatus
         $this->updatedAt = new \DateTime();
     }
 
-    public function getId(): ?int { return $this->id; }
-    public function getRoute(): ?Route { return $this->route; }
-    public function setRoute(?Route $route): static { $this->route = $route; return $this; }
-    public function getPort(): ?Port { return $this->port; }
-    public function setPort(?Port $port): static { $this->port = $port; return $this; }
-    public function getDepartureDate(): ?\DateTimeInterface { return $this->departureDate; }
-    public function setDepartureDate(\DateTimeInterface $departureDate): static { $this->departureDate = $departureDate; return $this; }
-    public function getShipName(): string { return $this->shipName; }
-    public function setShipName(string $shipName): static { $this->shipName = $shipName; return $this; }
-    public function getStatus(): ?OperationStatusEnum { return $this->status; }
-    public function setStatus(?OperationStatusEnum $status): static { $this->status = $status; return $this; }
-    public function getStatusDetail(): ?string { return $this->statusDetail; }
-    public function setStatusDetail(?string $statusDetail): static { $this->statusDetail = $statusDetail; return $this; }
-    public function getScheduledDepartureAt(): ?\DateTimeInterface { return $this->scheduledDepartureAt; }
-    public function setScheduledDepartureAt(?\DateTimeInterface $at): static { $this->scheduledDepartureAt = $at; return $this; }
-    public function getScheduledArrivalAt(): ?\DateTimeInterface { return $this->scheduledArrivalAt; }
-    public function setScheduledArrivalAt(?\DateTimeInterface $at): static { $this->scheduledArrivalAt = $at; return $this; }
-    public function getOperatedByCompany(): ?FerryCompany { return $this->operatedByCompany; }
-    public function setOperatedByCompany(?FerryCompany $company): static { $this->operatedByCompany = $company; return $this; }
-    public function getSourceUrl(): ?string { return $this->sourceUrl; }
-    public function setSourceUrl(?string $sourceUrl): static { $this->sourceUrl = $sourceUrl; return $this; }
-    public function getContentHash(): string { return $this->contentHash; }
-    public function setContentHash(string $contentHash): static { $this->contentHash = $contentHash; return $this; }
-    public function getScrapedAt(): ?\DateTimeInterface { return $this->scrapedAt; }
-    public function setScrapedAt(\DateTimeInterface $scrapedAt): static { $this->scrapedAt = $scrapedAt; return $this; }
-    public function getCheckedAt(): ?\DateTimeInterface { return $this->checkedAt; }
-    public function setCheckedAt(\DateTimeInterface $checkedAt): static { $this->checkedAt = $checkedAt; return $this; }
-    public function getCreatedAt(): ?\DateTimeInterface { return $this->createdAt; }
-    public function getUpdatedAt(): ?\DateTimeInterface { return $this->updatedAt; }
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getRoute(): ?Route
+    {
+        return $this->route;
+    }
+
+    public function setRoute(?Route $route): static
+    {
+        $this->route = $route;
+
+        return $this;
+    }
+
+    public function getPort(): ?Port
+    {
+        return $this->port;
+    }
+
+    public function setPort(?Port $port): static
+    {
+        $this->port = $port;
+
+        return $this;
+    }
+
+    public function getDepartureDate(): ?\DateTimeInterface
+    {
+        return $this->departureDate;
+    }
+
+    public function setDepartureDate(\DateTimeInterface $departureDate): static
+    {
+        $this->departureDate = $departureDate;
+
+        return $this;
+    }
+
+    public function getShipName(): string
+    {
+        return $this->shipName;
+    }
+
+    public function setShipName(string $shipName): static
+    {
+        $this->shipName = $shipName;
+
+        return $this;
+    }
+
+    public function getStatus(): ?OperationStatusEnum
+    {
+        return $this->status;
+    }
+
+    public function setStatus(?OperationStatusEnum $status): static
+    {
+        $this->status = $status;
+
+        return $this;
+    }
+
+    public function getStatusDetail(): ?string
+    {
+        return $this->statusDetail;
+    }
+
+    public function setStatusDetail(?string $statusDetail): static
+    {
+        $this->statusDetail = $statusDetail;
+
+        return $this;
+    }
+
+    public function getScheduledDepartureAt(): ?\DateTimeInterface
+    {
+        return $this->scheduledDepartureAt;
+    }
+
+    public function setScheduledDepartureAt(?\DateTimeInterface $at): static
+    {
+        $this->scheduledDepartureAt = $at;
+
+        return $this;
+    }
+
+    public function getScheduledArrivalAt(): ?\DateTimeInterface
+    {
+        return $this->scheduledArrivalAt;
+    }
+
+    public function setScheduledArrivalAt(?\DateTimeInterface $at): static
+    {
+        $this->scheduledArrivalAt = $at;
+
+        return $this;
+    }
+
+    public function getOperatedByCompany(): ?FerryCompany
+    {
+        return $this->operatedByCompany;
+    }
+
+    public function setOperatedByCompany(?FerryCompany $company): static
+    {
+        $this->operatedByCompany = $company;
+
+        return $this;
+    }
+
+    public function getSourceUrl(): ?string
+    {
+        return $this->sourceUrl;
+    }
+
+    public function setSourceUrl(?string $sourceUrl): static
+    {
+        $this->sourceUrl = $sourceUrl;
+
+        return $this;
+    }
+
+    public function getContentHash(): string
+    {
+        return $this->contentHash;
+    }
+
+    public function setContentHash(string $contentHash): static
+    {
+        $this->contentHash = $contentHash;
+
+        return $this;
+    }
+
+    public function getScrapedAt(): ?\DateTimeInterface
+    {
+        return $this->scrapedAt;
+    }
+
+    public function setScrapedAt(\DateTimeInterface $scrapedAt): static
+    {
+        $this->scrapedAt = $scrapedAt;
+
+        return $this;
+    }
+
+    public function getCheckedAt(): ?\DateTimeInterface
+    {
+        return $this->checkedAt;
+    }
+
+    public function setCheckedAt(\DateTimeInterface $checkedAt): static
+    {
+        $this->checkedAt = $checkedAt;
+
+        return $this;
+    }
+
+    public function getCreatedAt(): ?\DateTimeInterface
+    {
+        return $this->createdAt;
+    }
+
+    public function getUpdatedAt(): ?\DateTimeInterface
+    {
+        return $this->updatedAt;
+    }
 }

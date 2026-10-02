@@ -12,8 +12,8 @@ use App\Enum\OperationStatusEnum;
 use App\Enum\RouteDirectionEnum;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
-use Symfony\Component\BrowserKit\Cookie as BrowserCookie;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\BrowserKit\Cookie as BrowserCookie;
 use Symfony\Component\DomCrawler\Crawler;
 
 class StatusControllerTest extends WebTestCase
@@ -214,7 +214,7 @@ class StatusControllerTest extends WebTestCase
         $sections = $crawler->filter('section.company-day');
         $this->assertCount(4, $sections);
         $headings = implode(' ', $crawler->filter('section.company-day h2')->each(static fn (Crawler $n) => trim($n->text())));
-        for ($i = 0; $i < 4; $i++) {
+        for ($i = 0; $i < 4; ++$i) {
             $this->assertSame('d-' . $today->modify("+{$i} days")->format('Y-m-d'), $sections->eq($i)->attr('id'));
         }
         $this->assertStringNotContainsString($today->modify('-1 day')->format('n月j日（'), $headings);
@@ -310,7 +310,7 @@ class StatusControllerTest extends WebTestCase
         $this->assertResponseIsSuccessful();
         $headings = $crawler->filter('h2')->each(static fn (Crawler $n) => trim($n->text()));
         $today    = new \DateTimeImmutable('today');
-        for ($i = 0; $i < 4; $i++) {
+        for ($i = 0; $i < 4; ++$i) {
             $this->assertStringContainsString($today->modify("+{$i} days")->format('n月j日'), implode(' ', $headings));
         }
         $this->assertStringNotContainsString($today->modify('-1 day')->format('n月j日（'), implode(' ', $headings));
@@ -377,7 +377,7 @@ class StatusControllerTest extends WebTestCase
         $links = $crawler->filter('.date-nav a[href^="#d-"]');
         $this->assertCount(4, $links);
         $today = new \DateTimeImmutable('today');
-        for ($i = 0; $i < 4; $i++) {
+        for ($i = 0; $i < 4; ++$i) {
             $id = 'd-' . $today->modify("+{$i} days")->format('Y-m-d');
             $this->assertSame('#' . $id, $links->eq($i)->attr('href'));
             $this->assertCount(1, $crawler->filter("section#{$id}"));
@@ -785,10 +785,10 @@ class StatusControllerTest extends WebTestCase
             $routes[] = $route;
         }
 
-        $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today), '港別テスト丸', OperationStatusEnum::Operating, (clone $today)->setTime(5, 50))
+        $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], clone $today, '港別テスト丸', OperationStatusEnum::Operating, (clone $today)->setTime(5, 50))
             ->setScheduledArrivalAt((clone $today)->modify('+1 day')->setTime(8, 0)));
-        $em->persist($this->makeDeparture($routes[1], $ports['名瀬'], (clone $today), '', OperationStatusEnum::NoService, null));
-        $em->persist($this->makeDeparture($routes[1], $ports['鹿児島'], (clone $today), '', OperationStatusEnum::NoService, null));
+        $em->persist($this->makeDeparture($routes[1], $ports['名瀬'], clone $today, '', OperationStatusEnum::NoService, null));
+        $em->persist($this->makeDeparture($routes[1], $ports['鹿児島'], clone $today, '', OperationStatusEnum::NoService, null));
         $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today)->modify('+3 days'), '港別テスト丸', null, (clone $today)->modify('+3 days')->setTime(5, 50)));
         if ($tomorrowStatus !== null) {
             $em->persist($this->makeDeparture($routes[0], $ports['名瀬'], (clone $today)->modify('+1 day'), '港別テスト丸', $tomorrowStatus, (clone $today)->modify('+1 day')->setTime(5, 50)));

@@ -249,7 +249,7 @@ class PortBoardBuilderTest extends TestCase
     /** @param list<DepartureStatus> $statuses */
     private function build(array $statuses): \App\View\PortBoard
     {
-        $p = $this->ports;
+        $p     = $this->ports;
         $stops = [
             [
                 'direction'      => RouteDirectionEnum::Down,

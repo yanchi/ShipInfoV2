@@ -34,9 +34,9 @@ class PortFilterResolver
      */
     public function resolve(Request $request, array $boardStops): PortFilterResolution
     {
-        $validPortIds = $this->validPortIds($boardStops);
+        $validPortIds            = $this->validPortIds($boardStops);
         [$saved, $cookieInvalid] = $this->readCookie($request, $validPortIds);
-        $clearCookie = $cookieInvalid ? $this->clearCookie() : null;
+        $clearCookie             = $cookieInvalid ? $this->clearCookie() : null;
 
         if (!$request->query->has('port') && !$request->query->has('dir')) {
             return new PortFilterResolution($saved ?? PortFilter::none(), null, $clearCookie);
@@ -60,10 +60,10 @@ class PortFilterResolver
      */
     public function submit(Request $request, array $boardStops, bool $tokenValid): PortFilterResolution
     {
-        $validPortIds = $this->validPortIds($boardStops);
+        $validPortIds      = $this->validPortIds($boardStops);
         [, $cookieInvalid] = $this->readCookie($request, $validPortIds);
-        $clearCookie = $cookieInvalid ? $this->clearCookie() : null;
-        $action      = (string) $request->request->get('action', self::ACTION_SHOW);
+        $clearCookie       = $cookieInvalid ? $this->clearCookie() : null;
+        $action            = (string) $request->request->get('action', self::ACTION_SHOW);
 
         if ($action === self::ACTION_CLEAR) {
             return new PortFilterResolution(PortFilter::none(), self::PATH, $tokenValid ? $this->clearCookie() : $clearCookie);
@@ -101,6 +101,7 @@ class PortFilterResolver
      * 絞り込みの選択肢にする出発港（下りの寄港順 → 上りにしか無い港、重複なし）。
      *
      * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     *
      * @return list<Port>
      */
     public function departurePorts(array $boardStops): array
@@ -117,6 +118,7 @@ class PortFilterResolver
 
     /**
      * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     *
      * @return list<int>
      */
     private function validPortIds(array $boardStops): array
@@ -126,6 +128,7 @@ class PortFilterResolver
 
     /**
      * @param list<int> $validPortIds
+     *
      * @return array{0: ?PortFilter, 1: bool} [保存した条件（無い・不正なら null）, 不正か]
      */
     private function readCookie(Request $request, array $validPortIds): array
@@ -149,6 +152,7 @@ class PortFilterResolver
      * 空・all は全港（正しい値）。存在しない港は null 扱いで、不正な値とする。
      *
      * @param list<int> $validPortIds
+     *
      * @return array{value: ?int, valid: bool}
      */
     private function parsePort(string $value, array $validPortIds): array

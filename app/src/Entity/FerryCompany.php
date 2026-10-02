@@ -58,18 +58,72 @@ class FerryCompany
         $this->updatedAt = new \DateTime();
     }
 
-    public function getId(): ?int { return $this->id; }
-    public function getName(): string { return $this->name; }
-    public function setName(string $name): static { $this->name = $name; return $this; }
-    public function getWebsiteUrl(): ?string { return $this->websiteUrl; }
-    public function setWebsiteUrl(?string $websiteUrl): static { $this->websiteUrl = $websiteUrl; return $this; }
-    public function getScraperClass(): ?string { return $this->scraperClass; }
-    public function setScraperClass(?string $scraperClass): static { $this->scraperClass = $scraperClass; return $this; }
-    public function isActive(): bool { return $this->active; }
-    public function setActive(bool $active): static { $this->active = $active; return $this; }
-    public function getCreatedAt(): ?\DateTimeInterface { return $this->createdAt; }
-    public function getUpdatedAt(): ?\DateTimeInterface { return $this->updatedAt; }
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getName(): string
+    {
+        return $this->name;
+    }
+
+    public function setName(string $name): static
+    {
+        $this->name = $name;
+
+        return $this;
+    }
+
+    public function getWebsiteUrl(): ?string
+    {
+        return $this->websiteUrl;
+    }
+
+    public function setWebsiteUrl(?string $websiteUrl): static
+    {
+        $this->websiteUrl = $websiteUrl;
+
+        return $this;
+    }
+
+    public function getScraperClass(): ?string
+    {
+        return $this->scraperClass;
+    }
+
+    public function setScraperClass(?string $scraperClass): static
+    {
+        $this->scraperClass = $scraperClass;
+
+        return $this;
+    }
+
+    public function isActive(): bool
+    {
+        return $this->active;
+    }
+
+    public function setActive(bool $active): static
+    {
+        $this->active = $active;
+
+        return $this;
+    }
+
+    public function getCreatedAt(): ?\DateTimeInterface
+    {
+        return $this->createdAt;
+    }
+
+    public function getUpdatedAt(): ?\DateTimeInterface
+    {
+        return $this->updatedAt;
+    }
 
     /** @return Collection<int, Route> */
-    public function getRoutes(): Collection { return $this->routes; }
+    public function getRoutes(): Collection
+    {
+        return $this->routes;
+    }
 }

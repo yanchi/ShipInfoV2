@@ -53,6 +53,10 @@ jobs:
         working-directory: app
         run: composer install --no-interaction --prefer-dist
 
+      - name: Check code style (PHP-CS-Fixer)
+        working-directory: app
+        run: vendor/bin/php-cs-fixer check --diff
+
       # ローカル（docker-compose.yml の --default-time-zone）と同じ日本時間にする。
       # サービスコンテナは command を変えられないので、ここで設定する（以降の接続から効く）
       - name: Set MySQL time zone
@@ -91,6 +95,12 @@ jobs:
       - name: Install dependencies
         working-directory: scraper
         run: pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        working-directory: scraper
+        run: |
+          ruff check scraper/ tests/
+          ruff format --check scraper/ tests/
 
       - name: Run pytest
         working-directory: scraper

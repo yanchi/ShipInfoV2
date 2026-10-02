@@ -34,13 +34,56 @@ class RouteStop
     #[ORM\Column(type: 'smallint', options: ['default' => 0])]
     private int $dayOffset = 0;
 
-    public function getId(): ?int { return $this->id; }
-    public function getRoute(): ?Route { return $this->route; }
-    public function setRoute(?Route $route): static { $this->route = $route; return $this; }
-    public function getPort(): ?Port { return $this->port; }
-    public function setPort(?Port $port): static { $this->port = $port; return $this; }
-    public function getStopOrder(): int { return $this->stopOrder; }
-    public function setStopOrder(int $stopOrder): static { $this->stopOrder = $stopOrder; return $this; }
-    public function getDayOffset(): int { return $this->dayOffset; }
-    public function setDayOffset(int $dayOffset): static { $this->dayOffset = $dayOffset; return $this; }
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getRoute(): ?Route
+    {
+        return $this->route;
+    }
+
+    public function setRoute(?Route $route): static
+    {
+        $this->route = $route;
+
+        return $this;
+    }
+
+    public function getPort(): ?Port
+    {
+        return $this->port;
+    }
+
+    public function setPort(?Port $port): static
+    {
+        $this->port = $port;
+
+        return $this;
+    }
+
+    public function getStopOrder(): int
+    {
+        return $this->stopOrder;
+    }
+
+    public function setStopOrder(int $stopOrder): static
+    {
+        $this->stopOrder = $stopOrder;
+
+        return $this;
+    }
+
+    public function getDayOffset(): int
+    {
+        return $this->dayOffset;
+    }
+
+    public function setDayOffset(int $dayOffset): static
+    {
+        $this->dayOffset = $dayOffset;
+
+        return $this;
+    }
 }

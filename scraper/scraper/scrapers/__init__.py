@@ -14,9 +14,11 @@ SCRAPER_REGISTRY: dict[str, type[BaseScraper]] = {
 
 def get_all_scrapers(session) -> list[tuple[type[BaseScraper], int]]:
     """Return list of (ScraperClass, company_id) for all active companies."""
-    companies = session.execute(
-        select(FerryCompany).where(FerryCompany.active.is_(True))
-    ).scalars().all()
+    companies = (
+        session.execute(select(FerryCompany).where(FerryCompany.active.is_(True)))
+        .scalars()
+        .all()
+    )
     result = []
     for company in companies:
         scraper_cls = SCRAPER_REGISTRY.get(company.scraper_class or "")

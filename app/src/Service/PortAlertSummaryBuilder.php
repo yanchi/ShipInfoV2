@@ -25,7 +25,7 @@ class PortAlertSummaryBuilder
                             continue;
                         }
                         if (!$filter->matches($direction->direction, $row->port)) {
-                            $hidden++;
+                            ++$hidden;
                             continue;
                         }
                         $alerts[] = new PortAlert($day->date, $direction->direction, $row->port, $direction->arrivalPortName, $entry);

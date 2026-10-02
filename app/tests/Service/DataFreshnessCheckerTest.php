@@ -12,8 +12,8 @@ class DataFreshnessCheckerTest extends TestCase
 {
     public function testFreshWhenAllCompaniesAreRecent(): void
     {
-        $older = new \DateTimeImmutable('-70 minutes');
-        $checker   = $this->checker([1 => new \DateTimeImmutable('-30 minutes'), 2 => $older]);
+        $older   = new \DateTimeImmutable('-70 minutes');
+        $checker = $this->checker([1 => new \DateTimeImmutable('-30 minutes'), 2 => $older]);
 
         $freshness = $checker->check();
 
@@ -38,8 +38,8 @@ class DataFreshnessCheckerTest extends TestCase
     /** 前日以降の行が無い会社（スクレイパーが長く止まっている）も古い扱い */
     public function testStaleWhenCompanyHasNoRows(): void
     {
-        $recent = new \DateTimeImmutable('-30 minutes');
-        $checker    = $this->checker([1 => $recent]);
+        $recent  = new \DateTimeImmutable('-30 minutes');
+        $checker = $this->checker([1 => $recent]);
 
         $freshness = $checker->check();
 

@@ -100,7 +100,7 @@ class OperationStatusRepositoryTest extends KernelTestCase
     /** 今日〜3日先だけ。昨日・4日先・無効な航路・他社は入らない。航路・日付ごとに最新の1件 */
     public function testFindUpcomingByCompany(): void
     {
-        $em      = static::getContainer()->get('doctrine')->getManager();
+        $em         = static::getContainer()->get('doctrine')->getManager();
         $company    = (new FerryCompany())->setName('会社別リポジトリテスト会社')->setActive(true);
         $other      = (new FerryCompany())->setName('会社別リポジトリテスト他社')->setActive(true);
         $active     = (new Route())->setFerryCompany($company)->setName('有効航路')->setActive(true);

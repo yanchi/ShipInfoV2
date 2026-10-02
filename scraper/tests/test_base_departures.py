@@ -334,8 +334,15 @@ def test_replace_source_deletes_rows_on_other_dates(db_session, setup):
     tomorrow = date.today() + timedelta(days=1)
     scraper._upsert_departures(
         [
-            _rec(route, port, ship_name="", scheduled_departure_at=None, source_url=url),
-            _rec(route, port, departure_date=tomorrow, source_url="https://example.com/other/"),
+            _rec(
+                route, port, ship_name="", scheduled_departure_at=None, source_url=url
+            ),
+            _rec(
+                route,
+                port,
+                departure_date=tomorrow,
+                source_url="https://example.com/other/",
+            ),
         ]
     )
     db_session.commit()
@@ -356,7 +363,9 @@ def test_replace_source_deletes_rows_on_other_dates(db_session, setup):
     )
     db_session.commit()
 
-    rows = sorted((r.departure_date, r.ship_name, r.source_url) for r in _rows(db_session))
+    rows = sorted(
+        (r.departure_date, r.ship_name, r.source_url) for r in _rows(db_session)
+    )
     assert rows == [
         (tomorrow, "フェリーあけぼの", "https://example.com/other/"),
         (tomorrow, "フェリー波之上", url),

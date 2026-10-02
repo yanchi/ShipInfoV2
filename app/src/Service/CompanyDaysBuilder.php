@@ -22,6 +22,7 @@ class CompanyDaysBuilder
      * @param PortBoard $fullBoard 全港のボード（日付は表示する日付）
      * @param list<DepartureStatus> $statuses ボードを作った港別ステータス（全社分）
      * @param array<string, list<OperationStatus>> $routeSummaries [Y-m-d => その会社の航路単位の運航状況]
+     *
      * @return list<CompanyDay>
      */
     public function build(int $companyId, PortBoard $fullBoard, array $statuses, array $routeSummaries): array
@@ -40,9 +41,9 @@ class CompanyDaysBuilder
         foreach ($fullBoard->forCompany($companyId)->days as $day) {
             $key   = $day->date->format('Y-m-d');
             $state = match (true) {
-                $day->directions !== []        => CompanyDayStateEnum::Services,
-                isset($noServiceDates[$key])   => CompanyDayStateEnum::NoService,
-                default                        => CompanyDayStateEnum::NoInfo,
+                $day->directions !== []      => CompanyDayStateEnum::Services,
+                isset($noServiceDates[$key]) => CompanyDayStateEnum::NoService,
+                default                      => CompanyDayStateEnum::NoInfo,
             };
 
             // 航路単位では no_service（始発港を出る便が無い）でも、その方向の便が途中の港を出るなら要約行は出さない

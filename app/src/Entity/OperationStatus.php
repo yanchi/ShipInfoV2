@@ -58,24 +58,121 @@ class OperationStatus
         }
     }
 
-    public function getId(): ?int { return $this->id; }
-    public function getRoute(): ?Route { return $this->route; }
-    public function setRoute(?Route $route): static { $this->route = $route; return $this; }
-    public function getStatus(): OperationStatusEnum { return $this->status; }
-    public function setStatus(OperationStatusEnum $status): static { $this->status = $status; return $this; }
-    public function getStatusDetail(): ?string { return $this->statusDetail; }
-    public function setStatusDetail(?string $statusDetail): static { $this->statusDetail = $statusDetail; return $this; }
-    public function getDepartureTime(): ?\DateTimeInterface { return $this->departureTime; }
-    public function setDepartureTime(?\DateTimeInterface $departureTime): static { $this->departureTime = $departureTime; return $this; }
-    public function getArrivalTime(): ?\DateTimeInterface { return $this->arrivalTime; }
-    public function setArrivalTime(?\DateTimeInterface $arrivalTime): static { $this->arrivalTime = $arrivalTime; return $this; }
-    public function getValidDate(): ?\DateTimeInterface { return $this->validDate; }
-    public function setValidDate(\DateTimeInterface $validDate): static { $this->validDate = $validDate; return $this; }
-    public function getScrapedAt(): ?\DateTimeInterface { return $this->scrapedAt; }
-    public function setScrapedAt(\DateTimeInterface $scrapedAt): static { $this->scrapedAt = $scrapedAt; return $this; }
-    public function getSourceUrl(): ?string { return $this->sourceUrl; }
-    public function setSourceUrl(?string $sourceUrl): static { $this->sourceUrl = $sourceUrl; return $this; }
-    public function getRawHtmlHash(): ?string { return $this->rawHtmlHash; }
-    public function setRawHtmlHash(?string $rawHtmlHash): static { $this->rawHtmlHash = $rawHtmlHash; return $this; }
-    public function getCreatedAt(): ?\DateTimeInterface { return $this->createdAt; }
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getRoute(): ?Route
+    {
+        return $this->route;
+    }
+
+    public function setRoute(?Route $route): static
+    {
+        $this->route = $route;
+
+        return $this;
+    }
+
+    public function getStatus(): OperationStatusEnum
+    {
+        return $this->status;
+    }
+
+    public function setStatus(OperationStatusEnum $status): static
+    {
+        $this->status = $status;
+
+        return $this;
+    }
+
+    public function getStatusDetail(): ?string
+    {
+        return $this->statusDetail;
+    }
+
+    public function setStatusDetail(?string $statusDetail): static
+    {
+        $this->statusDetail = $statusDetail;
+
+        return $this;
+    }
+
+    public function getDepartureTime(): ?\DateTimeInterface
+    {
+        return $this->departureTime;
+    }
+
+    public function setDepartureTime(?\DateTimeInterface $departureTime): static
+    {
+        $this->departureTime = $departureTime;
+
+        return $this;
+    }
+
+    public function getArrivalTime(): ?\DateTimeInterface
+    {
+        return $this->arrivalTime;
+    }
+
+    public function setArrivalTime(?\DateTimeInterface $arrivalTime): static
+    {
+        $this->arrivalTime = $arrivalTime;
+
+        return $this;
+    }
+
+    public function getValidDate(): ?\DateTimeInterface
+    {
+        return $this->validDate;
+    }
+
+    public function setValidDate(\DateTimeInterface $validDate): static
+    {
+        $this->validDate = $validDate;
+
+        return $this;
+    }
+
+    public function getScrapedAt(): ?\DateTimeInterface
+    {
+        return $this->scrapedAt;
+    }
+
+    public function setScrapedAt(\DateTimeInterface $scrapedAt): static
+    {
+        $this->scrapedAt = $scrapedAt;
+
+        return $this;
+    }
+
+    public function getSourceUrl(): ?string
+    {
+        return $this->sourceUrl;
+    }
+
+    public function setSourceUrl(?string $sourceUrl): static
+    {
+        $this->sourceUrl = $sourceUrl;
+
+        return $this;
+    }
+
+    public function getRawHtmlHash(): ?string
+    {
+        return $this->rawHtmlHash;
+    }
+
+    public function setRawHtmlHash(?string $rawHtmlHash): static
+    {
+        $this->rawHtmlHash = $rawHtmlHash;
+
+        return $this;
+    }
+
+    public function getCreatedAt(): ?\DateTimeInterface
+    {
+        return $this->createdAt;
+    }
 }

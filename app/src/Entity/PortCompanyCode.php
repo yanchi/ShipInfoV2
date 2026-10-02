@@ -28,11 +28,44 @@ class PortCompanyCode
     #[ORM\Column(length: 32)]
     private string $externalCode = '';
 
-    public function getId(): ?int { return $this->id; }
-    public function getPort(): ?Port { return $this->port; }
-    public function setPort(?Port $port): static { $this->port = $port; return $this; }
-    public function getFerryCompany(): ?FerryCompany { return $this->ferryCompany; }
-    public function setFerryCompany(?FerryCompany $ferryCompany): static { $this->ferryCompany = $ferryCompany; return $this; }
-    public function getExternalCode(): string { return $this->externalCode; }
-    public function setExternalCode(string $externalCode): static { $this->externalCode = $externalCode; return $this; }
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getPort(): ?Port
+    {
+        return $this->port;
+    }
+
+    public function setPort(?Port $port): static
+    {
+        $this->port = $port;
+
+        return $this;
+    }
+
+    public function getFerryCompany(): ?FerryCompany
+    {
+        return $this->ferryCompany;
+    }
+
+    public function setFerryCompany(?FerryCompany $ferryCompany): static
+    {
+        $this->ferryCompany = $ferryCompany;
+
+        return $this;
+    }
+
+    public function getExternalCode(): string
+    {
+        return $this->externalCode;
+    }
+
+    public function setExternalCode(string $externalCode): static
+    {
+        $this->externalCode = $externalCode;
+
+        return $this;
+    }
 }

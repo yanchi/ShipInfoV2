@@ -677,12 +677,16 @@ def _naze_rows(db_session, company, ports):
 
 
 @resp_mock.activate
-def test_fallback_row_is_removed_when_detail_shifts_date(db_session, marix_line_company):
+def test_fallback_row_is_removed_when_detail_shifts_date(
+    db_session, marix_line_company
+):
     """予備ルートで作った行は、詳細ページで出港日がずれても残らない（#22）。"""
     ports = setup_port_master(db_session, marix_line_company)
     _mock_pages(down_status=500)
     _run_departures(db_session, marix_line_company)
-    assert _naze_rows(db_session, marix_line_company, ports) == [(date(2026, 10, 1), "")]
+    assert _naze_rows(db_session, marix_line_company, ports) == [
+        (date(2026, 10, 1), "")
+    ]
 
     resp_mock.reset()
     _mock_pages(down=_down_with_naze_delayed())
