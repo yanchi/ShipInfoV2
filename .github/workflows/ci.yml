@@ -70,6 +70,18 @@ jobs:
         working-directory: app
         run: php bin/console doctrine:migrations:migrate --no-interaction
 
+      - name: Lint Twig, YAML and DI container
+        working-directory: app
+        run: |
+          php bin/console lint:twig templates
+          php bin/console lint:yaml config --parse-tags
+          php bin/console lint:container
+
+      # マイグレーション後の DB とエンティティのマッピングがずれていないか（マイグレーションの作り忘れを拾う）
+      - name: Validate Doctrine schema
+        working-directory: app
+        run: php bin/console doctrine:schema:validate
+
       - name: Run PHPUnit
         working-directory: app
         run: php bin/phpunit
@@ -105,3 +117,32 @@ jobs:
       - name: Run pytest
         working-directory: scraper
         run: python -m pytest tests/ -v
+
+  # 依存パッケージの既知の脆弱性。新しい脆弱性は Dependabot（.github/dependabot.yml）でも知らせる
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Audit Composer dependencies
+        working-directory: app
+        run: composer audit --locked
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Audit pip dependencies
+        working-directory: scraper
+        run: |
+          pip install pip-audit==2.10.1
+          pip-audit -r requirements.txt -r requirements-dev.txt

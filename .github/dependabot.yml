@@ -1,0 +1,31 @@
+# 依存パッケージの更新とセキュリティ修正の PR を Dependabot が作る
+version: 2
+updates:
+  - package-ecosystem: composer
+    directory: /app
+    schedule:
+      interval: weekly
+      timezone: Asia/Tokyo
+    groups:
+      # Symfony は 7.4.* でそろえて上げる
+      symfony:
+        patterns: ["symfony/*"]
+      twig:
+        patterns: ["twig/*"]
+      doctrine:
+        patterns: ["doctrine/*"]
+
+  - package-ecosystem: pip
+    directory: /scraper
+    schedule:
+      interval: weekly
+      timezone: Asia/Tokyo
+    groups:
+      dev:
+        patterns: ["pytest*", "ruff", "mypy", "responses", "pip-audit"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+      timezone: Asia/Tokyo
