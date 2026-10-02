@@ -96,7 +96,7 @@ jobs:
       # スクレイパーの SQLAlchemy モデルの列が、マイグレーション後の DB にあるか。
       # スクレイパーのテストは SQLite にモデルからテーブルを作るので、ここでしか気づけない
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -123,7 +123,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -166,7 +166,7 @@ jobs:
         run: composer audit --locked
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
