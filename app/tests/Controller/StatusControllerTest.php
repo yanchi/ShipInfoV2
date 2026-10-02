@@ -142,6 +142,146 @@ class StatusControllerTest extends WebTestCase
         );
     }
 
+    // ------------------------------------------------------------------
+    // 共通ヘッダー・最終確認時刻（US6）
+    // ------------------------------------------------------------------
+
+    /** 3画面すべてに同じヘッダーがあり、今いるページに aria-current="page" */
+    public function testSharedHeaderOnAllPages(): void
+    {
+        $this->createPortBoardData();
+        $companyId = $this->companyId('港別テスト運航会社');
+
+        foreach (['/' => 'a[href="/"]', '/ports' => 'a[href="/ports"]', "/company/{$companyId}" => "a[href=\"/company/{$companyId}\"]"] as $url => $current) {
+            $crawler = $this->client->request('GET', $url);
+            $this->assertResponseIsSuccessful($url);
+
+            $nav = $crawler->filter('header.site-header nav');
+            $this->assertCount(1, $nav, $url);
+            $this->assertCount(1, $nav->filter('a[href="/"]'), $url);
+            $this->assertCount(1, $nav->filter('a[href="/ports"]'), $url);
+            $this->assertCount(1, $nav->filter("a[href=\"/company/{$companyId}\"]"), $url);
+            $this->assertCount(1, $nav->filter('[aria-current="page"]'), $url);
+            $this->assertCount(1, $nav->filter($current . '[aria-current="page"]'), $url);
+            $this->assertStringNotContainsString('トップへ戻る', $crawler->filter('body')->text(), $url);
+        }
+    }
+
+    public function testFreshnessWithoutWarningWhenRecent(): void
+    {
+        $this->createPortBoardData();
+        $this->setCheckedAt(null, '-10 minutes');
+
+        foreach (['/', '/ports'] as $url) {
+            $crawler = $this->client->request('GET', $url);
+
+            $this->assertCount(0, $crawler->filter('.site-freshness.alert'), $url);
+            $this->assertStringContainsString('最終確認 ' . (new \DateTimeImmutable('-10 minutes'))->format('n/j'), $crawler->filter('.site-freshness')->text(), $url);
+        }
+    }
+
+    /** 1社だけ古い → 他の会社が新しくても警告とその会社名 */
+    public function testFreshnessWarnsWhenOneCompanyIsStale(): void
+    {
+        $this->createPortBoardData();
+        $this->setCheckedAt(null, '-10 minutes');
+        $this->setCheckedAt('港別テスト非運航会社', '-3 hours');
+
+        foreach (['/', '/ports', '/company/' . $this->companyId('港別テスト運航会社')] as $url) {
+            $crawler = $this->client->request('GET', $url);
+
+            $warning = $crawler->filter('.site-freshness.alert-warning');
+            $this->assertCount(1, $warning, $url);
+            $this->assertStringContainsString('情報が古い可能性があります', $warning->text(), $url);
+            $this->assertStringContainsString('港別テスト非運航会社', $warning->text(), $url);
+            $this->assertStringNotContainsString('港別テスト運航会社 ', $warning->text(), $url);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // /company/{id}（会社別、US5）
+    // ------------------------------------------------------------------
+
+    /** 今日〜3日先。便あり・便なし・情報なしを区別する */
+    public function testCompanyPageShowsUpcomingDaysWithStates(): void
+    {
+        $this->createPortBoardData();
+        $today = new \DateTimeImmutable('today');
+
+        $crawler = $this->client->request('GET', '/company/' . $this->companyId('港別テスト運航会社'));
+
+        $this->assertResponseIsSuccessful();
+        $sections = $crawler->filter('section.company-day');
+        $this->assertCount(4, $sections);
+        $headings = implode(' ', $crawler->filter('section.company-day h2')->each(static fn (Crawler $n) => trim($n->text())));
+        for ($i = 0; $i < 4; $i++) {
+            $this->assertSame('d-' . $today->modify("+{$i} days")->format('Y-m-d'), $sections->eq($i)->attr('id'));
+        }
+        $this->assertStringNotContainsString($today->modify('-1 day')->format('n月j日（'), $headings);
+
+        // 今日：便あり（自社の便だけ）
+        $rows = $sections->eq(0)->filter('li.port-row');
+        $this->assertCount(1, $rows);
+        $this->assertStringStartsWith('名瀬発', trim($rows->filter('.fw-bold')->text()));
+        $this->assertStringContainsString('港別テスト丸／港別テスト運航会社', $rows->text());
+        // 明日：行が無い → 情報なし
+        $this->assertCount(0, $sections->eq(1)->filter('li.port-row'));
+        $this->assertStringContainsString('？ 情報なし', $sections->eq(1)->filter('.company-day-state')->text());
+        // 3日先：運航予定 → 便あり
+        $this->assertCount(1, $sections->eq(3)->filter('li.port-row'));
+    }
+
+    public function testCompanyPageShowsNoServiceDay(): void
+    {
+        $this->createPortBoardData();
+
+        $crawler = $this->client->request('GET', '/company/' . $this->companyId('港別テスト非運航会社'));
+
+        $today = $crawler->filter('section.company-day')->eq(0);
+        $this->assertCount(0, $today->filter('li.port-row'));
+        $this->assertStringContainsString('— 便なし', $today->filter('.company-day-state')->text());
+    }
+
+    public function testCompanyPageShowsRouteSummaryOnlyOnDaysWithInfo(): void
+    {
+        $this->createPortBoardData();
+        $this->persistOperationStatus('港別テスト運航会社 下り', 1, OperationStatusEnum::Delayed, '天候不良のため条件付き');
+
+        $crawler  = $this->client->request('GET', '/company/' . $this->companyId('港別テスト運航会社'));
+        $sections = $crawler->filter('section.company-day');
+
+        $this->assertCount(0, $sections->eq(0)->filter('.route-summaries'));
+        $summary = $sections->eq(1)->filter('.route-summaries');
+        $this->assertCount(1, $summary);
+        $this->assertStringContainsString('港別テスト運航会社 下り', $summary->text());
+        $this->assertStringContainsString('▲ 条件付・遅延', $summary->text());
+        $this->assertStringContainsString('└ 天候不良のため条件付き', $summary->text());
+    }
+
+    /** 航路単位では便なしでも、その方向の便が途中の港を出る日は要約行を出さない（tasks T054a） */
+    public function testCompanyPageHidesNoServiceSummaryWhenDepartingMidway(): void
+    {
+        $this->createPortBoardData();
+        $this->persistOperationStatus('港別テスト運航会社 下り', 0, OperationStatusEnum::NoService);
+
+        $crawler = $this->client->request('GET', '/company/' . $this->companyId('港別テスト運航会社'));
+        $today   = $crawler->filter('section.company-day')->eq(0);
+
+        $this->assertCount(0, $today->filter('.route-summaries'));
+        $this->assertCount(1, $today->filter('li.port-row'));
+    }
+
+    /** 無効な会社は 404（港別ボードにも共通ヘッダーにも出ないため） */
+    public function testCompanyPageReturns404ForInactiveCompany(): void
+    {
+        $company = (new FerryCompany())->setName('無効テスト会社')->setActive(false);
+        $id      = $this->persistCompany($company);
+
+        $this->client->request('GET', "/company/{$id}");
+
+        $this->assertResponseStatusCodeSame(404);
+    }
+
     public function testCompanyPageReturns404ForNonExistentId(): void
     {
         $this->client->request('GET', '/company/999999');
@@ -592,22 +732,16 @@ class StatusControllerTest extends WebTestCase
     public function testIndexKeepsCompanyWithDeparturesTodayAsCard(): void
     {
         $this->createPortBoardData();
-        $em    = $this->entityManager();
-        $route = $em->getRepository(Route::class)->findOneBy(['name' => '港別テスト運航会社 下り']);
-        $em->persist((new OperationStatus())
-            ->setRoute($route)
-            ->setStatus(OperationStatusEnum::NoService)
-            ->setValidDate(new \DateTime('today'))
-            ->setScrapedAt(new \DateTime())
-            ->setSourceUrl('https://example.invalid/test'));
-        $em->flush();
-        $em->clear();
+        $this->persistOperationStatus('港別テスト運航会社 下り', 0, OperationStatusEnum::NoService);
 
         $crawler = $this->client->request('GET', '/');
 
         $this->assertResponseIsSuccessful();
-        $this->findCard($crawler, '港別テスト運航会社');
+        $card = $this->findCard($crawler, '港別テスト運航会社');
         $this->assertCount(0, $crawler->filter('.idle-companies'));
+        // 航路単位の「便なし」ではなく、途中の港を出る便があると出す（tasks T054a）
+        $this->assertStringContainsString('途中の港を出る便あり', $card->text());
+        $this->assertStringNotContainsString('便なし', $card->text());
     }
 
     public function testIndexIsPrivateAndVariesByCookie(): void
@@ -676,6 +810,41 @@ class StatusControllerTest extends WebTestCase
             ->setParameter('date', (new \DateTime('today'))->modify("+{$daysAhead} days"))
             ->setParameter('ship', '港別テスト丸')
             ->execute();
+    }
+
+    /** 港別ステータスの確認時刻を書き換える。$companyName が null なら全部 */
+    private function setCheckedAt(?string $companyName, string $checkedAt): void
+    {
+        $conn = $this->entityManager()->getConnection();
+        $time = (new \DateTimeImmutable($checkedAt))->format('Y-m-d H:i:s');
+        if ($companyName === null) {
+            $conn->executeStatement('UPDATE departure_statuses SET checked_at = ?', [$time]);
+
+            return;
+        }
+        $conn->executeStatement(
+            'UPDATE departure_statuses d JOIN routes r ON r.id = d.route_id JOIN ferry_companies fc ON fc.id = r.ferry_company_id SET d.checked_at = ? WHERE fc.name = ?',
+            [$time, $companyName],
+        );
+    }
+
+    private function companyId(string $name): int
+    {
+        return $this->entityManager()->getRepository(FerryCompany::class)->findOneBy(['name' => $name])->getId();
+    }
+
+    private function persistOperationStatus(string $routeName, int $daysAhead, OperationStatusEnum $status, ?string $detail = null): void
+    {
+        $em = $this->entityManager();
+        $em->persist((new OperationStatus())
+            ->setRoute($em->getRepository(Route::class)->findOneBy(['name' => $routeName]))
+            ->setStatus($status)
+            ->setStatusDetail($detail)
+            ->setValidDate((new \DateTime('today'))->modify("+{$daysAhead} days"))
+            ->setScrapedAt(new \DateTime())
+            ->setSourceUrl('https://example.invalid/test'));
+        $em->flush();
+        $em->clear();
     }
 
     private function portId(string $name): int

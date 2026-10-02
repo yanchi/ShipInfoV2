@@ -195,4 +195,53 @@ class DepartureStatusRepositoryTest extends KernelTestCase
         );
         $this->assertNotContains(['鹿児島', '亀徳'], $orders, '無効な会社の寄港順が使われています。');
     }
+
+    /** 会社ごとの最大値。前日より前の行は見ない。無効な会社・航路、direction の無い航路は入らない。行が無い会社はキーが無い */
+    public function testFindLatestCheckedAtByCompany(): void
+    {
+        $port  = $this->em->getRepository(Port::class)->findOneBy(['name' => '名瀬']);
+        $today = new \DateTimeImmutable('today');
+
+        $make = function (string $label, bool $companyActive, array $routes) use ($port): FerryCompany {
+            $company = (new FerryCompany())->setName("最終確認テスト会社（{$label}）")->setActive($companyActive);
+            $this->em->persist($company);
+            foreach ($routes as [$routeActive, $direction, $rows]) {
+                $route = (new Route())
+                    ->setFerryCompany($company)
+                    ->setName("最終確認テスト航路（{$label}）")
+                    ->setDirection($direction)
+                    ->setActive($routeActive);
+                $this->em->persist($route);
+                foreach ($rows as $i => [$dateOffset, $checkedAt]) {
+                    $this->em->persist((new DepartureStatus())
+                        ->setRoute($route)
+                        ->setPort($port)
+                        ->setDepartureDate(\DateTime::createFromImmutable((new \DateTimeImmutable('today'))->modify("{$dateOffset} days")))
+                        ->setShipName("船{$i}")
+                        ->setStatus(OperationStatusEnum::Operating)
+                        ->setContentHash(str_repeat('a', 64))
+                        ->setCheckedAt(new \DateTime($checkedAt)));
+                }
+            }
+            $this->em->flush();
+            $this->extraCompanyIds[] = $company->getId();
+
+            return $company;
+        };
+
+        $main = $make('対象', true, [
+            [true, RouteDirectionEnum::Down, [[0, 'today 06:00'], [1, 'today 07:30'], [-1, 'yesterday 20:00'], [-2, 'today 09:00']]],
+            [false, RouteDirectionEnum::Up, [[0, 'today 10:00']]],
+            [true, null, [[0, 'today 11:00']]],
+        ]);
+        $inactive = $make('無効', false, [[true, RouteDirectionEnum::Down, [[0, 'today 08:00']]]]);
+        $old      = $make('古い行だけ', true, [[true, RouteDirectionEnum::Down, [[-2, 'today 08:00']]]]);
+        $this->em->clear();
+
+        $result = $this->repository->findLatestCheckedAtByCompany($today);
+
+        $this->assertSame($today->setTime(7, 30)->format('Y-m-d H:i:s'), $result[$main->getId()]->format('Y-m-d H:i:s'));
+        $this->assertArrayNotHasKey($inactive->getId(), $result);
+        $this->assertArrayNotHasKey($old->getId(), $result);
+    }
 }

@@ -261,28 +261,28 @@
 
 ### Tests for User Story 5
 
-- [ ] T047 [P] [US5] `app/tests/View/PortBoardTest.php` に `forCompany()` のテストを足す：その会社の Status・Scheduled のエントリーだけが残る、他社のエントリーと NoInfo・NoService のエントリーは落ちる、エントリーが無くなった行・方向は落ちる
-- [ ] T048 [P] [US5] `app/tests/Repository/OperationStatusRepositoryTest.php` に `findUpcomingByCompany()` のテストを足す（今日〜3日先だけ、昨日は入らない、無効な航路は入らない）。`findRecentByCompany` のテスト2件（`testFindRecentByCompanyReturnsArray`・`testFindRecentByCompanyReturnsAtMostNDays`）を削除する
+- [X] T047 [P] [US5] `app/tests/View/PortBoardTest.php` に `forCompany()` のテストを足す：その会社の Status・Scheduled のエントリーだけが残る、他社のエントリーと NoInfo・NoService のエントリーは落ちる、エントリーが無くなった行・方向は落ちる
+- [X] T048 [P] [US5] `app/tests/Repository/OperationStatusRepositoryTest.php` に `findUpcomingByCompany()` のテストを足す（今日〜3日先だけ、昨日は入らない、無効な航路は入らない）。`findRecentByCompany` のテスト2件（`testFindRecentByCompanyReturnsArray`・`testFindRecentByCompanyReturnsAtMostNDays`）を削除する
 
 ### Implementation for User Story 5
 
-- [ ] T049 [P] [US5] `app/src/Enum/CompanyDayStateEnum.php` を作る（`Services = 'services'`、`NoService = 'no_service'`、`NoInfo = 'no_info'`）
-- [ ] T050 [P] [US5] `app/src/View/CompanyDay.php` を作る（data-model.md の `CompanyDay`：`date`・`state`・`routeSummaries`・`board`）
-- [ ] T051 [US5] `app/src/View/PortBoard.php` に `forCompany(int $companyId): PortBoard` を追加する（research R13）。`state` が `Status` か `Scheduled` で `companyId` が一致するエントリーだけを残す。エントリーが無くなった行、行が無くなった方向は落とす。日付は残す
-- [ ] T052 [US5] `app/src/Repository/OperationStatusRepository.php` に `findUpcomingByCompany(FerryCompany $company, int $days): array` を追加する（`valid_date` が今日〜`$days-1` 日先、その会社の有効な航路。`[Y-m-d => list<OperationStatus>]`）。`findRecentByCompany()` を削除する
-- [ ] T053 [US5] `app/src/Controller/StatusController.php` の `company()` を変える
+- [X] T049 [P] [US5] `app/src/Enum/CompanyDayStateEnum.php` を作る（`Services = 'services'`、`NoService = 'no_service'`、`NoInfo = 'no_info'`）
+- [X] T050 [P] [US5] `app/src/View/CompanyDay.php` を作る（data-model.md の `CompanyDay`：`date`・`state`・`routeSummaries`・`board`）
+- [X] T051 [US5] `app/src/View/PortBoard.php` に `forCompany(int $companyId): PortBoard` を追加する（research R13）。`state` が `Status` か `Scheduled` で `companyId` が一致するエントリーだけを残す。エントリーが無くなった行、行が無くなった方向は落とす。日付は残す
+- [X] T052 [US5] `app/src/Repository/OperationStatusRepository.php` に `findUpcomingByCompany(FerryCompany $company, int $days): array` を追加する（`valid_date` が今日〜`$days-1` 日先、その会社の有効な航路。`[Y-m-d => list<OperationStatus>]`）。`findRecentByCompany()` を削除する
+- [X] T053 [US5] `app/src/Controller/StatusController.php` の `company()` を変える
   - 全港4日分のボードを作り、`forCompany($company->getId())` する
   - `findForBoard()` の結果（`DepartureStatus` の配列）から、日付ごとに「その会社の行があるか」「その会社の `no_service` の行があるか」を数える
   - 日付ごとに `CompanyDay` を作る：ボードの日付に行があれば `Services`、無くて `no_service` の行があれば `NoService`、その会社の行が1つも無ければ `NoInfo`（data-model.md の state の決め方）
   - `routeSummaries` は `findUpcomingByCompany()` のその日の行
   - `now` も渡す
-- [ ] T054 [US5] `app/templates/status/company.html.twig` を書き直す（FR-019〜021）
+- [X] T054 [US5] `app/templates/status/company.html.twig` を書き直す（FR-019〜021）
   - 日付ごとに見出し「n月j日（曜）」
   - `routeSummaries` があれば、航路ごとに「{航路名} {バッジ} {詳細文}」の1行（詳細文は T036 と同じく60文字で畳む）
   - `state` が `Services` → 方向ごとに `_port_entry` で各行（`li.port-row` と `.fw-bold` の「{港}発 → {到着港}」）
   - `NoService` → 「— 便なし」の1行、`NoInfo` → 「？ 情報なし」の1行
-- [ ] T054a [US5] **TODO（PR #34 レビュー）** トップの会社カードと会社別ページの航路の行は、航路単位の情報（`operation_statuses`）をそのまま出しているので、前日に始発港を出た便が今日途中の港を出る会社でも「— 便なし」になる（例：マリックスの航路単位の情報は `no_service` なのに、和泊を今日 12:00 に出る便がある）。カードは出ているのに中身が「便なし」で、矛盾して見える。航路単位の `no_service` の見せ方（「始発港発の便なし」と書く、港別ボードに便があれば出さない、など）を決めて直す。PR3 より前にリリースするなら、先にこれだけ直す
-- [ ] T055 [US5] `app/tests/Controller/StatusControllerTest.php` に足す：今日〜3日先の見出しが出て昨日が無い、便のある日に `li.port-row` が出る、`no_service` の行だけの日が「便なし」、行が無い日が「情報なし」、航路の要約行が出る日・出ない日。既存の `testCompanyPage*`（200・404）が通ること
+- [X] T054a [US5] **TODO（PR #34 レビュー）** トップの会社カードと会社別ページの航路の行は、航路単位の情報（`operation_statuses`）をそのまま出しているので、前日に始発港を出た便が今日途中の港を出る会社でも「— 便なし」になる（例：マリックスの航路単位の情報は `no_service` なのに、和泊を今日 12:00 に出る便がある）。カードは出ているのに中身が「便なし」で、矛盾して見える。航路単位の `no_service` の見せ方（「始発港発の便なし」と書く、港別ボードに便があれば出さない、など）を決めて直す。PR3 より前にリリースするなら、先にこれだけ直す
+- [X] T055 [US5] `app/tests/Controller/StatusControllerTest.php` に足す：今日〜3日先の見出しが出て昨日が無い、便のある日に `li.port-row` が出る、`no_service` の行だけの日が「便なし」、行が無い日が「情報なし」、航路の要約行が出る日・出ない日。既存の `testCompanyPage*`（200・404）が通ること
 
 **Checkpoint**: US5 の Independent Test が通る。`make test-php` が全部通る → コミット
 
@@ -296,9 +296,9 @@
 
 ### Tests for User Story 6
 
-- [ ] T056 [P] [US6] `app/tests/Repository/DepartureStatusRepositoryTest.php` に `findLatestCheckedAtByCompany()` のテストを足す：会社ごとの最大値、前日より前の行は見ない、無効な会社・航路は入らない、行が無い会社はキーが無い
-- [ ] T057 [P] [US6] `app/tests/Repository/` に `FerryCompanyRepositoryTest.php` を作り、`findBoardCompanies()` が「有効で、方向のある有効な航路を持つ会社」だけを返すことをテストする
-- [ ] T058 [P] [US6] `app/tests/Twig/SiteExtensionTest.php` を作る（リポジトリはモック）
+- [X] T056 [P] [US6] `app/tests/Repository/DepartureStatusRepositoryTest.php` に `findLatestCheckedAtByCompany()` のテストを足す：会社ごとの最大値、前日より前の行は見ない、無効な会社・航路は入らない、行が無い会社はキーが無い
+- [X] T057 [P] [US6] `app/tests/Repository/` に `FerryCompanyRepositoryTest.php` を作り、`findBoardCompanies()` が「有効で、方向のある有効な航路を持つ会社」だけを返すことをテストする
+- [X] T058 [P] [US6] `app/tests/Twig/SiteExtensionTest.php` を作る（リポジトリはモック）
   - 全社の最終確認時刻が1時間前 → 古くない、表示する時刻は一番古い会社の時刻
   - 1社だけ3時間前 → 古い、その会社名が入る
   - 1社の結果が無い（キーが無い）→ 古い、その会社名が入る
@@ -306,21 +306,21 @@
 
 ### Implementation for User Story 6
 
-- [ ] T059 [P] [US6] `app/src/Repository/DepartureStatusRepository.php` に `findLatestCheckedAtByCompany(\DateTimeImmutable $today): array` を追加する（research R10）。`SELECT fc.id, MAX(d.checkedAt) … WHERE d.departureDate >= :from AND r.active = true AND fc.active = true AND r.direction IS NOT NULL GROUP BY fc.id`、`:from` は `$today->modify('-1 day')`。`[companyId => \DateTimeImmutable]` で返す
-- [ ] T060 [P] [US6] `app/src/Repository/FerryCompanyRepository.php` に `findBoardCompanies(): array` を追加する（有効な会社で、`direction` が NULL でない有効な航路を持つもの。重複なし、ID 順）
-- [ ] T061 [US6] `app/src/Twig/SiteExtension.php` を作る（`AbstractExtension`、自動で登録される）
+- [X] T059 [P] [US6] `app/src/Repository/DepartureStatusRepository.php` に `findLatestCheckedAtByCompany(\DateTimeImmutable $today): array` を追加する（research R10）。`SELECT fc.id, MAX(d.checkedAt) … WHERE d.departureDate >= :from AND r.active = true AND fc.active = true AND r.direction IS NOT NULL GROUP BY fc.id`、`:from` は `$today->modify('-1 day')`。`[companyId => \DateTimeImmutable]` で返す
+- [X] T060 [P] [US6] `app/src/Repository/FerryCompanyRepository.php` に `findBoardCompanies(): array` を追加する（有効な会社で、`direction` が NULL でない有効な航路を持つもの。重複なし、ID 順）
+- [X] T061 [US6] `app/src/Twig/SiteExtension.php` を作る（`AbstractExtension`、自動で登録される）
   - `site_freshness()`：`{checkedAt: ?DateTimeImmutable, isStale: bool, staleCompanies: list<string>}`。`findBoardCompanies()` の各社について `findLatestCheckedAtByCompany()` の値を見て、無い会社と2時間以上前の会社を `staleCompanies` に入れる。`checkedAt` は値のある会社の中で一番古い時刻。閾値は `private const STALE_AFTER = 'PT2H'`
   - `site_companies()`：有効な会社の一覧（ヘッダーの「各社」用）
   - どちらも、結果をプロパティに覚えておき、同じリクエストの中では2回目以降クエリを走らせない（research R10）
-- [ ] T062 [US6] `app/templates/base.html.twig` に共通ヘッダーを置く（FR-022・research R11）
+- [X] T062 [US6] `app/templates/base.html.twig` に共通ヘッダーを置く（FR-022・research R11）
   - Bootstrap の `navbar navbar-expand-md`。サイト名（`/` へのリンク）、「港別」（`/ports`）、「各社」（ドロップダウンで `site_companies()` の各社、`/company/{id}`）
   - 今いるページのリンクに `active` と `aria-current="page"`（`app.request.attributes.get('_route')` で判定）
   - スマートフォン幅では折りたたむ。ヘッダーは sticky にしない（research R16）
-- [ ] T063 [US6] `app/templates/base.html.twig` のヘッダーの下に最終確認時刻を出す（FR-023）
+- [X] T063 [US6] `app/templates/base.html.twig` のヘッダーの下に最終確認時刻を出す（FR-023）
   - 古くない → `small text-muted` で「最終確認 {n/j H:i}」
   - 古い → `alert alert-warning` で「情報が古い可能性があります（{会社名、…} の情報が2時間以上更新されていません）」と最終確認時刻
   - 3画面の「← トップへ戻る」のリンクは、共通ヘッダーがあるので削除する
-- [ ] T064 [US6] `app/tests/Controller/StatusControllerTest.php` に足す：3画面すべてにヘッダー（`nav` の中に `/`・`/ports`・各社へのリンク）があり、今のページに `aria-current="page"`。テストデータの確認時刻が新しい → 警告が無い。1社の `checked_at` を3時間前にする → 警告とその会社名
+- [X] T064 [US6] `app/tests/Controller/StatusControllerTest.php` に足す：3画面すべてにヘッダー（`nav` の中に `/`・`/ports`・各社へのリンク）があり、今のページに `aria-current="page"`。テストデータの確認時刻が新しい → 警告が無い。1社の `checked_at` を3時間前にする → 警告とその会社名
 
 **Checkpoint**: US6 の Independent Test が通る。`make test-php` が全部通る → コミット
 
@@ -328,10 +328,11 @@
 
 ## Phase 9: Polish & Cross-Cutting（PR3 の仕上げ）
 
-- [ ] T065 幅 375 × 667 で3画面すべてを目視する（SC-008）。共通ヘッダーが入った状態で、港別ページとトップの SC-003・SC-004（スクロールせずに見える）を満たすこと。満たさなければヘッダーの高さを詰める
-- [ ] T066 全ステータスを出したページをグレースケール（開発者ツールの「Emulate vision deficiencies → Achromatopsia」）で見て、記号と文言だけで区別できることを確認する（SC-007）
-- [ ] T067 quickstart.md の「PR3」の手順を全部実際に行う（スクレイパーを止めてから。終わったら `make scraper-run` と `docker compose start scraper` で戻す）
-- [ ] T068 push して PR を作る。説明に US5・US6 との対応、削除した `findRecentByCompany()` とそのテスト、「← トップへ戻る」を消したことを書く
+- [X] T065 幅 375 × 667 で3画面すべてを目視する（SC-008）。共通ヘッダーが入った状態で、港別ページとトップの SC-003・SC-004（スクロールせずに見える）を満たすこと。満たさなければヘッダーの高さを詰める
+- [X] T066 全ステータスを出したページをグレースケール（開発者ツールの「Emulate vision deficiencies → Achromatopsia」）で見て、記号と文言だけで区別できることを確認する（SC-007）
+- [X] T067 quickstart.md の「PR3」の手順を全部実際に行う（スクレイパーを止めてから。終わったら `make scraper-run` と `docker compose start scraper` で戻す）
+- [X] T068 push して PR を作る。説明に US5・US6 との対応、削除した `findRecentByCompany()` とそのテスト、「← トップへ戻る」を消したことを書く
+- [X] T068a PR #35 のレビュー対応：無効な会社のページは 404 にする。古さの判定を `DataFreshnessChecker`（Service）に出し、閾値の時間数を戻り値 `staleHours` で文言にも使う。Twig は `SiteExtension` と `SiteRuntime`（`RuntimeExtensionInterface`）に分ける。`findUpcomingByCompany()` は「今日」を引数で受け取る。「便がある」の判定を `PortBoardEntry::isDeparture()` にまとめる。テンプレートの Enum の比較を `is same as constant(...)` にする
 
 ---
 

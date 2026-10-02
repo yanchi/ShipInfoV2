@@ -67,6 +67,7 @@ make scraper-run   # 最新のデータを入れる
      ```
 
    - 確認が終わったら `make scraper-run` でデータを戻し、`docker compose start scraper` で再開する
+     （`raw_html_hash` で同じ内容の取得を飛ばすので、消した行が戻らないことがある。先に `CREATE TABLE tmp_backup AS SELECT …` で退避しておき、`INSERT INTO departure_statuses SELECT * FROM tmp_backup` で戻すと確実）
 
 ## テスト
 

@@ -3,7 +3,7 @@
 {% block title %}ShipInfo - フェリー運航情報{% endblock %}
 
 {% block body %}
-<div class="container py-4">
+<div class="container pt-3 pb-4">
     <h1 class="h4 mb-1">ShipInfo - フェリー運航情報</h1>
     <p class="text-muted mb-3">{{ today|date('Y年n月j日（') }}{{ ['日','月','火','水','木','金','土'][today|date('w')] }}）の運航状況</p>
 
@@ -68,7 +68,12 @@
                                 {% set status = routeData.status %}
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span>{{ route.name }}</span>
-                                    {{ include('status/_status_badge.html.twig', {state: null, status: status ? status.status : null}) }}
+                                    {% if routesDepartingMidway[route.id] is defined %}
+                                        {# 航路単位では便なし（始発港を出る便が無い）でも、途中の港を出る便がある（tasks T054a） #}
+                                        <a href="{{ path('app_status_company', {id: company.id}) }}" class="route-midway small">途中の港を出る便あり</a>
+                                    {% else %}
+                                        {{ include('status/_status_badge.html.twig', {state: null, status: status ? status.status : null}) }}
+                                    {% endif %}
                                 </li>
                             {% else %}
                                 <li class="list-group-item text-muted">航路情報がありません。</li>

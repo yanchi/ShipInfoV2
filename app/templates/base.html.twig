@@ -9,6 +9,14 @@
         <style>
             /* 共通の CSS（アセットのビルド環境は入れないので、ここに置く） */
 
+            /* 共通ヘッダー（FR-022）。「各社」は <details> のドロップダウン */
+            .site-header .nav-link.active, .site-header summary.active { color: var(--bs-emphasis-color); }
+            .site-companies { position: relative; }
+            .site-companies > summary { cursor: pointer; list-style: none; color: var(--bs-link-color); }
+            .site-companies > summary::-webkit-details-marker { display: none; }
+            .site-companies > summary::after { content: " ▾"; }
+            .site-companies-menu { position: absolute; top: 100%; left: 0; z-index: 20; min-width: 12rem; margin-top: .25rem; background: var(--bs-body-bg); }
+
             /* ステータス表示（specs/5-ui-readability/contracts/ui-status.md） */
             .badge-scheduled { background: var(--bs-body-bg); color: var(--bs-body-color); border: 1px dashed var(--bs-secondary); }
             .badge-muted { background: var(--bs-secondary-bg-subtle); color: var(--bs-secondary-text-emphasis); }
@@ -38,6 +46,40 @@
         {% block stylesheets %}{% endblock %}
     </head>
     <body>
+        {#- 共通ヘッダー（FR-022）。JS 無しでも使えるよう、折りたたまず1行にし、「各社」は <details> で開く -#}
+        {%- set currentRoute = app.request.attributes.get('_route') -%}
+        {%- set currentCompanyId = currentRoute == 'app_status_company' ? app.request.attributes.get('id')|default(null) : null -%}
+        <header class="site-header border-bottom">
+            <nav class="container d-flex align-items-center gap-3 py-2" aria-label="サイト">
+                <a href="{{ path('app_status_index') }}" class="site-brand fw-bold text-decoration-none text-reset{{ currentRoute == 'app_status_index' ? ' active' }}"{% if currentRoute == 'app_status_index' %} aria-current="page"{% endif %}>ShipInfo</a>
+                <a href="{{ path('app_status_ports') }}" class="nav-link p-0{{ currentRoute == 'app_status_ports' ? ' active fw-bold' }}"{% if currentRoute == 'app_status_ports' %} aria-current="page"{% endif %}>港別</a>
+                <details class="site-companies">
+                    <summary class="nav-link p-0{{ currentRoute == 'app_status_company' ? ' active fw-bold' }}">各社</summary>
+                    <ul class="site-companies-menu list-unstyled border rounded shadow-sm py-1 mb-0">
+                        {% for company in site_companies() %}
+                            {%- set isCurrent = currentCompanyId is not null and currentCompanyId == company.id -%}
+                            <li><a href="{{ path('app_status_company', {id: company.id}) }}" class="dropdown-item{{ isCurrent ? ' active' }}"{% if isCurrent %} aria-current="page"{% endif %}>{{ company.name }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </details>
+            </nav>
+        </header>
+
+        {#- 最終確認時刻と古い情報の警告（FR-023） -#}
+        {%- set freshness = site_freshness() -%}
+        {% if freshness.isStale %}
+            <div class="container mt-2">
+                <div class="site-freshness alert alert-warning py-2 small mb-0" role="alert">
+                    情報が古い可能性があります（{{ freshness.staleCompanies|join('、') }} の情報が{{ freshness.staleHours }}時間以上更新されていません）
+                    {%- if freshness.checkedAt %}。最終確認 {{ freshness.checkedAt|date('n/j H:i') }}{% endif %}
+                </div>
+            </div>
+        {% elseif freshness.checkedAt %}
+            <div class="container">
+                <p class="site-freshness small text-muted text-end mt-1 mb-0">最終確認 {{ freshness.checkedAt|date('n/j H:i') }}</p>
+            </div>
+        {% endif %}
+
         {% block body %}{% endblock %}
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
         {% block javascripts %}{% endblock %}

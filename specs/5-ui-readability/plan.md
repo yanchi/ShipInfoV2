@@ -75,7 +75,9 @@ specs/5-ui-readability/
 app/src/Controller/StatusController.php          # 3アクションとも変更
 app/src/Service/PortFilterResolver.php           # 新規：クエリ・Cookie から PortFilter を作る
 app/src/Service/PortAlertSummaryBuilder.php      # 新規：異常の要約
-app/src/Twig/SiteExtension.php                   # 新規：会社ごとの最終確認時刻・古さ判定・会社一覧（リクエスト内で結果を覚える）
+app/src/Service/DataFreshnessChecker.php         # 新規：会社ごとの最終確認時刻・古さ判定（リクエスト内で結果を覚える）
+app/src/Twig/SiteExtension.php                   # 新規：Twig 関数 site_freshness()・site_companies() の定義
+app/src/Twig/SiteRuntime.php                     # 新規：上の関数の中身（RuntimeExtensionInterface）
 app/src/Enum/CompanyDayStateEnum.php             # 新規：便あり / 便なし / 情報なし
 app/src/View/PortFilter.php                      # 新規
 app/src/View/PortAlert.php                       # 新規

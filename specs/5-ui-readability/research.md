@@ -115,6 +115,8 @@ CSRF トークンは `symfony/security-csrf` の stateless トークンを使う
 
 全ページで使うので、Twig 拡張 `SiteExtension` の関数（`site_freshness()`）で base レイアウトから呼ぶ。`SiteExtension` はリクエストの中で結果を覚えておき、同じクエリを2回走らせない（PR #31 レビュー）。
 
+**更新（PR #35 レビュー）**: 古さの判定はロジックなので Service（`DataFreshnessChecker`）に出し、Twig は `SiteExtension`（関数の定義）と `SiteRuntime`（中身、`RuntimeExtensionInterface`）に分けた。結果を覚えておくのは `DataFreshnessChecker`（`ResetInterface` で kernel.reset のときに忘れる）。閾値の2時間は `DataFreshnessChecker::STALE_AFTER_HOURS` だけに書き、警告の文言は戻り値の `staleHours` を出す。
+
 **Rationale**:
 - サイト全体の `MAX(checked_at)` だと、1社のスクレイパーが止まっても、もう1社が動いていれば警告が出ない。その間、止まった会社の古い「通常運航」が表示され続ける（PR #31 レビュー）
 - `checked_at` は出港前の行ならスクレイパーが実行のたびに更新するので、スクレイパーが止まれば止まった時刻のまま残る。2 時間経てば4回分の失敗になる
@@ -130,6 +132,8 @@ CSRF トークンは `symfony/security-csrf` の stateless トークンを使う
 ## R11. 共通ヘッダーの「各社」リンク（FR-022）
 
 **Decision**: 同じ `SiteExtension` に `site_companies()`（有効な会社の一覧）を置く。ヘッダーの「各社」は Bootstrap のドロップダウンにする（Bootstrap の JS は読み込み済み）。スマートフォン幅ではヘッダーを折りたたむ（navbar の collapse）。
+
+**更新（PR3 実装時）**: Bootstrap のドロップダウンと collapse は JS が無いと開かないので、plan の「JS 無しでも全機能が動く」に合わない。そこで、ヘッダーは折りたたまずに1行（「ShipInfo」「港別」「各社 ▾」）にし、「各社」は `<details>` で開くメニューにした。項目が3つだけなので 375px でも1行に収まり、折りたたむより高さも低い（R16）。
 
 ## R12. トップの構成（FR-015〜018）
 
@@ -152,6 +156,10 @@ CSRF トークンは `symfony/security-csrf` の stateless トークンを使う
   - **情報なし**：その日その会社の行が1つも無い（まだ取得していない・取得に失敗した）
 - 航路の要約行：`OperationStatusRepository::findUpcomingByCompany($company, $days)`（今日〜3日先、`valid_date >= today`）。航路単位の情報が無い日・航路は要約行を出さない
 - 今の `findRecentByCompany()` は会社別ページでしか使っていないので削除する。`OperationStatusRepositoryTest` のそのテスト（2件）も削除する
+- **航路単位の `no_service` の見せ方（PR #34 レビュー、tasks T054a）**: 航路単位の `no_service` は「始発港を出る便が無い」という意味なので、前日に始発港を出た便がその日途中の港を出ることがある。そのまま「— 便なし」と出すと、下に出る便の行や港別ページと矛盾して見える。そこで、その日その方向にその会社の便が港別ボードにあるときは：
+  - 会社別ページ：その航路の要約行を出さない（便の行で分かるため）
+  - トップの会社カード：バッジの代わりに「途中の港を出る便あり」と出し、会社別ページへリンクする
+  - ステータスの8種類（contracts/ui-status.md）は増やさない
 
 **Rationale**:
 - 便の行は `/ports` と同じビルダーを通すので、「他社運航」「運航予定」の判定が港別ページと一致する

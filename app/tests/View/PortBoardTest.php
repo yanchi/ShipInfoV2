@@ -106,7 +106,63 @@ class PortBoardTest extends TestCase
         $this->assertEquals($board, $board->filter(PortFilter::none()));
     }
 
+    public function testForCompanyKeepsOnlyThatCompanysServices(): void
+    {
+        $board = new PortBoard([
+            new PortBoardDay(new \DateTimeImmutable('2026-10-01'), [
+                $this->direction(RouteDirectionEnum::Down, [
+                    // 自社の発表済み・他社の発表済み → 自社だけ残る
+                    $this->row(1, [$this->service(1), $this->service(2)]),
+                    // 他社だけ → 行ごと落ちる
+                    $this->row(3, [$this->service(2)]),
+                    // 自社の運航予定 → 残る
+                    $this->row(5, [$this->service(1, DepartureDisplayStateEnum::Scheduled)]),
+                ]),
+                // 情報なし・便なしだけ → 方向ごと落ちる
+                $this->direction(RouteDirectionEnum::Up, [
+                    $this->row(7, [new PortBoardEntry(DepartureDisplayStateEnum::NoInfo, companyId: 1)]),
+                    $this->row(5, [new PortBoardEntry(DepartureDisplayStateEnum::NoService)]),
+                ]),
+            ]),
+            new PortBoardDay(new \DateTimeImmutable('2026-10-02'), [
+                $this->direction(RouteDirectionEnum::Down, [$this->row(1, [$this->service(2)])]),
+            ]),
+        ]);
+
+        $company = $board->forCompany(1);
+
+        $this->assertSame(['down' => [1, 5]], $this->portIdsByDirection($company->days[0]));
+        $this->assertCount(1, $company->days[0]->directions[0]->rows[0]->entries);
+        $this->assertSame(1, $company->days[0]->directions[0]->rows[0]->entries[0]->companyId);
+        // 日付は残る
+        $this->assertCount(2, $company->days);
+        $this->assertSame([], $company->days[1]->directions);
+    }
+
+    public function testHasDeparturesOf(): void
+    {
+        $day = new PortBoardDay(new \DateTimeImmutable('2026-10-01'), [
+            $this->direction(RouteDirectionEnum::Down, [$this->row(1, [$this->service(1)])]),
+            $this->direction(RouteDirectionEnum::Up, [$this->row(7, [new PortBoardEntry(DepartureDisplayStateEnum::NoInfo, companyId: 2)])]),
+        ]);
+
+        $this->assertTrue($day->hasDeparturesOf(1));
+        $this->assertTrue($day->hasDeparturesOf(1, RouteDirectionEnum::Down));
+        $this->assertFalse($day->hasDeparturesOf(1, RouteDirectionEnum::Up));
+        // 情報なし（他社運航の今日の行）は便として数えない
+        $this->assertFalse($day->hasDeparturesOf(2));
+    }
+
     // ------------------------------------------------------------------
+
+    private function service(int $companyId, DepartureDisplayStateEnum $state = DepartureDisplayStateEnum::Status): PortBoardEntry
+    {
+        return new PortBoardEntry(
+            $state,
+            $state === DepartureDisplayStateEnum::Status ? \App\Enum\OperationStatusEnum::Operating : null,
+            companyId: $companyId,
+        );
+    }
 
     /** 2日分。下り：1・3・5 → 7、上り：7・5・3 → 1 */
     private function sampleBoard(): PortBoard

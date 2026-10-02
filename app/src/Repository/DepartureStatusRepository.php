@@ -45,4 +45,36 @@ class DepartureStatusRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * 会社ごとの最終確認時刻（MAX(checked_at)）。$today の前日以降の行だけを見る（idx_departure_date_port が効く）。
+     * 有効な会社の、有効で direction のある航路だけを対象にする。行が1つも無い会社はキーが無い（呼び出し側で古い扱いにする）。
+     *
+     * @return array<int, \DateTimeImmutable> [companyId => 最終確認時刻]
+     */
+    public function findLatestCheckedAtByCompany(\DateTimeImmutable $today): array
+    {
+        $rows = $this->createQueryBuilder('d')
+            ->select('IDENTITY(r.ferryCompany) AS companyId', 'MAX(d.checkedAt) AS checkedAt')
+            ->join('d.route', 'r')
+            ->join('r.ferryCompany', 'fc')
+            ->where('d.departureDate >= :from')
+            ->andWhere('r.active = :active')
+            ->andWhere('fc.active = :active')
+            ->andWhere('r.direction IS NOT NULL')
+            ->setParameter('from', $today->modify('-1 day')->format('Y-m-d'))
+            ->setParameter('active', true)
+            ->groupBy('r.ferryCompany')
+            ->getQuery()
+            ->getArrayResult();
+
+        $result = [];
+        foreach ($rows as $row) {
+            if ($row['checkedAt'] !== null) {
+                $result[(int) $row['companyId']] = new \DateTimeImmutable($row['checkedAt']);
+            }
+        }
+
+        return $result;
+    }
 }

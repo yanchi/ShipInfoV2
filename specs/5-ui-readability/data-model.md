@@ -49,6 +49,12 @@
 | `forCompany(int $companyId): PortBoard` | その会社の便（`state` が `status` / `scheduled`、`companyId` が一致）のエントリーだけを残す。エントリーが無くなった行・方向は落とす |
 | `lastCheckedAt(): ?DateTimeInterface` | ボード内の最大の確認時刻 |
 
+### PortBoardDay（変更）
+
+| 追加メソッド | 説明 |
+|---|---|
+| `hasDeparturesOf(int $companyId, ?RouteDirectionEnum $direction = null): bool` | その会社の便（`state` が `status` / `scheduled`）がこの日にあるか。トップの「本日運航なし」と、航路単位の `no_service` を出すかの判定に使う |
+
 ### PortBoardDirection（変更）
 
 | 追加メソッド | 説明 |
@@ -97,7 +103,7 @@
 |---|---|---|
 | `date` | `DateTimeImmutable` | 日付 |
 | `state` | `CompanyDayStateEnum` | `services`（便あり）/ `no_service`（便なし）/ `no_info`（情報なし） |
-| `routeSummaries` | `list<array{route: Route, status: OperationStatus}>` | 航路単位の要約行。情報がある航路だけ |
+| `routeSummaries` | `list<OperationStatus>` | 航路単位の要約行。情報がある航路だけ（航路は `OperationStatus::getRoute()`）。航路単位では `no_service` でも、その日その方向の便が途中の港を出るなら入れない（tasks T054a） |
 | `board` | `?PortBoardDay` | その会社の便の行。`state` が `services` のときだけ入る |
 
 **state の決め方**:
@@ -105,7 +111,7 @@
 - 行は無いが、その日その会社の `departure_statuses` に `no_service` の行がある → `no_service`
 - その日その会社の `departure_statuses` が1行も無い → `no_info`
 
-`CompanyDayStateEnum` は `app/src/Enum/` に置く（新規）。
+`CompanyDayStateEnum` は `app/src/Enum/` に置く（新規）。組み立ては `CompanyDaysBuilder`（Service、新規）で行う。
 
 ---
 
@@ -115,7 +121,7 @@
 |---|---|
 | `DepartureStatusRepository::findLatestCheckedAtByCompany(DateTimeImmutable $today): array` | 有効な会社・有効な航路で、`departure_date >= $today - 1日` の行について、会社ごとの `MAX(checked_at)`。`[companyId => DateTimeImmutable]`。`idx_departure_date_port` が効く。結果に出てこない会社は呼び出し側（`SiteExtension`）で古い扱いにする |
 | `FerryCompanyRepository::findBoardCompanies(): list<FerryCompany>` | 有効で、方向のある有効な航路を持つ会社（情報の古さの判定の基準）。新規 |
-| `OperationStatusRepository::findUpcomingByCompany(FerryCompany $company, int $days): array` | 今日〜`$days-1` 日先の、その会社の有効な航路の行。`[Y-m-d => list<OperationStatus>]` |
+| `OperationStatusRepository::findUpcomingByCompany(FerryCompany $company, DateTimeImmutable $today, int $days): array` | `$today`〜`$days-1` 日先の、その会社の有効な航路の行。`[Y-m-d => list<OperationStatus>]` |
 | `OperationStatusRepository::findRecentByCompany()` | **削除**（会社別ページでしか使っていない）。`OperationStatusRepositoryTest` の該当テスト2件も削除 |
 
 ## Cookie
