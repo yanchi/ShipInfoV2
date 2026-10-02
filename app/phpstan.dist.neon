@@ -1,0 +1,14 @@
+parameters:
+    level: 7
+    paths:
+        - src
+        - tests
+    excludePaths:
+        - tests/bootstrap.php
+    # Symfony のコンテナ情報（make phpstan・CI は先に cache:warmup --env=test で作る）
+    symfony:
+        containerXmlPath: var/cache/test/App_KernelTestDebugContainer.xml
+    doctrine:
+        objectManagerLoader: tests/PHPStan/object-manager.php
+        # エンティティは new した直後に値が入っていないので、NOT NULL の列でもプロパティは ?型 にしている
+        allowNullablePropertyForRequiredField: true

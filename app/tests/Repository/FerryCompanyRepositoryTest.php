@@ -20,7 +20,7 @@ class FerryCompanyRepositoryTest extends KernelTestCase
     {
         self::bootKernel();
         $this->repository = static::getContainer()->get(FerryCompanyRepository::class);
-        $this->em         = static::getContainer()->get('doctrine')->getManager();
+        $this->em         = static::getContainer()->get(EntityManagerInterface::class);
     }
 
     protected function tearDown(): void
@@ -45,7 +45,7 @@ class FerryCompanyRepositoryTest extends KernelTestCase
 
         $ids = array_map(static fn (FerryCompany $c) => $c->getId(), $this->repository->findBoardCompanies());
 
-        $this->assertSame(1, \count(array_keys($ids, $board, true)));
+        $this->assertCount(1, array_keys($ids, $board, true));
         foreach ([$inactive, $inactiveRoute, $noDirection, $noRoutes] as $id) {
             $this->assertNotContains($id, $ids);
         }

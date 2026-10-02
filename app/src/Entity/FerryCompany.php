@@ -37,6 +37,7 @@ class FerryCompany
     #[ORM\Column(type: 'datetime')]
     private ?\DateTimeInterface $updatedAt = null;
 
+    /** @var Collection<int, Route> */
     #[ORM\OneToMany(mappedBy: 'ferryCompany', targetEntity: Route::class)]
     private Collection $routes;
 

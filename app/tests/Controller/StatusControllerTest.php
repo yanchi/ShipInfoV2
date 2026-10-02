@@ -942,6 +942,6 @@ class StatusControllerTest extends WebTestCase
 
     private function entityManager(): EntityManagerInterface
     {
-        return static::getContainer()->get('doctrine')->getManager();
+        return static::getContainer()->get(EntityManagerInterface::class);
     }
 }
