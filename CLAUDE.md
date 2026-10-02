@@ -57,6 +57,10 @@ make shell-php     # PHPコンテナにシェル接続
 make shell-scraper # Scraperコンテナにシェル接続
 make test-php      # PHPUnitテスト
 make test-scraper  # pytestテスト
+make cs-php        # PHPのコードスタイルチェック（PHP-CS-Fixer）
+make cs-fix-php    # PHPのコードスタイル自動修正
+make lint-scraper  # Pythonのlint・フォーマットチェック（ruff）
+make format-scraper # Pythonの自動フォーマット（ruff format）
 make scraper-run   # スクレイパー即時実行
 ```
 
