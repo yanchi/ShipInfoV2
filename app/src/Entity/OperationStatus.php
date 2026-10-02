@@ -49,13 +49,24 @@ class OperationStatus
     #[ORM\Column(type: 'datetime')]
     private ?\DateTimeInterface $createdAt = null;
 
+    #[ORM\Column(type: 'datetime')]
+    private ?\DateTimeInterface $updatedAt = null;
+
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
-        $this->createdAt = new \DateTime();
+        $now             = new \DateTime();
+        $this->createdAt = $now;
+        $this->updatedAt = $now;
         if ($this->scrapedAt === null) {
-            $this->scrapedAt = new \DateTime();
+            $this->scrapedAt = $now;
         }
+    }
+
+    #[ORM\PreUpdate]
+    public function onPreUpdate(): void
+    {
+        $this->updatedAt = new \DateTime();
     }
 
     public function getId(): ?int
@@ -174,5 +185,10 @@ class OperationStatus
     public function getCreatedAt(): ?\DateTimeInterface
     {
         return $this->createdAt;
+    }
+
+    public function getUpdatedAt(): ?\DateTimeInterface
+    {
+        return $this->updatedAt;
     }
 }

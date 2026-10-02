@@ -8,6 +8,7 @@ use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: ScraperLogRepository::class)]
 #[ORM\Table(name: 'scraper_logs')]
+#[ORM\HasLifecycleCallbacks]
 class ScraperLog
 {
     #[ORM\Id]
@@ -37,12 +38,27 @@ class ScraperLog
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $errorMessage = null;
 
+    #[ORM\Column(type: 'datetime')]
+    private ?\DateTimeInterface $createdAt = null;
+
+    #[ORM\Column(type: 'datetime')]
+    private ?\DateTimeInterface $updatedAt = null;
+
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
+        $now = new \DateTime();
         if ($this->startedAt === null) {
-            $this->startedAt = new \DateTime();
+            $this->startedAt = $now;
         }
+        $this->createdAt = $now;
+        $this->updatedAt = $now;
+    }
+
+    #[ORM\PreUpdate]
+    public function onPreUpdate(): void
+    {
+        $this->updatedAt = new \DateTime();
     }
 
     public function getId(): ?int
@@ -132,5 +148,15 @@ class ScraperLog
         $this->errorMessage = $errorMessage;
 
         return $this;
+    }
+
+    public function getCreatedAt(): ?\DateTimeInterface
+    {
+        return $this->createdAt;
+    }
+
+    public function getUpdatedAt(): ?\DateTimeInterface
+    {
+        return $this->updatedAt;
     }
 }

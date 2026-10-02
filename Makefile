@@ -1,7 +1,7 @@
 .PHONY: help up up-tools down build logs logs-php logs-scraper \
         shell-php shell-scraper \
         migrate migrate-diff fixtures cache-clear \
-        test-php test-scraper lint-scraper format-scraper cs-php cs-fix-php lint-php phpstan audit \
+        test-php test-scraper lint-scraper format-scraper cs-php cs-fix-php lint-php phpstan audit check-schema \
         init init-test-db reset-test-db check-test-token
 
 DOCKER_COMPOSE = docker compose
@@ -121,6 +121,10 @@ lint-scraper: ## Lint and check formatting of Python code with ruff
 
 format-scraper: ## Format Python code with ruff
 	$(DOCKER_COMPOSE) exec $(SCRAPER_SERVICE) ruff format scraper/ tests/
+
+# テスト DB は 01_schema.sql + マイグレーションで作るので、CI・本番と同じ形になる
+check-schema: check-test-token ## Check scraper models against the migrated (test) DB schema
+	$(DOCKER_COMPOSE) exec -T $(SCRAPER_SERVICE) sh -c 'DB_NAME="$${DB_NAME}_test$(TEST_TOKEN)" python -m scraper.db.check_schema'
 
 # ─── Security ───────────────────────────────────────────────────
 

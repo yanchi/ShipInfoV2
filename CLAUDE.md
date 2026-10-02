@@ -64,6 +64,7 @@ make phpstan       # PHPStan（level 7、Symfony・Doctrine・PHPUnit拡張つ�
 make audit         # 依存パッケージの脆弱性チェック（composer audit・pip-audit）
 make lint-scraper  # Pythonのlint・フォーマットチェック（ruff）
 make format-scraper # Pythonの自動フォーマット（ruff format）
+make check-schema  # スクレイパーのモデルの列がマイグレーション後のDBにあるか
 make scraper-run   # スクレイパー即時実行
 ```
 

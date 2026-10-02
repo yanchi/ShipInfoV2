@@ -93,6 +93,28 @@ jobs:
         working-directory: app
         run: php bin/phpunit
 
+      # スクレイパーの SQLAlchemy モデルの列が、マイグレーション後の DB にあるか。
+      # スクレイパーのテストは SQLite にモデルからテーブルを作るので、ここでしか気づけない
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scraper/requirements*.txt
+
+      - name: Check scraper models against migrated schema
+        working-directory: scraper
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_NAME: shipinfo_test
+          DB_USER: root
+          DB_PASSWORD: password
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends default-libmysqlclient-dev pkg-config
+          pip install -r requirements.txt
+          python -m scraper.db.check_schema
+
   python-tests:
     name: pytest
     runs-on: ubuntu-latest
