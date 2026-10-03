@@ -1,0 +1,84 @@
+# さくら VPS 向けの本番構成。開発用の docker-compose.yml とは別物。
+#
+# 前提:
+#   - ホストの nginx が 80/443 と TLS を持ち、そこからリバースプロキシされる
+#     （deploy/nginx/shipinfo-v2.conf）
+#   - 既存サービス（shipinfo / keiei-copilot / ai-task-manager）と同居する
+# そのため app は 127.0.0.1 にだけ bind し、MySQL はポートを公開しない。
+#
+# VPS 上のレイアウト（CI の deploy ジョブが転送する）:
+#   /opt/shipinfo-v2/compose.prod.yml
+#   /opt/shipinfo-v2/mysql-init/       ← docker/mysql/init/*.sql
+#   /opt/shipinfo-v2/.env.production  ← 手で置く（deploy/.env.production.example）
+#
+# 使い方:
+#   docker compose -f compose.prod.yml --env-file .env.production up -d
+
+name: shipinfo-v2
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: '10m', max-file: '3' }
+
+services:
+  app:
+    image: ${APP_IMAGE:-ghcr.io/yanchi/shipinfov2/app:latest}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    # ホストの nginx からだけ届くようにする。
+    # 8000（shipinfo-python）・8001（keiei-copilot）・8080（shipinfo-symfony）・3000（ai-task-manager）は使用中
+    ports:
+      - '127.0.0.1:${APP_PORT:-8002}:80'
+    environment:
+      APP_SECRET: ${APP_SECRET:?APP_SECRET を .env.production に設定してください}
+      DEFAULT_URI: ${DEFAULT_URI:?DEFAULT_URI を .env.production に設定してください}
+      DATABASE_URL: mysql://${DB_USER:-shipinfo}:${DB_PASSWORD:?DB_PASSWORD を .env.production に設定してください}@mysql:3306/${DB_NAME:-shipinfo}?serverVersion=8.0&charset=utf8mb4
+    logging: *logging
+
+  scraper:
+    image: ${SCRAPER_IMAGE:-ghcr.io/yanchi/shipinfov2/scraper:latest}
+    restart: unless-stopped
+    # app の entrypoint がマイグレーションを済ませてから書き込み始める
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_PORT: '3306'
+      DB_NAME: ${DB_NAME:-shipinfo}
+      DB_USER: ${DB_USER:-shipinfo}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD を .env.production に設定してください}
+      SCRAPER_INTERVAL_MINUTES: ${SCRAPER_INTERVAL_MINUTES:-30}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TZ: Asia/Tokyo
+    logging: *logging
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    # PHP・スクレイパーと同じ日本時間にする（CLAUDE.md の「重要な設計決定」）
+    command: --default-time-zone=+09:00
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD を .env.production に設定してください}
+      MYSQL_DATABASE: ${DB_NAME:-shipinfo}
+      MYSQL_USER: ${DB_USER:-shipinfo}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD を .env.production に設定してください}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 初回起動時（ボリュームが空のとき）だけ流れる。01_schema.sql → 02_seed.sql の順。
+      # そのあと app の entrypoint がマイグレーションを流す
+      - ${MYSQL_INIT_DIR:-./mysql-init}:/docker-entrypoint-initdb.d:ro
+    # -h 127.0.0.1（TCP）で確かめる。初回の init スクリプト実行中は一時サーバーが
+    # ソケットだけで動いているので、localhost（ソケット）だと init の途中で healthy になってしまう
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -uroot -p"$$MYSQL_ROOT_PASSWORD" --silent']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    logging: *logging
+
+volumes:
+  mysql-data:
