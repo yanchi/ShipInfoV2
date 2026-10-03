@@ -66,6 +66,7 @@ make lint-scraper  # Pythonのlint・フォーマットチェック（ruff）
 make format-scraper # Pythonの自動フォーマット（ruff format）
 make check-schema  # スクレイパーのモデルの列がマイグレーション後のDBにあるか
 make scraper-run   # スクレイパー即時実行
+make verify-prod   # 本番用イメージで compose.prod.yml を起動するスモークテスト（CI でも全 PR で実行）
 ```
 
 ## ディレクトリ構造
@@ -100,4 +101,5 @@ ShipInfoV2/
 - `raw_html_hash` で重複スクレイピングを防止
 - phpmyadminは `make up-tools` でのみ起動（デフォルト除外）
 - REST APIはMVP以降のフェーズで検討
-- 時刻はすべて日本時間（PHP・スクレイパー・MySQL とも）。MySQL は `docker-compose.yml` の `--default-time-zone=+09:00`、CI は `.github/workflows/ci.yml` で設定している。本番（RDS など）を作るときもパラメータグループなどで `time_zone = '+09:00'` にすること（忘れると日本時間の 0:00〜9:00 に `CURDATE()` が前日になる）
+- 本番はさくら VPS。master に push すると CI が GHCR にイメージを push し、SSH で `compose.prod.yml` を入れ替える（手順・初回設定は [deploy/README.md](deploy/README.md)）
+- 時刻はすべて日本時間（PHP・スクレイパー・MySQL とも）。MySQL は `docker-compose.yml`・`compose.prod.yml` の `--default-time-zone=+09:00`、CI は `.github/workflows/ci.yml` で設定している。本番（RDS など）を作るときもパラメータグループなどで `time_zone = '+09:00'` にすること（忘れると日本時間の 0:00〜9:00 に `CURDATE()` が前日になる）

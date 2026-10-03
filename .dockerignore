@@ -15,7 +15,16 @@ scraper/.mypy_cache/
 scraper/.ruff_cache/
 scraper/.pytest_cache/
 
-# Secrets
+# Secrets（本番イメージに焼き込まない。本番の値は compose.prod.yml の environment で渡す）
 .env
-app/.env.local
+.env.*
+app/.env
+app/.env.*
 scraper/.env
+
+# 本番イメージに要らないもの
+app/tests/
+scraper/tests/
+.specify/
+specs/
+deploy/

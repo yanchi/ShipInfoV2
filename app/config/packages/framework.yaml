@@ -12,6 +12,15 @@ framework:
     php_errors:
         log: true
 
+# 本番は ホストの nginx（TLS 終端）→ コンテナの nginx → php-fpm の順に届く（compose.prod.yml）。
+# X-Forwarded-* を信頼しないと https を http と取り違え、/ports の「この港を保存」
+# （stateless CSRF。Origin とスキームを比べる）が黙って失敗する。
+# app のポートは 127.0.0.1 にしか bind していないので、届くのはホストの nginx（Docker のブリッジ経由）だけ
+when@prod:
+    framework:
+        trusted_proxies: 'PRIVATE_SUBNETS'
+        trusted_headers: ['x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-port']
+
 when@test:
     framework:
         test: true

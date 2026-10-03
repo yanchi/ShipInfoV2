@@ -5,6 +5,12 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  workflow_dispatch:
+
+# PR は新しい push で古い実行を止める。master は止めない（デプロイの途中で止まると困る）
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   php-tests:
@@ -175,3 +181,177 @@ jobs:
         run: |
           pip install pip-audit==2.10.1
           pip-audit -r requirements.txt -r requirements-dev.txt
+
+  verify-prod:
+    name: 本番等価スモークテスト
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # compose.prod.yml を本番用イメージで実際に起動し、本番でしか通らない経路を通す
+      # （空の DB からの初期化、prod の設定、https の裏での「この港を保存」、再デプロイ後のデータ保持）。
+      # 変更したファイルで実行するかどうかを分けないこと。framework.yaml の 1 行でも本番は壊れる
+      - name: 本番構成で起動して確かめる
+        run: make verify-prod
+
+  # ---------------------------------------------------------------------
+  # ここから下はデプロイ。master への push で上がすべて通ったときだけ動く。
+  # ---------------------------------------------------------------------
+
+  build-image:
+    name: 本番イメージをビルドして GHCR に push (${{ matrix.image }})
+    needs: [php-tests, python-tests, audit, verify-prod]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image: app
+            dockerfile: docker/production/app/Dockerfile
+          - image: scraper
+            dockerfile: docker/python/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: GHCR にログイン
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: イメージ名を決める
+        id: meta
+        run: |
+          # 小文字にしないと GHCR が受け付けない
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/${REPO}/${{ matrix.image }}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: ビルドして push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          # コミット SHA のタグも打つ。ロールバックはこのタグを指定するだけでよい
+          tags: |
+            ${{ steps.meta.outputs.image }}:latest
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}
+          # パッケージをこのリポジトリに紐づける（デプロイ時の GITHUB_TOKEN で pull できるように）
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deploy:
+    name: さくら VPS にデプロイ
+    needs: build-image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # VPS が GHCR から private イメージを pull するときにこの GITHUB_TOKEN を使う
+      packages: read
+    # 同時デプロイを防ぐ
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: ${{ vars.DEPLOY_URL }}
+    env:
+      # compose.prod.yml・deploy/.env.production.example と揃える
+      DEPLOY_DIR: /opt/shipinfo-v2
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: SSH 鍵を用意
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+
+          # ホスト鍵はシークレットに固定した値を使う。
+          # ssh-keyscan でその場で取ると、相手が本物か確かめずに受け入れることになる
+          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: compose ファイルと MySQL の初期化 SQL を転送
+        run: |
+          TARGET="${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
+          ssh -i ~/.ssh/id_deploy "$TARGET" "mkdir -p $DEPLOY_DIR/mysql-init"
+          scp -i ~/.ssh/id_deploy compose.prod.yml "$TARGET:$DEPLOY_DIR/compose.prod.yml"
+          # MySQL の初回起動時（ボリュームが空のとき）だけ使われる。2 回目以降のデプロイでは読まれない
+          scp -i ~/.ssh/id_deploy docker/mysql/init/*.sql "$TARGET:$DEPLOY_DIR/mysql-init/"
+
+      - name: イメージ名を決める
+        id: image
+        run: |
+          # build-image と同じ名前。小文字にしないと GHCR が受け付けない
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "app=ghcr.io/${REPO}/app:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "scraper=ghcr.io/${REPO}/scraper:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: イメージを入れ替えて起動
+        run: |
+          # GHCR は private なので VPS 側にも認証が要る。PAT を VPS に置かずに済むよう、
+          # この実行限りの GITHUB_TOKEN を使い、使い終わったら logout する。
+          #
+          # トークンとイメージ名はスクリプト本文に埋め込んで標準入力から渡す。
+          # ssh のコマンドライン引数に置くと、VPS 側の ps に一瞬見えてしまうため。
+          # Actions の式は bash より先に展開されるので、クォート付きヒアドキュメントでも値は埋め込まれる。
+          # （このコメントに式の記法を書くと Actions が式として解析しようとしてワークフローが起動しなくなる）
+          ssh -i ~/.ssh/id_deploy \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd '${{ env.DEPLOY_DIR }}'
+
+          printf '%s' '${{ secrets.GITHUB_TOKEN }}' \
+            | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+
+          # latest ではなく SHA 指定で起動する。何が動いているかが確定し、
+          # ロールバックも過去の SHA を指定するだけで済む
+          export APP_IMAGE='${{ steps.image.outputs.app }}'
+          export SCRAPER_IMAGE='${{ steps.image.outputs.scraper }}'
+          docker compose -f compose.prod.yml --env-file .env.production pull app scraper
+          # app の entrypoint がマイグレーションを流し、app が healthy になってから scraper が起動する
+          docker compose -f compose.prod.yml --env-file .env.production up -d --remove-orphans
+
+          docker logout ghcr.io
+
+          # 古いイメージの掃除は、このリポジトリのイメージだけを対象にする。
+          # docker image prune はホスト全体を消すので、同居している他サービスの
+          # ロールバック用イメージまで巻き込む。直近 5 世代は残す（ロールバック用）
+          for image in "${APP_IMAGE%:*}" "${SCRAPER_IMAGE%:*}"; do
+            docker images "$image" --format '{{.ID}} {{.CreatedAt}}' \
+              | sort -k2 -r | tail -n +6 | awk '{print $1}' | sort -u \
+              | while read -r id; do docker rmi "$id" 2>/dev/null || true; done
+          done
+          REMOTE
+
+      - name: 起動を確認
+        run: |
+          ssh -i ~/.ssh/id_deploy \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd '${{ env.DEPLOY_DIR }}'
+          # up -d は app の healthy を待ってから scraper を起動するが、念のため両方を見る
+          for i in $(seq 1 40); do
+            app=$(docker inspect -f '{{.State.Health.Status}}' shipinfo-v2-app-1 2>/dev/null || echo starting)
+            scraper=$(docker inspect -f '{{.State.Status}}' shipinfo-v2-scraper-1 2>/dev/null || echo starting)
+            if [ "$app" = healthy ] && [ "$scraper" = running ]; then
+              echo "app: healthy / scraper: running"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "起動を確認できなかった。直近のログ:" >&2
+          docker compose -f compose.prod.yml --env-file .env.production logs --tail=50 app scraper >&2
+          exit 1
+          REMOTE

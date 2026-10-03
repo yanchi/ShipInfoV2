@@ -1,6 +1,7 @@
 .PHONY: help up up-tools down build logs logs-php logs-scraper \
         shell-php shell-scraper \
         migrate migrate-diff fixtures cache-clear \
+        verify-prod \
         test-php test-scraper lint-scraper format-scraper cs-php cs-fix-php lint-php phpstan audit check-schema \
         init init-test-db reset-test-db check-test-token
 
@@ -131,6 +132,11 @@ check-schema: check-test-token ## Check scraper models against the migrated (tes
 audit: ## Check PHP and Python dependencies for known vulnerabilities
 	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) composer audit
 	$(DOCKER_COMPOSE) exec $(SCRAPER_SERVICE) pip-audit -r requirements.txt -r requirements-dev.txt
+
+# ─── Production ─────────────────────────────────────────────────
+
+verify-prod: ## Build production images and smoke-test compose.prod.yml
+	@bash scripts/verify-prod.sh
 
 # ─── First-time setup ───────────────────────────────────────────
 
