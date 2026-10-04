@@ -503,6 +503,155 @@ def test_route_level_parse_unchanged_with_real_list(db_session, marix_line_compa
 
 
 # ---------------------------------------------------------------------------
+# 航行経路変更・欠航・抜港（実サイト 2026-06-24 / 06-26 の詳細ページ）
+# ---------------------------------------------------------------------------
+
+
+def _list_with_down(ymd: str, next_day: str, classes: str, exp: str) -> str:
+    """一覧フィクスチャの下り便（9/30 通常運航）を、別の日付・クラスの便に差し替える。"""
+    html = read_fixture("marix/list.html")
+    head, sep, up_part = html.partition('<div class="up_stream_services">')
+    y, m, d = int(ymd[:4]), int(ymd[4:6]), int(ymd[6:])
+    head = (
+        head.replace("status_single_cover normal", f"status_single_cover {classes}")
+        .replace("status_single normal", f"status_single {classes}")
+        .replace("downstream20260930", f"downstream{ymd}")
+        .replace("2026年9月30日", f"{y}年{m}月{d}日")
+        .replace("2026年10月1日", next_day)
+        .replace('<p class="exp">通常運航</p>', f'<p class="exp">{exp}</p>')
+    )
+    return head + sep + up_part
+
+
+def _down_url(ymd: str) -> str:
+    return f"https://marixline.com/service/downstream{ymd}/"
+
+
+def _mock_down_voyage(ymd, next_day, classes, exp, down_html):
+    resp_mock.add(
+        resp_mock.GET,
+        SOURCE_URL,
+        body=_list_with_down(ymd, next_day, classes, exp),
+    )
+    resp_mock.add(resp_mock.GET, _down_url(ymd), body=down_html)
+    resp_mock.add(
+        resp_mock.GET, UP_URL, body=read_fixture("marix/upstream_conditional.html")
+    )
+
+
+def _mock_route_change():
+    _mock_down_voyage(
+        "20260624",
+        "2026年6月25日",
+        "route alert",
+        "航行経路変更",
+        read_fixture("marix/downstream_route_change.html"),
+    )
+
+
+@resp_mock.activate
+def test_route_change_voyage_is_delayed_not_cancelled(db_session, marix_line_company):
+    """一覧の航行経路変更（route alert）は運航するので、欠航ではなく delayed。"""
+    _mock_route_change()
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 6, 24))):
+        records = scraper.parse(scraper.fetch())
+
+    down, _ = _routes(db_session, marix_line_company)
+    rec = next(
+        r
+        for r in records
+        if r["route_id"] == down.id and r["valid_date"] == date(2026, 6, 24)
+    )
+    assert rec["status"] == OperationStatusEnum.delayed
+    assert rec["status_detail"] == "航行経路変更"
+
+
+@resp_mock.activate
+def test_departures_route_change_skipped_ports(db_session, marix_line_company):
+    """経路変更（鹿児島 → 名瀬）：寄る港は delayed、寄らない港（no_status）は cancelled。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_route_change()
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with structlog.testing.capture_logs() as logs:
+        scraper.fetch()
+        records = scraper.parse_departures()
+
+    down, _ = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, down)
+    assert list(rows) == ["鹿児島", "名瀬", "亀徳", "和泊", "与論", "本部"]
+    for name in ["鹿児島", "名瀬"]:
+        assert rows[name]["status"] == OperationStatusEnum.delayed
+        assert "航行経路を「鹿児島 → 名瀬」に変更し運航" in rows[name]["status_detail"]
+    for name in ["亀徳", "和泊", "与論", "本部"]:
+        assert rows[name]["status"] == OperationStatusEnum.cancelled
+        assert "寄港しません" in rows[name]["status_detail"]
+    assert rows["鹿児島"]["ship_name"] == "クイーンコーラルプラス"
+    assert not any(log["event"] == "detail_status_unknown" for log in logs)
+
+
+@resp_mock.activate
+def test_departures_cancelled_voyage(db_session, marix_line_company):
+    """欠航（cancel alert）の便は全港 cancelled。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_down_voyage(
+        "20260626",
+        "2026年6月27日",
+        "cancel alert",
+        "欠航",
+        read_fixture("marix/downstream_cancel.html"),
+    )
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 6, 26))):
+        route_records = scraper.parse(scraper.fetch())
+    records = scraper.parse_departures()
+
+    down, _ = _routes(db_session, marix_line_company)
+    rec = next(
+        r
+        for r in route_records
+        if r["route_id"] == down.id and r["valid_date"] == date(2026, 6, 26)
+    )
+    assert rec["status"] == OperationStatusEnum.cancelled
+    rows = _by_port(records, ports, down)
+    assert len(rows) == 6
+    assert all(r["status"] == OperationStatusEnum.cancelled for r in rows.values())
+    assert "欠航のため、船の運航は行いません。" in rows["名瀬"]["status_detail"]
+
+
+@resp_mock.activate
+def test_unknown_alert_class_is_not_cancelled(db_session, marix_line_company):
+    """知らないクラス（例：delay alert）は欠航にしない。一覧は読み飛ばし、港は unknown。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    down_html = read_fixture("marix/downstream.html").replace(
+        'class="single normal"', 'class="single delay alert"'
+    )
+    assert 'class="single delay alert"' in down_html
+    _mock_pages(
+        list_html=read_fixture("marix/list.html").replace(
+            "status_single_cover normal", "status_single_cover delay alert"
+        ),
+        down=down_html,
+    )
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with structlog.testing.capture_logs() as logs:
+        with patch(
+            "scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 9, 30))
+        ):
+            route_records = scraper.parse(scraper.fetch())
+
+    down, _ = _routes(db_session, marix_line_company)
+    rec = next(r for r in route_records if r["route_id"] == down.id)
+    assert rec["status"] == OperationStatusEnum.unknown
+    assert any(log["event"] == "unknown_status_class" for log in logs)
+
+    # 一覧で読み飛ばした便は港別も作らない。詳細ページの港だけ確かめる
+    scraper._list_html = read_fixture("marix/list.html")
+    rows = _by_port(scraper.parse_departures(), ports, down)
+    assert rows["名瀬"]["status"] == OperationStatusEnum.unknown
+
+
+# ---------------------------------------------------------------------------
 # 日またぎ（US5）
 # ---------------------------------------------------------------------------
 
