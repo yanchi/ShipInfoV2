@@ -329,6 +329,19 @@ class StatusControllerTest extends WebTestCase
         $this->assertStringContainsString('港別テスト運航会社', $crawler->filter('meta[name="description"]')->attr('content'));
     }
 
+    /** 社名に & < " ' を含んでも og タグが二重にエスケープされない */
+    public function testOgTagsAreNotDoubleEscaped(): void
+    {
+        $id = $this->createCompanyWithRoute('A&B<汽船>"\'');
+
+        $crawler = $this->client->request('GET', "/company/{$id}");
+
+        $this->assertSame("A&B<汽船>\"' 運航状況 | 鹿児島〜沖縄フェリー運航状況", $crawler->filter('title')->text());
+        $this->assertSame($crawler->filter('title')->text(), $crawler->filter('meta[property="og:title"]')->attr('content'));
+        $this->assertSame($crawler->filter('meta[name="description"]')->attr('content'), $crawler->filter('meta[property="og:description"]')->attr('content'));
+        $this->assertStringContainsString('A&B<汽船>"\'', $crawler->filter('meta[property="og:description"]')->attr('content'));
+    }
+
     public function testCanonicalExcludesQueryString(): void
     {
         $crawler = $this->client->request('GET', '/ports?port=all&dir=down');
