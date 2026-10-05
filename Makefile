@@ -66,7 +66,7 @@ cache-clear: ## Clear Symfony cache
 SLOT ?= 6
 
 notify-dry-run: ## Print the irregular-status notification mail (no send, no run record)
-	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) bin/console app:notify-irregular-statuses --slot=6 --dry-run
+	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) bin/console app:notify-irregular-statuses --slot=$(SLOT) --dry-run
 
 notify: ## Send the notification mail to Mailpit (SLOT=1|6|15; needs make up-tools)
 	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) bin/console app:notify-irregular-statuses --slot=$(SLOT)

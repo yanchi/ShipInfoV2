@@ -213,4 +213,24 @@ class NotifyIrregularStatusesCommandTest extends KernelTestCase
         $this->assertStringContainsString('NOTIFY_TO が未設定のためメールを送りませんでした', preg_replace('/\s+/', ' ', $tester->getDisplay()) ?? '');
         $this->assertSame('not_configured', $this->runResult(1));
     }
+
+    /** 集める途中で予期しない例外 → failed を記録し、pending のまま残さない */
+    public function testUnexpectedExceptionIsRecordedAsFailed(): void
+    {
+        $collector = $this->createStub(IrregularServiceCollector::class);
+        $collector->method('collect')->willThrowException(new \RuntimeException('secret detail'));
+        $command = new NotifyIrregularStatusesCommand(
+            static::getContainer()->get(NotificationRunRepository::class),
+            $collector,
+            new NotificationSlotResolver(),
+            static::getContainer()->get(IrregularStatusMailer::class),
+        );
+
+        $tester = new CommandTester($command);
+        $tester->execute(['--slot' => '6']);
+
+        $this->assertSame(Command::FAILURE, $tester->getStatusCode());
+        $this->assertSame('failed', $this->runResult(6));
+        $this->assertStringNotContainsString('secret detail', $tester->getDisplay());
+    }
 }

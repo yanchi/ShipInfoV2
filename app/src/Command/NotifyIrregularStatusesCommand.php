@@ -76,7 +76,12 @@ class NotifyIrregularStatusesCommand extends Command
             return Command::SUCCESS;
         }
 
-        $items = $this->collector->collect($today);
+        // 確保のあとで予期しない例外が出ても、回が pending のまま無言で残らないよう failed を記録する
+        try {
+            $items = $this->collector->collect($today);
+        } catch (\Throwable $e) {
+            return $this->failUnexpected($io, $today, $slot, $e);
+        }
         if ($items === []) {
             $this->runRepository->finish($today, $slot, NotificationResultEnum::None, 0, null);
             $io->writeln(sprintf('%s：通常運航以外の便はありません', $label));
@@ -85,7 +90,11 @@ class NotifyIrregularStatusesCommand extends Command
             return Command::SUCCESS;
         }
 
-        $outcome = $this->mailer->send($items);
+        try {
+            $outcome = $this->mailer->send($items);
+        } catch (\Throwable $e) {
+            return $this->failUnexpected($io, $today, $slot, $e);
+        }
         $this->cleanup($today);
 
         switch ($outcome->result) {
@@ -105,6 +114,16 @@ class NotifyIrregularStatusesCommand extends Command
 
                 return Command::SUCCESS;
         }
+    }
+
+    /** 予期しない例外。メッセージに接続情報が入りうるので、記録するのは例外のクラス名だけ */
+    private function failUnexpected(SymfonyStyle $io, \DateTimeImmutable $today, int $slot, \Throwable $e): int
+    {
+        $summary = '予期しないエラー: ' . $e::class;
+        $this->runRepository->finish($today, $slot, NotificationResultEnum::Failed, 0, $summary);
+        $io->error($summary);
+
+        return Command::FAILURE;
     }
 
     private function dryRun(SymfonyStyle $io, \DateTimeImmutable $today, string $label): int
