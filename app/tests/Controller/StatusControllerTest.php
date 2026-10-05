@@ -941,8 +941,63 @@ class StatusControllerTest extends WebTestCase
         $this->assertResponseIsSuccessful();
         $card = $this->findCard($crawler, '港別テスト運航会社');
         $this->assertCount(0, $crawler->filter('.idle-companies'));
-        // 航路単位の「便なし」ではなく、途中の港を出る便があると出す（tasks T054a）
-        $this->assertStringContainsString('途中の港を出る便あり', $card->text());
+        // 下りは航路単位の「便なし」ではなく、始発港を除いた港の便の状態を出す（tasks T054a）
+        $this->assertStringContainsString('✓ 通常運航', $card->text());
+        $this->assertStringNotContainsString('便なし', $card->text());
+    }
+
+    /** 上りも同じ：前日に那覇を出た便が今日名瀬を出るなら、名瀬発の便の状態を出す */
+    public function testIndexShowsMidwayStatusForUpRoute(): void
+    {
+        $this->createPortBoardData(direction: RouteDirectionEnum::Up);
+        $this->persistOperationStatus('港別テスト運航会社 上り', 0, OperationStatusEnum::NoService);
+
+        $crawler = $this->client->request('GET', '/');
+
+        $this->assertResponseIsSuccessful();
+        $card = $this->findCard($crawler, '港別テスト運航会社');
+        $this->assertStringContainsString('✓ 通常運航', $card->text());
+        $this->assertStringNotContainsString('便なし', $card->text());
+    }
+
+    /** 途中の港を出る便が全部欠航なら、そのまま「欠航」と出す */
+    public function testIndexShowsMidwayStatusAsIsWhenUniform(): void
+    {
+        $this->createPortBoardData();
+        $this->persistOperationStatus('港別テスト運航会社 下り', 0, OperationStatusEnum::NoService);
+        $this->updateTestDeparture(0, 'status', OperationStatusEnum::Cancelled);
+
+        $crawler = $this->client->request('GET', '/');
+
+        $this->assertResponseIsSuccessful();
+        $card = $this->findCard($crawler, '港別テスト運航会社');
+        $this->assertStringContainsString('✗ 欠航', $card->text());
+        $this->assertCount(1, $card->filter('.status-warning'));
+        $this->assertStringNotContainsString('スケジュール変更', $card->text());
+    }
+
+    /** 途中の港を出る便の状態がバラけていて、欠航・運休・条件付・遅延が混じれば「スケジュール変更」と出し、会社別ページへリンクする */
+    public function testIndexShowsScheduleChangeWhenMidwayStatusesDiffer(): void
+    {
+        $this->createPortBoardData();
+        $this->persistOperationStatus('港別テスト運航会社 下り', 0, OperationStatusEnum::NoService);
+        $em    = $this->entityManager();
+        $route = $em->getRepository(Route::class)->findOneBy(['name' => '港別テスト運航会社 下り']);
+        $port  = $em->getRepository(Port::class)->findOneBy(['name' => '名瀬']);
+        $this->assertNotNull($route);
+        $this->assertNotNull($port);
+        $em->persist($this->makeDeparture($route, $port, new \DateTime('today'), '港別テスト二号', OperationStatusEnum::Cancelled, (new \DateTime('today'))->setTime(9, 0)));
+        $em->flush();
+        $em->clear();
+
+        $crawler = $this->client->request('GET', '/');
+
+        $this->assertResponseIsSuccessful();
+        $card = $this->findCard($crawler, '港別テスト運航会社');
+        $link = $card->filter('a.route-midway');
+        $this->assertCount(1, $link);
+        $this->assertSame('▲ スケジュール変更', trim($link->text()));
+        $this->assertStringNotContainsString('欠航', $card->text());
         $this->assertStringNotContainsString('便なし', $card->text());
     }
 
@@ -959,8 +1014,9 @@ class StatusControllerTest extends WebTestCase
      * - 今日: 運航会社が船あり・通常運航（05:50発・翌08:00着）、非運航会社が no_service。鹿児島発は非運航会社の no_service だけ
      * - 3日先: 運航会社が status null（運航予定）
      * - $tomorrowStatus を渡すと、明日の名瀬発に運航会社のその status の行を足す
+     * - $direction に上りを渡すと、寄港順を那覇→名瀬→鹿児島にした上りの航路で作る（便は同じく名瀬発）
      */
-    private function createPortBoardData(?OperationStatusEnum $tomorrowStatus = null): void
+    private function createPortBoardData(?OperationStatusEnum $tomorrowStatus = null, RouteDirectionEnum $direction = RouteDirectionEnum::Down): void
     {
         $em    = $this->entityManager();
         $ports = [];
@@ -977,11 +1033,12 @@ class StatusControllerTest extends WebTestCase
         foreach ([$operator, $other] as $company) {
             $route = (new Route())
                 ->setFerryCompany($company)
-                ->setName($company->getName() . ' 下り')
-                ->setDirection(RouteDirectionEnum::Down)
+                ->setName($company->getName() . ($direction === RouteDirectionEnum::Down ? ' 下り' : ' 上り'))
+                ->setDirection($direction)
                 ->setActive(true);
             $em->persist($route);
-            foreach (['鹿児島', '名瀬', '那覇'] as $i => $name) {
+            $stops = ['鹿児島', '名瀬', '那覇'];
+            foreach ($direction === RouteDirectionEnum::Down ? $stops : array_reverse($stops) as $i => $name) {
                 $em->persist((new RouteStop())->setRoute($route)->setPort($ports[$name])->setStopOrder($i + 1));
             }
             $routes[] = $route;

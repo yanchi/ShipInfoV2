@@ -36,4 +36,28 @@ final readonly class PortBoardDay
 
         return false;
     }
+
+    /**
+     * その会社の、その方向の始発港（先頭の行）を除いた港を出る便（発表済み・運航予定）。
+     *
+     * @return list<PortBoardEntry>
+     */
+    public function midwayDeparturesOf(int $companyId, RouteDirectionEnum $direction): array
+    {
+        $entries = [];
+        foreach ($this->directions as $d) {
+            if ($d->direction !== $direction) {
+                continue;
+            }
+            foreach (\array_slice($d->rows, 1) as $row) {
+                foreach ($row->entries as $entry) {
+                    if ($entry->companyId === $companyId && $entry->isDeparture()) {
+                        $entries[] = $entry;
+                    }
+                }
+            }
+        }
+
+        return $entries;
+    }
 }

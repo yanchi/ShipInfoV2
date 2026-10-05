@@ -71,15 +71,21 @@
                                 <li class="list-group-item">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span>{{ route.name }}</span>
-                                        {% if routesDepartingMidway[route.id] is defined %}
-                                            {# 航路単位では便なし（始発港を出る便が無い）でも、途中の港を出る便がある（tasks T054a） #}
-                                            <a href="{{ path('app_status_company', {id: company.id}) }}" class="route-midway small">途中の港を出る便あり</a>
-                                        {% else %}
+                                        {% set midway = routesDepartingMidway[route.id] ?? null %}
+                                        {% if midway is null %}
                                             {{ include('status/_status_badge.html.twig', {state: null, status: status ? status.status : null}) }}
+                                        {% elseif midway.kind == 'changed' %}
+                                            {# 航路単位では便なし（始発港を出る便が無い）でも、途中の港を出る便がある。状態がバラけていて欠航・運休・条件付・遅延が混じる（tasks T054a） #}
+                                            <a href="{{ path('app_status_company', {id: company.id}) }}" class="status-badge status-badge--delayed route-midway text-decoration-none">▲ スケジュール変更</a>
+                                        {% else %}
+                                            {# 航路単位では便なし（始発港を出る便が無い）でも、途中の港を出る便がある。その便の状態を出す #}
+                                            {{ include('status/_status_badge.html.twig', {state: midway.state, status: midway.status}) }}
                                         {% endif %}
                                     </div>
-                                    {% if routesDepartingMidway[route.id] is not defined %}
+                                    {% if midway is null %}
                                         {{ include('status/_status_warning.html.twig', {status: status ? status.status : null}) }}
+                                    {% elseif midway.kind == 'badge' %}
+                                        {{ include('status/_status_warning.html.twig', {status: midway.status}) }}
                                     {% endif %}
                                 </li>
                             {% else %}
