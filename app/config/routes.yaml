@@ -3,3 +3,12 @@ controllers:
         path: ../src/Controller/
         namespace: App\Controller
     type: attribute
+
+# V1 の URL。港別ページへ 301 で転送する（クエリは捨てる）
+app_legacy_details_today:
+    path: /details/today
+    controller: Symfony\Bundle\FrameworkBundle\Controller\RedirectController
+    defaults:
+        route: app_status_ports
+        permanent: true
+        keepQueryParams: false

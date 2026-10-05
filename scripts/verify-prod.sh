@@ -207,6 +207,11 @@ ok '存在しないページは 404' "$(http_code "$BASE/nope")" '404'
 ok '実在しない .php は 404' "$(http_code "$BASE/nope.php")" '404'
 ok 'ドットファイルは配信しない' "$(http_code "$BASE/.env")" '403'
 ok 'プロファイラが無い' "$(http_code "$BASE/_profiler")" '404'
+ok 'V1 の /details/today は 301' "$(http_code "$BASE/details/today")" '301'
+ok '/robots.txt' "$(http_code "$BASE/robots.txt")" '200'
+ok '/sitemap.xml' "$(http_code "$BASE/sitemap.xml")" '200'
+# GOOGLE_ANALYTICS_ID が空のときは GA のタグを出さない（FR-021・022）
+ok 'ID 無しなら GA を出さない' "$(curl -s "$BASE/" | grep -c 'googletagmanager')" '0'
 
 # ---------------------------------------------------------------------------
 # 4. https の裏での「この港を保存」

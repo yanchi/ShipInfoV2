@@ -35,6 +35,9 @@ class ErrorPageTest extends WebTestCase
         foreach (['meta[name="description"]', 'link[rel="canonical"]', 'meta[property="og:description"]', 'meta[property="og:url"]', 'meta[property="og:type"]', 'meta[property="og:site_name"]', 'meta[name="twitter:card"]'] as $selector) {
             $this->assertCount(1, $crawler->filter($selector), $selector);
         }
-        $this->assertStringNotContainsString('ShipInfo', (string) $client->getResponse()->getContent());
+        $html = (string) $client->getResponse()->getContent();
+        $this->assertStringNotContainsString('ShipInfo', $html);
+        $this->assertStringNotContainsString('googletagmanager.com', $html);
+        $this->assertStringNotContainsString('gtag(', $html);
     }
 }

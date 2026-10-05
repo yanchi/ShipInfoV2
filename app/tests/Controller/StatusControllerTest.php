@@ -342,6 +342,17 @@ class StatusControllerTest extends WebTestCase
         $this->assertStringContainsString('A&B<汽船>"\'', $crawler->filter('meta[property="og:description"]')->attr('content'));
     }
 
+    /** 本番以外（テスト環境）では GA のタグを出さない（FR-022） */
+    public function testNoAnalyticsTagOutsideProd(): void
+    {
+        foreach (array_keys($this->threePages()) as $url) {
+            $this->client->request('GET', $url);
+            $html = (string) $this->client->getResponse()->getContent();
+            $this->assertStringNotContainsString('googletagmanager.com', $html, $url);
+            $this->assertStringNotContainsString('gtag(', $html, $url);
+        }
+    }
+
     public function testCanonicalExcludesQueryString(): void
     {
         $crawler = $this->client->request('GET', '/ports?port=all&dir=down');

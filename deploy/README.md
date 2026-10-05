@@ -72,9 +72,11 @@ VPS で動いている他のもの（2026-10-03 時点）:
 
 V2 に置き換えるときは:
 
+0. V1 の本番の環境変数から GA の測定 ID（`GOOGLE_ANALYTICS_ID`）を確認し、V2 の `/opt/shipinfo-v2/.env.production` に `GOOGLE_ANALYTICS_ID=<V1 と同じ ID>` を足す。`v2.ship.isl-mentor.com` で並べている間は**入れない**（V2 のアクセスが V1 の計測に混ざるため）
 1. `/etc/nginx/sites-available/shipinfo`（`ship.isl-mentor.com`）の `proxy_pass` を `127.0.0.1:8080` → `127.0.0.1:8002` に変えて、`X-Forwarded-Host`・`X-Forwarded-Port` も足す（`shipinfo-v2.conf` と同じヘッダーにする）
 2. `.env.production` の `DEFAULT_URI` を `https://ship.isl-mentor.com` にして、`docker compose -f compose.prod.yml --env-file .env.production up -d`
 3. `sudo nginx -t && sudo systemctl reload nginx`。戻すときは proxy_pass を 8080 に戻すだけ
+   切り替え後に確かめること: `https://ship.isl-mentor.com/details/today` が `/ports` に 301 で移る／`/robots.txt`・`/sitemap.xml` のホストが `https://ship.isl-mentor.com`／GA のリアルタイムレポートで計測が続いている
    `X-Robots-Tag`（noindex）は `shipinfo-v2.conf` にしか無いので、`ship.isl-mentor.com` では付かず検索エンジンに載る。旧版の vhost に写さないこと
 4. 落ち着いたら旧 ShipInfo のコンテナ（`shipinfo` プロジェクト。8000 の外部公開もこれで消える）を止め、`v2.ship.isl-mentor.com` を `ship.isl-mentor.com` へのリダイレクトにするか消す
 

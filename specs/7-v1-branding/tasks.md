@@ -169,11 +169,11 @@
 
 **Independent Test**: `GET /details/today` → 301 `Location: /ports`。`GET /robots.txt`・`GET /sitemap.xml` が contracts/http-routes.md のとおり。`make test-php` で T033 が通る
 
-- [ ] T032 [US3] PR1 のマージ後、`master` から `7-v1-branding-seo` ブランチを切る。`make test-php` が通ることを確認する
+- [X] T032 [US3] PR1 のマージ後、`master` から `7-v1-branding-seo` ブランチを切る。`make test-php` が通ることを確認する
 
 ### Tests for User Story 3
 
-- [ ] T033 [US3] `app/tests/Controller/SeoControllerTest.php` を新しく作る（contracts/http-routes.md）。データの入れ方・後片付けは `StatusControllerTest` の `setUp`・`tearDown` に合わせる
+- [X] T033 [US3] `app/tests/Controller/SeoControllerTest.php` を新しく作る（contracts/http-routes.md）。データの入れ方・後片付けは `StatusControllerTest` の `setUp`・`tearDown` に合わせる
   - `testDetailsTodayRedirectsToPorts`：`GET /details/today` → 301、`Location` が `/ports`。`GET /details/today?foo=1` も `Location` が `/ports`（クエリを捨てる）
   - `testRobotsTxt`：200、`Content-Type` が `text/plain; charset=UTF-8`、本文に `User-agent: *`・`Allow: /`・`Sitemap: http://localhost/sitemap.xml`。`Disallow` が無い
   - `testSitemapXml`：200、`Content-Type` が `application/xml; charset=UTF-8`。`loc` に `http://localhost/`・`http://localhost/ports`・有効な会社の `http://localhost/company/{id}` があり、無効な会社（`active = 0`）の URL が無い。`changefreq` が `hourly`、`priority` がトップ `1.0`・港別 `0.9`・会社別 `0.8`
@@ -181,12 +181,12 @@
 
 ### Implementation for User Story 3
 
-- [ ] T034 [P] [US3] `app/config/routes.yaml` に `app_legacy_details_today`（`path: /details/today`、`controller: Symfony\Bundle\FrameworkBundle\Controller\RedirectController`、`defaults: { route: app_status_ports, permanent: true, keepQueryParams: false }`）を足す（FR-017、research R8）
-- [ ] T035 [P] [US3] `app/src/Controller/SeoController.php` を新しく作る（FR-018・019、research R9）。`AbstractController` を継承し、attribute でルートを定義する
+- [X] T034 [P] [US3] `app/config/routes.yaml` に `app_legacy_details_today`（`path: /details/today`、`controller: Symfony\Bundle\FrameworkBundle\Controller\RedirectController`、`defaults: { route: app_status_ports, permanent: true, keepQueryParams: false }`）を足す（FR-017、research R8）
+- [X] T035 [P] [US3] `app/src/Controller/SeoController.php` を新しく作る（FR-018・019、research R9）。`AbstractController` を継承し、attribute でルートを定義する
   - `#[Route('/robots.txt', name: 'app_seo_robots', methods: ['GET'])]`：`$request->getSchemeAndHttpHost() . '/sitemap.xml'` を Sitemap に入れた本文を `Response` で返す。`Content-Type: text/plain; charset=UTF-8`
   - `#[Route('/sitemap.xml', name: 'app_seo_sitemap', methods: ['GET'])]`：`FerryCompanyRepository::findActive()` で会社を取り、トップ・港別・会社別の `loc`（`generateUrl(..., UrlGeneratorInterface::ABSOLUTE_URL)`）・`changefreq`・`priority` の配列を作って `seo/sitemap.xml.twig` を描画する。`Content-Type: application/xml; charset=UTF-8`
-- [ ] T036 [P] [US3] `app/templates/seo/sitemap.xml.twig` を新しく作る（contracts/http-routes.md の XML のとおり。`lastmod` は出さない）。`loc` は Twig の自動エスケープ（`.xml.twig` なので XML 用）に任せる
-- [ ] T037 [US3] `make test-php`・`make lint-php`・`make phpstan`・`make cs-php` を通す。`make up` で `http://localhost:8080/robots.txt`・`/sitemap.xml`・`/details/today` を開いて確かめる（`public/` に `robots.txt`・`sitemap.xml` が無いので nginx から Symfony に回ること）
+- [X] T036 [P] [US3] `app/templates/seo/sitemap.xml.twig` を新しく作る（contracts/http-routes.md の XML のとおり。`lastmod` は出さない）。`loc` は Twig の自動エスケープ（`.xml.twig` なので XML 用）に任せる
+- [X] T037 [US3] `make test-php`・`make lint-php`・`make phpstan`・`make cs-php` を通す。`make up` で `http://localhost:8080/robots.txt`・`/sitemap.xml`・`/details/today` を開いて確かめる（`public/` に `robots.txt`・`sitemap.xml` が無いので nginx から Symfony に回ること）
 
 **Checkpoint**: US3 の Acceptance Scenarios 1〜3 を満たす → コミット
 
@@ -198,11 +198,11 @@
 
 **Independent Test**: テスト環境の全ページに `googletagmanager.com` が無い。本番では `.env.production` に ID を入れたときだけ出る
 
-- [ ] T038 `app/tests/Controller/StatusControllerTest.php` に `testNoAnalyticsTagOutsideProd` を足す：`/`・`/ports`・`/company/{id}` の HTML に `googletagmanager.com` と `gtag(` が含まれない（FR-022。テスト環境は `app.environment` が `test`）。`app/tests/Controller/ErrorPageTest.php` にも同じ assert を足す
-- [ ] T039 `app/config/packages/twig.yaml` の `twig.globals` に `ga_measurement_id: '%env(default::GOOGLE_ANALYTICS_ID)%'` を足す（research R10。V1 の `../ShipInfo/ship_info/config/packages/twig.yaml` と同じ）
-- [ ] T040 `app/templates/base.html.twig` の `</head>` の直前に、`{% if app.environment == 'prod' and ga_measurement_id %}` のときだけ V1 の `../ShipInfo/ship_info/templates/base.html.twig` と同じ gtag.js のタグ（`<script async src="https://www.googletagmanager.com/gtag/js?id=…">` と `dataLayer`・`gtag('config', …)` のインラインスクリプト）を出す。ID は `ga_measurement_id|e('url')`（URL の中）・`ga_measurement_id|e('js')`（JS の中）でエスケープする
-- [ ] T041 [P] `compose.prod.yml` の `app` の `environment` に `GOOGLE_ANALYTICS_ID: ${GOOGLE_ANALYTICS_ID:-}` を足す。`deploy/.env.production.example` に `GOOGLE_ANALYTICS_ID=` を、「V1 と並べている間は空のまま。切り替えのときに V1 と同じ ID を入れる」というコメントつきで足す
-- [ ] T042 `make test-php`・`make lint-php` を通す。`make verify-prod` で本番用イメージが ID 無しで起動することを確かめる。`scripts/verify-prod.sh` は HTML の中身を見ないので、起動中に `curl -s` でトップを取り、`googletagmanager` が含まれないことを別に確かめる（スクリプトに足してもよい）
+- [X] T038 `app/tests/Controller/StatusControllerTest.php` に `testNoAnalyticsTagOutsideProd` を足す：`/`・`/ports`・`/company/{id}` の HTML に `googletagmanager.com` と `gtag(` が含まれない（FR-022。テスト環境は `app.environment` が `test`）。`app/tests/Controller/ErrorPageTest.php` にも同じ assert を足す
+- [X] T039 `app/config/packages/twig.yaml` の `twig.globals` に `ga_measurement_id: '%env(default::GOOGLE_ANALYTICS_ID)%'` を足す（research R10。V1 の `../ShipInfo/ship_info/config/packages/twig.yaml` と同じ）
+- [X] T040 `app/templates/base.html.twig` の `</head>` の直前に、`{% if app.environment == 'prod' and ga_measurement_id %}` のときだけ V1 の `../ShipInfo/ship_info/templates/base.html.twig` と同じ gtag.js のタグ（`<script async src="https://www.googletagmanager.com/gtag/js?id=…">` と `dataLayer`・`gtag('config', …)` のインラインスクリプト）を出す。ID は `ga_measurement_id|e('url')`（URL の中）・`ga_measurement_id|e('js')`（JS の中）でエスケープする
+- [X] T041 [P] `compose.prod.yml` の `app` の `environment` に `GOOGLE_ANALYTICS_ID: ${GOOGLE_ANALYTICS_ID:-}` を足す。`deploy/.env.production.example` に `GOOGLE_ANALYTICS_ID=` を、「V1 と並べている間は空のまま。切り替えのときに V1 と同じ ID を入れる」というコメントつきで足す
+- [X] T042 `make test-php`・`make lint-php` を通す。`make verify-prod` で本番用イメージが ID 無しで起動することを確かめる。`scripts/verify-prod.sh` は HTML の中身を見ないので、起動中に `curl -s` でトップを取り、`googletagmanager` が含まれないことを別に確かめる（スクリプトに足してもよい）
 
 **Checkpoint**: FR-021・022 を満たす → コミット
 
@@ -210,9 +210,9 @@
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T043 [P] `deploy/README.md` の「旧 ShipInfo からの切り替え」に、quickstart.md §4 の手順を足す：V1 の本番の環境変数から GA の測定 ID を確認する → V2 の `.env.production` に `GOOGLE_ANALYTICS_ID` を入れる（v2 のホストで並べている間は入れない理由も1行）→ 切り替え後に `/details/today` の 301、`/robots.txt`・`/sitemap.xml` のホストが `https://ship.isl-mentor.com` であること、GA のリアルタイムで計測が続いていることを確かめる
-- [ ] T044 [P] `CLAUDE.md` の「重要な設計決定」に1行足す：サイト名・タイトル・OG の文言は V1 を引き継ぎ `app/config/packages/twig.yaml` の globals に置く（「ShipInfo」は画面に出さない）。GA は本番かつ `GOOGLE_ANALYTICS_ID` があるときだけ出す
-- [ ] T045 `make test-php`・`make lint-php`・`make phpstan`・`make cs-php`・`make audit`・`make verify-prod` を全部通す
+- [X] T043 [P] `deploy/README.md` の「旧 ShipInfo からの切り替え」に、quickstart.md §4 の手順を足す：V1 の本番の環境変数から GA の測定 ID を確認する → V2 の `.env.production` に `GOOGLE_ANALYTICS_ID` を入れる（v2 のホストで並べている間は入れない理由も1行）→ 切り替え後に `/details/today` の 301、`/robots.txt`・`/sitemap.xml` のホストが `https://ship.isl-mentor.com` であること、GA のリアルタイムで計測が続いていることを確かめる
+- [X] T044 [P] `CLAUDE.md` の「重要な設計決定」に1行足す：サイト名・タイトル・OG の文言は V1 を引き継ぎ `app/config/packages/twig.yaml` の globals に置く（「ShipInfo」は画面に出さない）。GA は本番かつ `GOOGLE_ANALYTICS_ID` があるときだけ出す
+- [X] T045 `make test-php`・`make lint-php`・`make phpstan`・`make cs-php`・`make audit`・`make verify-prod` を全部通す
 - [ ] T046 quickstart.md §2 のチェック項目を全部（375px・1280px、3ページ＋エラーページ）通しで確かめる。SC-003 用に、V1 と V2 のトップを並べたスクリーンショットを第三者 1 名に見せて「同じサイト」に見えるか確認してもらう
 
 **Checkpoint**: PR2 の全部が終わる → コミット → PR2 を作る（タイトル例：`feat(app): V1 の URL・robots・sitemap・GA を引き継ぐ`）。マージ後、切り替えの日に deploy/README.md の手順で `ship.isl-mentor.com` を V2 に向ける
