@@ -34,6 +34,7 @@ services:
     environment:
       APP_SECRET: ${APP_SECRET:?APP_SECRET を .env.production に設定してください}
       DEFAULT_URI: ${DEFAULT_URI:?DEFAULT_URI を .env.production に設定してください}
+      GOOGLE_ANALYTICS_ID: ${GOOGLE_ANALYTICS_ID:-}
       DATABASE_URL: mysql://${DB_USER:-shipinfo}:${DB_PASSWORD:?DB_PASSWORD を .env.production に設定してください}@mysql:3306/${DB_NAME:-shipinfo}?serverVersion=8.0&charset=utf8mb4
     logging: *logging
 
