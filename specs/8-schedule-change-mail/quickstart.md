@@ -53,12 +53,25 @@ make verify-prod # 本番イメージで supercronic が起動しているか・
    NOTIFY_TO=a@example.com,b@example.com
    ```
 
-2. master に push（CI がデプロイ）
-3. 次の確認時刻のあとに確かめる
+2. マージの前に、VPS から本番の SMTP で送れるか確かめる。V1 は証明書の検証をオフにしていたので、同じサーバーでも検証で落ちることがある。宛先は自分だけにし、`notification_runs` を使わない `--dry-run` の本文で中身も見る
+
+   ```bash
+   # PR1 がデプロイ済みの app コンテナで。宛先を自分だけに上書きして、使わない回（その日の過ぎた回）を指定する
+   docker compose -f compose.prod.yml exec -e NOTIFY_TO=自分のアドレス app php bin/console app:notify-irregular-statuses --slot=1
+   ```
+
+   `failed` になったら deploy/README の証明書の節を見る。試した回の行は消しておく（その日の 1 時の回が残っていても、過ぎた回なので実害は無い）
+
+3. master に push（CI がデプロイ）
+4. 次の確認時刻のあとに確かめる
 
    ```bash
    docker compose -f compose.prod.yml logs app | grep -E '確認時刻|件を送りました|送信に失敗'
    docker compose -f compose.prod.yml exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u"$MYSQL_USER" "$MYSQL_DATABASE" -e "SELECT * FROM notification_runs ORDER BY id DESC LIMIT 5"'
    ```
 
-4. 並行運用の 1 週間、V1（`【ShipInfo】`）と V2（`【ShipInfo V2】`）の同じ回を比べる（SC-004）。V1 は 0 時、V2 は 1 時に届く点に注意
+   `result` が `pending` のまま残っている回は、送信の途中でプロセスが落ちた回（再送はしない）。
+
+   本番で手で中身を見るときは必ず `--dry-run` を付ける（付けないと、確認時刻より前ならその回を先に取ってしまう）。
+
+5. 並行運用の 1 週間、V1（`【ShipInfo】`）と V2（`【ShipInfo V2】`）の同じ回を比べる（SC-004）。V1 は 0 時、V2 は 1 時に届く点に注意

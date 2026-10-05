@@ -87,6 +87,7 @@ app/src/Repository/OperationStatusRepository.php         # findLatestBetween()
 app/src/Repository/DepartureStatusRepository.php         # findIrregularBetween()
 app/src/View/IrregularService.php                        # 新規
 app/src/View/IrregularPort.php                           # 新規
+app/src/View/NotificationOutcome.php                     # 新規：送信の結果（結果・エラーの要約・足りない設定）
 app/src/Service/IrregularServiceCollector.php            # 新規：2 つの Repository から (航路, 日付) でまとめる。DB 以外は純粋
 app/src/Service/NotificationSlotResolver.php             # 新規：時刻 → 回（1・6・15、10 分の窓）
 app/src/Service/IrregularStatusMailer.php                # 新規：設定の確認・件名と本文・送信・結果
@@ -96,6 +97,7 @@ app/src/Controller/StatusController.php                  # PortBoardBuilder::DAY
 app/templates/email/irregular_statuses.txt.twig          # 新規
 app/templates/status/_status_badge.html.twig             # 文言を status.label() に（見た目・文言は同じ）
 
+app/tests/Enum/OperationStatusEnumTest.php               # 新規：label()・isIrregular()
 app/tests/Repository/NotificationRunRepositoryTest.php   # 新規：確保・二重確保・古い行の削除
 app/tests/Repository/OperationStatusRepositoryTest.php   # findLatestBetween
 app/tests/Repository/DepartureStatusRepositoryTest.php   # findIrregularBetween

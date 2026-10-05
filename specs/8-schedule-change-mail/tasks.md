@@ -38,7 +38,7 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
 - [ ] T003 [P] `app/config/services.yaml` の `parameters:` に既定値を足す：`env(MAILER_DSN): 'null://null'`・`env(NOTIFY_FROM): ''`・`env(NOTIFY_TO): ''`（本番イメージの `.env` は空なので、未設定でもコンテナが起動するように。research R7）
 - [ ] T004 [P] `app/phpunit.xml.dist` の `<php>` に `<server name="MAILER_DSN" value="smtp://mailer.test.invalid" force="true" />`・`NOTIFY_FROM`（`noreply@example.com`）・`NOTIFY_TO`（`ops1@example.com, ,ops2@example.com`）を足す。Mailer 本体は `when@test` で `null://null` なので実際には送らず、通知サービスからは「設定あり」に見える（research R7）
 - [ ] T005 [P] `docker-compose.yml` に Mailpit を足す（FR-011、research R7）
-  - `mailpit:` サービス：`image: axllent/mailpit:v1.27`（タグを固定）、`ports: "8025:8025"`、`networks: [shipinfo]`、`profiles: [tools]`（phpMyAdmin と同じ扱い）
+  - `mailpit:` サービス：`image: axllent/mailpit:<タグ>`（実装のときに Docker Hub の最新の安定版のタグを確かめて固定する。`latest` にはしない）、`ports: "8025:8025"`、`networks: [shipinfo]`、`profiles: [tools]`（phpMyAdmin と同じ扱い）
   - php の `environment` に `MAILER_DSN: "${MAILER_DSN:-smtp://mailpit:1025}"`・`NOTIFY_FROM: "${NOTIFY_FROM:-shipinfo-v2@localhost}"`・`NOTIFY_TO: "${NOTIFY_TO:-ops@localhost}"`
 - [ ] T006 [P] `Makefile` に `notify-dry-run`（`bin/console app:notify-irregular-statuses --slot=6 --dry-run`）と `notify`（`SLOT ?= 6` で `--slot=$(SLOT)`）を足す。既存のターゲットと同じく php コンテナで `exec` し、`.PHONY` と `## ` のヘルプも付ける。`help` の末尾の phpMyAdmin の行の下に `Mailpit: make up-tools && open http://localhost:8025` を足す（contracts/console-command.md「Make」）
 
@@ -94,8 +94,9 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
   - 並びが会社 ID → 日付 → 航路 ID
   - `directionLabel()` が direction のある航路は `RouteDirectionEnum::label()`、無い航路は航路名
 - [ ] T019 [P] [US1] `app/tests/Service/NotificationSlotResolverTest.php` を新しく作る（research R4）：`01:00`・`01:09:59` → 1、`01:10:00` → null、`00:59` → null、`06:05` → 6、`15:00` → 15、`03:12` → null。`fromOption('1'|'6'|'15')` は int を返し、`'0'`・`'7'`・`'abc'`・`''` は `\InvalidArgumentException`
-- [ ] T020 [P] [US1] `app/tests/Service/IrregularStatusMailerTest.php` を新しく作る（Mailer は `MailerInterface` のモック。設定ありの経路だけ。US3 の経路は T033 で足す）：送った `Email` の From・To（`NOTIFY_TO=" a@example.com, ,b@example.com "` → 2 つ）・件名 `【ShipInfo V2】非通常運航ステータスを検出 (2件)`・HTML パートが無いこと・本文に会社名・`運航日: 2026-10-07（水）` の形・`方向　:`・`状況　:`・`港　　:` の下の `    - 名瀬 07:00発 フェリーなみのうえ：欠航（台風接近のため）` の形の行があること（contracts/notification-mail.md「本文」）。戻り値の結果が `sent`
+- [ ] T020 [P] [US1] `app/tests/Service/IrregularStatusMailerTest.php` を新しく作る（Mailer は `MailerInterface` のモック。設定ありの経路だけ。US3 の経路は T033 で足す）：送った `Email` の From・To（`NOTIFY_TO=" a@example.com, ,b@example.com "` → 2 つ）・件名 `【ShipInfo V2】非通常運航ステータスを検出 (2件)`・HTML パートが無いこと・本文に会社名・`運航日: 2026-10-07（水）` の形・`方向　:`・`状況　:`・`港　　:` の下の `    - 名瀬 07:00発 フェリーなみのうえ：欠航（台風接近のため）` の形の行があること（contracts/notification-mail.md「本文」）。戻り値の `NotificationOutcome` の `result` が `Sent`
 - [ ] T021 [US1] `app/tests/Command/NotifyIrregularStatusesCommandTest.php` を新しく作る（`KernelTestCase` ＋ `CommandTester` ＋ `MailerAssertionsTrait`。実 DB に今日の欠航の `operation_statuses` を作る。テストで作った行と今日の `notification_runs` は `tearDown` で消す）
+  - **テスト DB の既存の行に依存しない**：`setUp` で、今日〜3 日先の `operation_statuses`・`departure_statuses` と今日の `notification_runs` を消してから、テストに要る行だけを作る（テスト DB は `_test` の別 DB なので消してよい。seed の会社・航路・港は消さない）。件数・`none` の判定がほかのテストの消し忘れや seed で変わらないようにする
   - `--slot=6` → 終了コード 0、`assertEmailCount(1)`、件名・本文に作った便、`notification_runs` の今日の 6 時の行が `sent`・`item_count` が件数
   - 同じ `--slot=6` を 2 回 → 2 回目は `この回は処理済みです` を含む出力で、メールは増えない（FR-009）
   - 欠航の行を作らない（通常運航だけ）→ 終了コード 0、メール 0 通、結果 `none`（FR-002・SC-002）
@@ -117,7 +118,8 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
   - コンストラクタ：`MailerInterface`・`Twig\Environment`・`#[Autowire(env: 'MAILER_DSN')] string $mailerDsn`・`#[Autowire(env: 'NOTIFY_FROM')] string $from`・`#[Autowire(env: 'NOTIFY_TO')] string $to`（または `services.yaml` の `bind`。どちらか 1 つに揃える）
   - `public const SUBJECT_PREFIX = '【ShipInfo V2】';`、`subject(int $count): string` → `【ShipInfo V2】非通常運航ステータスを検出 (N件)`、`body(list<IrregularService> $items): string`（テンプレートを描画）
   - `recipients(): list<string>`：`NOTIFY_TO` をカンマで分け、前後の空白を除き、空を捨てる
-  - `send(list<IrregularService> $items): NotificationResultEnum`：`Email` を `from`・`to(...recipients)`・`subject`・`text(body)` で作って送り、`Sent` を返す（設定なし・失敗の分岐は US3 の T034 で足す）
+  - `send(list<IrregularService> $items): NotificationOutcome`：`Email` を `from`・`to(...recipients)`・`subject`・`text(body)` で作って送り、`result = Sent` を返す（設定なし・失敗の分岐は US3 の T034 で足す）
+  - `app/src/View/NotificationOutcome.php` を新しく作る：`final readonly` で `result`（`NotificationResultEnum`）・`errorSummary`（`?string`）・`missingSettings`（`list<string>`）
 - [ ] T030 [US1] `app/src/Command/NotifyIrregularStatusesCommand.php` を新しく作る（T014・T026・T027・T029 の後。contracts/console-command.md「処理の順番」1〜4・6・8）
   - `#[AsCommand(name: 'app:notify-irregular-statuses', description: '運航に変更がある便をメールで知らせる')]`、オプション `--slot`（値必須）・`--dry-run`
   - `--slot` が不正 → エラーを出して `Command::INVALID`（2）。`--slot` 無し → `NotificationSlotResolver::resolve(new \DateTimeImmutable('now'))`、null なら `確認時刻ではありません（現在 HH:MM）` を出して 0
@@ -159,9 +161,8 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
 ### Implementation for User Story 3
 
 - [ ] T034 [US3] `app/src/Service/IrregularStatusMailer.php` の `send()` に分岐を足す（research R7）
-  - 送る前に設定を確かめる：`MAILER_DSN` が空か `null://` で始まる、`NOTIFY_FROM` が空、`recipients()` が空 → `NotConfigured`。どの設定が足りないかを返せるようにする（例：`missingSettings(): list<string>`）
-  - `TransportExceptionInterface` を捕まえて `Failed`。エラーの要約は例外のメッセージから作り、DSN（`MAILER_DSN` の値・`user:pass@` の部分）を伏せる。長さは 1000 文字までに切る
-  - 戻り値を「結果・エラーの要約」を持つ小さな値（例：`app/src/View/NotificationOutcome.php` の readonly クラス）にしてよい。T020 の戻り値の確かめ方もそれに合わせる
+  - 送る前に設定を確かめる：`MAILER_DSN` が空か `null://` で始まる、`NOTIFY_FROM` が空、`recipients()` が空 → `NotificationOutcome` の `result = NotConfigured`・`missingSettings` に足りない設定の名前（`MAILER_DSN`・`NOTIFY_FROM`・`NOTIFY_TO`）
+  - `TransportExceptionInterface` を捕まえて `result = Failed`・`errorSummary`。要約は例外のメッセージから作り、DSN（`MAILER_DSN` の値・`user:pass@` の部分）を伏せる。長さは 1000 文字までに切る
 - [ ] T035 [US3] `app/src/Command/NotifyIrregularStatusesCommand.php` に contracts/console-command.md「処理の順番」5・7 を足す：`NotConfigured` → `{設定名} が未設定のためメールを送りませんでした` を warning で出し、`finish(NotConfigured, 0)`・終了コード 0。`Failed` → `メールの送信に失敗しました: {要約}` を error で出し、`finish(Failed, 0, 要約)`・終了コード 1。どちらでも最後の `deleteOlderThan` は動かす
 - [ ] T036 [US3] `make test-php`・`make phpstan`・`make cs-php` を通す。quickstart.md「設定なし・送信失敗を確かめる」の 2 つのコマンドを動かし、そのあと `make scraper-run` とトップページが普段どおり動くことを確かめる（SC-005）
 
@@ -182,10 +183,11 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
 - [ ] T037 [P] [US1] `docker/production/app/crontab` を新しく作る（contracts/console-command.md「起動（本番）」のコメントと行をそのまま。末尾は改行で終える）
 - [ ] T038 [US1] `docker/production/app/Dockerfile` の runtime ステージを直す（research R2）
   - `apk add` に `tzdata` を足し、`ENV` に `TZ=Asia/Tokyo` を足す
-  - supercronic を公式のリリースから入れる：`ARG SUPERCRONIC_VERSION=v0.2.x`・`ARG SUPERCRONIC_SHA1SUM=…`（最新のリリースのページの linux-amd64 の値。`TARGETARCH` で arm64 も選べるようにするかは CI のビルド対象に合わせる）で `curl -fsSLO` → `sha1sum -c -` → `/usr/local/bin/supercronic` に置いて `chmod +x`。curl が無ければビルドのときだけ入れて消す
+  - supercronic を公式のリリース（github.com/aptible/supercronic/releases）から入れる。実装のときに最新のリリースのページを開き、`ARG SUPERCRONIC_VERSION`（例 `v0.2.33` の形）と、その版の `supercronic-linux-amd64` の `ARG SUPERCRONIC_SHA1SUM` を書き写す（推測で書かない）。CI のイメージのビルドは platforms の指定が無く amd64 だけなので、amd64 のバイナリだけを入れる（arm64 は対応しない）
+  - `curl -fsSLO` → `echo "${SUPERCRONIC_SHA1SUM}  supercronic-linux-amd64" | sha1sum -c -` → `/usr/local/bin/supercronic` に置いて `chmod +x`。curl が無ければ `--virtual` でビルドのときだけ入れて消す
   - `COPY docker/production/app/crontab /etc/crontab`
 - [ ] T039 [US1] `docker/production/app/supervisord.conf` に `[program:supercronic]` を足す（T038 の後）：`command=supercronic /etc/crontab`・`user=www-data`・`autostart=true`・`autorestart=true`・`priority=30`、標準出力・標準エラーは既存のプログラムと同じく `/dev/stdout`・`/dev/stderr`（`maxbytes=0`）。冒頭のコメントに「supercronic で通知のコマンドを動かす」を足す
-- [ ] T040 [US1] `compose.prod.yml` の app の `environment` に `MAILER_DSN: ${MAILER_DSN:-null://null}`・`NOTIFY_FROM: ${NOTIFY_FROM:-}`・`NOTIFY_TO: ${NOTIFY_TO:-}` を足す（必須にしない。FR-008）。`deploy/.env.production.example` に 3 つを空で足し、URL エンコードの注意をコメントで書く（quickstart.md「本番に出すとき」1）
+- [ ] T040 [US1] `compose.prod.yml` の app の `environment` に `MAILER_DSN: ${MAILER_DSN:-null://null}`・`NOTIFY_FROM: ${NOTIFY_FROM:-}`・`NOTIFY_TO: ${NOTIFY_TO:-}` を足す（必須にしない。FR-008）。`deploy/.env.production.example` に 3 つを空で足し、URL エンコードの注意をコメントで書く（quickstart.md「本番に出すとき」1）。**PR2 をマージする前に**、quickstart.md「本番に出すとき」2 のとおり VPS の app コンテナから本番の SMTP で自分宛てに 1 通送り、証明書の検証で落ちないことを確かめる（V1 は検証オフだったので。落ちたら T042 の証明書の節に沿って直してからマージする）
 - [ ] T041 [US1] `scripts/verify-prod.sh` に確認を足す（既存の `section`・`ok` の書き方に合わせる）
   - `supervisorctl status supercronic` が `RUNNING`
   - app コンテナの `date +%Z` が `JST`（TZ）
@@ -198,10 +200,10 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T042 [P] `deploy/README.md` に通知の節を足す：`.env.production` への 3 つの入れ方（DSN のユーザー名・パスワードの URL エンコード）、TLS の証明書は検証すること（通らないときはまずホスト名を合わせる。`verify_peer=0` を使うなら理由を書く。research R7）、確認の仕方（quickstart.md「本番に出すとき」3 のコマンド）、supercronic の更新手順（Dependabot の対象外なので、リリースのページでバージョンと SHA-1 を確かめて Dockerfile の `ARG` を直す。research R2）
+- [ ] T042 [P] `deploy/README.md` に通知の節を足す：`.env.production` への 3 つの入れ方（DSN のユーザー名・パスワードの URL エンコード）、TLS の証明書は検証すること（通らないときはまずホスト名を合わせる。`verify_peer=0` を使うなら理由を書く。research R7）、確認の仕方（quickstart.md「本番に出すとき」4 のコマンド。`result = 'pending'` が残っている回は送信の途中で落ちた回）、本番で手で動かすときは必ず `--dry-run` を付けること（付けないと確認時刻より前ならその回を先に取ってしまう。research R4）、supercronic の更新手順（Dependabot の対象外なので、リリースのページでバージョンと SHA-1 を確かめて Dockerfile の `ARG` を直す。research R2）
 - [ ] T043 [P] `CLAUDE.md` の「よく使うコマンド」に `make notify-dry-run`・`make notify SLOT=6` を、「重要な設計決定」に「運航に変更がある便の通知は app コンテナの supercronic が 1・6・15 時に `app:notify-irregular-statuses` を動かす。同じ回は `notification_runs` の一意キーで 1 通まで」を 1 行で足す
 - [ ] T044 `make test-php`・`make phpstan`・`make cs-php`・`make lint-php`・`make audit`・`make verify-prod` を全部通す → コミット → PR2 を作る
-- [ ] T045 デプロイ後、quickstart.md「本番に出すとき」3 のコマンドで最初の確認時刻の結果を確かめ、並行運用の 1 週間、V1 と V2 の同じ回のメールを比べる（SC-004。V1 は 0 時、V2 は 1 時）
+- [ ] T045 デプロイ後、quickstart.md「本番に出すとき」4 のコマンドで最初の確認時刻の結果を確かめ、並行運用の 1 週間、V1 と V2 の同じ回のメールを比べる（SC-004。V1 は 0 時、V2 は 1 時）
 
 ---
 
