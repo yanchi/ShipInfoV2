@@ -65,11 +65,13 @@
 > **NOTE: 先に書いて、実装前に FAIL することを確認する**
 
 - [ ] T007 [US1] `app/tests/Controller/StatusControllerTest.php` を直す・足す
+  - `testSharedHeaderOnAllPages` は**変えずに通す**（`header.site-header nav` の中に `a[href="/"]` と `aria-current` がちょうど1つずつ。T010 の制約）
   - 既存の書き換え：`testIndexContainsTitle` の `assertSelectorTextContains('h1', 'ShipInfo')` → `'現在の運航状況'`（research R13）。`.badge.bg-success` を見ている3か所 → `.status-badge--operating`。`testPortsShowsScheduledBadge` の `.badge` → `.status-badge--scheduled`
   - 追加 `testSiteChromeOnAllPages`：`/`・`/ports`・`/company/{有効な会社ID}` の3ページで、`.site-header .site-name` がサイト名（`鹿児島〜沖縄・奄美大島`・`フェリー運航情報` を含む）で `href="/"`、ヘッダーのナビに「トップ」「港別」「各社」がある、`footer.site-footer` の文が `© 2025 鹿児島〜沖縄・奄美大島 フェリー運航情報サービス`、`link[rel="icon"]` の `href` が `/favicon.svg`、`html` の `data-bs-theme` が `light`
   - 追加 `testCurrentPageIsMarkedInNav`：`/ports` でナビの「港別」に `aria-current="page"`、`/` で「トップ」に `aria-current="page"`
   - 追加 `testStatusWarningShownForCancelledAndDelayed`：欠航・条件付・遅延の便の行（`.port-entry`）に `.status-warning`（文言「出港時間・寄港地が変更になってる可能性があるので公式サイトをご確認ください」）があり、通常運航・運休の便の行には無い。トップの会社カードの航路の行、会社別の航路の要約行（`.route-summaries li`）でも同じ（データの作り方は既存のテストのヘルパーに合わせる）
-  - 追加：「情報なし」の表示（`/` で会社が無いとき、`/ports` で情報が無いとき）が `.no-data` で出る。既存のテストでそれらのケースを作っているものがあれば、そこに assert を足す形でよい
+  - 追加 `testNoDataMessagesUseV1Style`：会社が1社も無い状態で `/` を開くと `.no-data` に「現在情報がありません。」、運航情報が無い状態で `/ports` を開くと `.no-data` に「港別の情報がありません。」が出て、`.alert-secondary` が無い
+  - 追加 `testPageHeadingsHaveClass`：3ページの `<h1>` が `.page-heading` の中にあり（会社別は `h1` を囲む `div.page-heading`）、`/ports` と `/company/{id}` の日付の `<h2>` が `.page-heading`
   - 追加：3ページとも `<footer>` 要素はサイト共通の1つだけ（`footer` の数が 1）で、注記は `p.page-note`
 - [ ] T008 [P] [US1] `app/tests/Controller/ErrorPageTest.php` を新しく作る（research R7）
   - `static::createClient(['debug' => false])` で `/company/999999` を開き、404・`link[rel="icon"][href="/favicon.svg"]`・`.site-header .site-name`・`footer.site-footer` があり、`.site-companies`（「各社」メニュー）と `.site-freshness` が無い。ナビは「トップ」「港別」の2つ
@@ -82,6 +84,7 @@
   - 同じ `:root` で Bootstrap の変数を上書き：`--bs-body-bg: var(--v1-bg)`・`--bs-body-color: var(--v1-text)`・`--bs-body-font-family`（V1 の書体）・`--bs-primary: var(--v1-primary)`・`--bs-primary-rgb: 0, 115, 230`・`--bs-link-color: var(--v1-primary)`・`--bs-link-color-rgb: 0, 115, 230`
 - [ ] T010 [US1] `app/templates/base.html.twig` のヘッダーを V1 の形に書き換える（FR-003・009、research R12、contracts/ui-theme.md「ヘッダー」）
   - `<header class="site-header">`（`border-bottom` は外す）の中に、サイト名 `<a class="site-name" href="{{ path('app_status_index') }}">` を中央に置く。中身は `<span>鹿児島〜沖縄・奄美大島</span> <span>フェリー運航情報</span>`（`site_name` を空白で分けて出す。`<h1>` にはしない）
+  - サイト名のリンクは `<nav>` の**外**（`<header>` の直下）に置き、`aria-current` も `active` も付けない。既存の `testSharedHeaderOnAllPages` が `nav` の中の `a[href="/"]`・`[aria-current="page"]` をちょうど1つと数えているため
   - その下の `<nav aria-label="サイト">` に「トップ」（`app_status_index`）・「港別」・`{% block site_companies_menu %}`（「各社」）の3項目を1行で中央寄せ。今いるページには `aria-current="page"` と `active`。「各社」の `<summary>` は会社別ページで `active`
   - 「ShipInfo」の文字列を消す
   - `<link rel="icon">` の data URI を `<link rel="icon" type="image/svg+xml" href="/favicon.svg">` に置き換える（FR-001）
@@ -94,7 +97,7 @@
 - [ ] T012 [US1] `app/templates/base.html.twig` の `{% block body %}` の後（`<script>` の前）にフッター `<footer class="site-footer"><p class="mb-0">{{ copyright }}</p></footer>` を足し、`app/templates/_site_styles.html.twig` に `.site-footer`（背景 `var(--v1-footer-bg)`・白文字・中央・`padding: 1rem 0`・`margin-top: 2rem`、768px 以下で `font-size: .8rem`）を足す（FR-014）
 - [ ] T013 [US1] `app/templates/_site_styles.html.twig` に本文の見た目を足す（FR-010〜012、research R14、contracts/ui-theme.md「本文」）
   - `.card`：`--bs-card-border-width: 0`・`--bs-card-border-radius: 8px`・`box-shadow: 0 2px 4px rgba(0,0,0,.1)`・白地（`--bs-card-bg: #fff`）
-  - 見出し：`main h1, .page-heading, section[id^="d-"] > h2`（実装で付けたクラスに合わせる）に `border-bottom: 2px solid var(--v1-primary); padding-bottom: .5rem`
+  - 見出し：`.page-heading` に `border-bottom: 2px solid var(--v1-primary); padding-bottom: .5rem`。付ける要素は T018〜T020 で決める（各ページの `<h1>`、会社別は `h1` と公式サイトのリンクを囲む `div`、日付ごとの `<h2>`）。トップの「{港}の今日の便」の `<h2>` には付けない
   - `.no-data`：背景 `var(--v1-bg-light)`・角丸 5px・斜体・`var(--v1-text-light)`・中央寄せ・`padding`
   - `.page-note`：小さい灰色の文字（今の `text-muted small` 相当）
   - `.date-nav` の背景は `var(--bs-body-bg)` のまま（グレーの不透明になる。Edge Cases）
@@ -105,18 +108,21 @@
 - [ ] T016 [P] [US1] `app/templates/status/_status_warning.html.twig` を新しく作る（FR-016、research R5）。引数 `status`（`OperationStatusEnum` か null）。`status` が `cancelled` か `delayed` のときだけ `<p class="status-warning">出港時間・寄港地が変更になってる可能性があるので公式サイトをご確認ください</p>` を出す。`_site_styles.html.twig` に `.status-warning { color: var(--v1-warning-text); font-size: .85em; margin: 0 0 .3rem; }` を足す
 - [ ] T017 [US1] `app/templates/status/_port_entry.html.twig` で、バッジの下に `_status_warning.html.twig` を `include` する。`entry.state` が `status` のときだけ `status: entry.status` を渡し、それ以外（運航予定・情報なし・便なし）は出さない（data-model.md「ステータスと表示の対応」）
 - [ ] T018 [US1] `app/templates/status/index.html.twig` を直す
-  - `<h1>` の「ShipInfo - フェリー運航情報」→「現在の運航状況」（research R13）。日付の行は今のまま
+  - `<h1>` の「ShipInfo - フェリー運航情報」→「現在の運航状況」（research R13）にし、`page-heading` のクラスを足す。日付の行は今のまま
   - `<div class="alert alert-secondary">現在情報がありません。</div>` → `<div class="no-data">現在情報がありません。</div>`
   - 会社カードの航路の行（`list-group-item`）で、バッジを出す分岐のときにバッジの下に `_status_warning.html.twig`（`status: status ? status.status : null`）を出す。行のレイアウト（`d-flex justify-content-between`）が崩れないよう、航路名とバッジの行を1つの `div` にまとめ、注意書きはその下に置く
   - 下部の注記 `<footer class="text-muted small mt-4">` → `<p class="page-note mt-4">`
-- [ ] T019 [P] [US1] `app/templates/status/ports.html.twig` を直す：`<div class="alert alert-secondary">港別の情報がありません。</div>` → `.no-data`、日付の `<h2>` の `border-bottom pb-1` を外して T013 の青い下線にする、下部の注記の `<footer>` → `<p class="page-note mt-4">`
-- [ ] T020 [P] [US1] `app/templates/status/company.html.twig` を直す：日付の `<h2>` の `border-bottom pb-1` を外す、航路の要約行（`.route-summaries li`）のバッジの下に `_status_warning.html.twig`（`status: summary.status`）、下部の注記の `<footer>` → `<p class="page-note mt-4">`
+  - 会社カードの中の「航路情報がありません。」（`list-group-item text-muted`）はカードの中のリストの行なので `.no-data` にしない（今のまま）。`.no-data` にするのは、ページ全体の「情報なし」（`.alert-secondary` の2か所）だけ
+- [ ] T019 [P] [US1] `app/templates/status/ports.html.twig` を直す：`<h1>` に `page-heading` を足す、`<div class="alert alert-secondary">港別の情報がありません。</div>` → `.no-data`、日付の `<h2>` の `border-bottom pb-1` を `page-heading` に置き換える、下部の注記の `<footer>` → `<p class="page-note mt-4">`
+- [ ] T020 [P] [US1] `app/templates/status/company.html.twig` を直す：`<h1>` と公式サイトのリンクを囲む `div`（`d-flex … mb-4`）に `page-heading` を足す（`h1` 自体には付けない。下線をリンクの下まで通すため）、日付の `<h2>` の `border-bottom pb-1` を `page-heading` に置き換える、航路の要約行（`.route-summaries li`）のバッジの下に `_status_warning.html.twig`（`status: summary.status`）、下部の注記の `<footer>` → `<p class="page-note mt-4">`
 - [ ] T021 [P] [US1] エラーページのテンプレートを新しく作る（research R7、contracts/http-routes.md「エラーページ」）
   - `app/templates/bundles/TwigBundle/Exception/error404.html.twig`：`base.html.twig` を継承。`title` は「ページが見つかりません」、`site_companies_menu`・`site_freshness` は空にする。本文は `<div class="container py-3"><h1>ページが見つかりません</h1><p>お探しのページは移動または削除された可能性があります。</p><p><a href="{{ path('app_status_index') }}">トップへ戻る</a></p></div>`
   - `app/templates/bundles/TwigBundle/Exception/error.html.twig`：同じ形で、`title`・見出しは「エラーが発生しました」、本文は「時間をおいて再度お試しください。」
   - DB を読む関数（`site_companies()`・`site_freshness()`）を呼ばないこと
 - [ ] T022 [US1] `make test-php`・`make lint-php`・`make phpstan`・`make cs-php` を通す。T007・T008 が通ること、既存テストが（T007 で書き換えた箇所以外は変えずに）通ることを確認する
-- [ ] T023 [US1] quickstart.md §2 の画面のチェック項目を、V1 と並べて 375px と 1280px で確かめる（タイトル・OG は US2 なのでまだ見ない）。エラーページは `http://localhost:8080/_error/404` と `/_error/500` で見る
+- [ ] T023 [US1] quickstart.md §2 の画面のチェック項目を、V1 と並べて 375px と 1280px で確かめる（タイトル・OG は US2 なのでまだ見ない）。エラーページは `http://localhost:8080/_error/404` と `/_error/500` で見る。quickstart に無い次の項目も見る
+  - 古い情報の警告（`alert-warning`）が、青いヘッダーの下・グレーの背景の上で目立つこと（`docker compose exec mysql` で `departure_statuses` の `checked_at` を `DataFreshnessChecker::STALE_AFTER_HOURS` より前にずらして出す。見終わったら `make scraper-run` で戻す）
+  - 375px で「各社 ▾」を開いたとき、メニューが画面の左右からはみ出さないこと（T011 の位置の調整）
 
 **Checkpoint**: 全ページが V1 のテイストで出る。US1 の Acceptance Scenarios 1〜5 を満たす → コミット
 
@@ -196,7 +202,7 @@
 - [ ] T039 `app/config/packages/twig.yaml` の `twig.globals` に `ga_measurement_id: '%env(default::GOOGLE_ANALYTICS_ID)%'` を足す（research R10。V1 の `../ShipInfo/ship_info/config/packages/twig.yaml` と同じ）
 - [ ] T040 `app/templates/base.html.twig` の `</head>` の直前に、`{% if app.environment == 'prod' and ga_measurement_id %}` のときだけ V1 の `../ShipInfo/ship_info/templates/base.html.twig` と同じ gtag.js のタグ（`<script async src="https://www.googletagmanager.com/gtag/js?id=…">` と `dataLayer`・`gtag('config', …)` のインラインスクリプト）を出す。ID は `ga_measurement_id|e('url')`（URL の中）・`ga_measurement_id|e('js')`（JS の中）でエスケープする
 - [ ] T041 [P] `compose.prod.yml` の `app` の `environment` に `GOOGLE_ANALYTICS_ID: ${GOOGLE_ANALYTICS_ID:-}` を足す。`deploy/.env.production.example` に `GOOGLE_ANALYTICS_ID=` を、「V1 と並べている間は空のまま。切り替えのときに V1 と同じ ID を入れる」というコメントつきで足す
-- [ ] T042 `make test-php`・`make lint-php` を通す。`make verify-prod` で本番用イメージが ID 無しで起動し、HTML に gtag が出ないことを確かめる
+- [ ] T042 `make test-php`・`make lint-php` を通す。`make verify-prod` で本番用イメージが ID 無しで起動することを確かめる。`scripts/verify-prod.sh` は HTML の中身を見ないので、起動中に `curl -s` でトップを取り、`googletagmanager` が含まれないことを別に確かめる（スクリプトに足してもよい）
 
 **Checkpoint**: FR-021・022 を満たす → コミット
 
