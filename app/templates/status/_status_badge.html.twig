@@ -18,15 +18,15 @@
 {%- elseif status is null -%}
     <span class="status-badge status-badge--muted">？ 情報なし</span>
 {%- elseif status.value == 'operating' -%}
-    <span class="status-badge status-badge--operating">✓ 通常運航</span>
+    <span class="status-badge status-badge--operating">✓ {{ status.label() }}</span>
 {%- elseif status.value == 'delayed' -%}
-    <span class="status-badge status-badge--delayed">▲ 条件付・遅延</span>
+    <span class="status-badge status-badge--delayed">▲ {{ status.label() }}</span>
 {%- elseif status.value == 'cancelled' -%}
-    <span class="status-badge status-badge--cancelled">✗ 欠航</span>
+    <span class="status-badge status-badge--cancelled">✗ {{ status.label() }}</span>
 {%- elseif status.value == 'suspended' -%}
-    <span class="status-badge status-badge--suspended">■ 運休</span>
+    <span class="status-badge status-badge--suspended">■ {{ status.label() }}</span>
 {%- elseif status.value == 'unknown' -%}
-    <span class="status-badge status-badge--muted">？ 不明</span>
+    <span class="status-badge status-badge--muted">？ {{ status.label() }}</span>
 {%- else -%}
     <span class="status-badge status-badge--muted">？ 情報なし</span>
 {%- endif -%}

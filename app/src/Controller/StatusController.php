@@ -27,9 +27,6 @@ use Symfony\Component\Routing\Attribute\Route;
 
 class StatusController extends AbstractController
 {
-    /** 港別ページ・トップのボードに出す日数（今日〜3日先） */
-    private const PORT_BOARD_DAYS = 4;
-
     public function __construct(
         private readonly DepartureStatusRepository $departureStatusRepository,
         private readonly PortBoardBuilder $portBoardBuilder,
@@ -183,7 +180,7 @@ class StatusController extends AbstractController
         }
 
         $today    = new \DateTimeImmutable('today');
-        $statuses = $this->departureStatusRepository->findForBoard($today, self::PORT_BOARD_DAYS);
+        $statuses = $this->departureStatusRepository->findForBoard($today, PortBoardBuilder::DAYS);
 
         return $this->render('status/company.html.twig', [
             'company' => $company,
@@ -191,7 +188,7 @@ class StatusController extends AbstractController
                 $company->getId(),
                 $this->buildFullBoard($routeStopRepository->findBoardStops(), $today, $statuses),
                 $statuses,
-                $operationStatusRepository->findUpcomingByCompany($company, $today, self::PORT_BOARD_DAYS),
+                $operationStatusRepository->findUpcomingByCompany($company, $today, PortBoardBuilder::DAYS),
             ),
             'now' => new \DateTimeImmutable(),
         ]);
@@ -258,9 +255,9 @@ class StatusController extends AbstractController
     {
         return $this->portBoardBuilder->build(
             $boardStops,
-            $statuses ?? $this->departureStatusRepository->findForBoard($today, self::PORT_BOARD_DAYS),
+            $statuses ?? $this->departureStatusRepository->findForBoard($today, PortBoardBuilder::DAYS),
             $today,
-            self::PORT_BOARD_DAYS,
+            PortBoardBuilder::DAYS,
         );
     }
 

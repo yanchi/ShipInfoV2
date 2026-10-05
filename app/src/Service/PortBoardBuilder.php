@@ -27,6 +27,9 @@ use App\View\PortBoardRow;
  */
 class PortBoardBuilder
 {
+    /** 港別ページ・トップのボードと通知メールで見る日数（今日〜3日先） */
+    public const DAYS = 4;
+
     /**
      * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
      * @param list<DepartureStatus> $statuses
