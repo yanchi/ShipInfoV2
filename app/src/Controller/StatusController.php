@@ -4,7 +4,9 @@ namespace App\Controller;
 
 use App\Entity\FerryCompany;
 use App\Entity\OperationStatus;
+use App\Enum\DepartureDisplayStateEnum;
 use App\Enum\OperationStatusEnum;
+use App\Enum\RouteDirectionEnum;
 use App\Repository\DepartureStatusRepository;
 use App\Repository\FerryCompanyRepository;
 use App\Repository\OperationStatusRepository;
@@ -15,6 +17,7 @@ use App\Service\PortBoardBuilder;
 use App\Service\PortFilterResolver;
 use App\View\PortBoard;
 use App\View\PortBoardDay;
+use App\View\PortBoardEntry;
 use App\View\PortFilter;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -107,25 +110,62 @@ class StatusController extends AbstractController
     /**
      * 航路単位では no_service でも、今日その方向の便が途中の港を出る航路（会社カードで「— 便なし」と出さない。tasks T054a）。
      *
+     * 前日に始発港を出た便が今日途中の港を出る日は、その区間（始発港を除いた港を出る便）の状態を出す。
+     * 全便が同じ状態ならそれを badge。バラけていて欠航・運休・条件付・遅延が混じれば changed（スケジュール変更）、
+     * 混じらなければ通常運航 → 不明 → 運航予定の順で badge。
+     *
      * @param list<array{company: FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: ?OperationStatus}>}> $companies
      *
-     * @return array<int, true> [routeId => true]
+     * @return array<int, array{kind: 'changed'|'badge', state: ?DepartureDisplayStateEnum, status: ?OperationStatusEnum}> [routeId => 表示]
      */
     private function routesDepartingMidway(array $companies, ?PortBoardDay $today): array
     {
         $result = [];
         foreach ($companies as $companyData) {
+            $companyId = $companyData['company']->getId();
             foreach ($companyData['routes'] as $routeId => $r) {
                 $direction = $r['route']->getDirection();
-                if ($r['status']?->getStatus() === OperationStatusEnum::NoService
-                    && $direction !== null
-                    && $today?->hasDeparturesOf($companyData['company']->getId(), $direction)) {
-                    $result[$routeId] = true;
+                if ($today === null || $direction === null || $r['status']?->getStatus() !== OperationStatusEnum::NoService) {
+                    continue;
+                }
+                $display = $this->midwayDisplay($today->midwayDeparturesOf($companyId, $direction));
+                if ($display !== null) {
+                    $result[$routeId] = $display;
                 }
             }
         }
 
         return $result;
+    }
+
+    /**
+     * @param list<PortBoardEntry> $entries
+     *
+     * @return array{kind: 'changed'|'badge', state: ?DepartureDisplayStateEnum, status: ?OperationStatusEnum}|null 便が無ければ null
+     */
+    private function midwayDisplay(array $entries): ?array
+    {
+        if ($entries === []) {
+            return null;
+        }
+        // 全部同じ状態ならそれを出す（途中の港が1つで欠航なら「欠航」）
+        $first = $entries[0];
+        if (array_filter($entries, static fn (PortBoardEntry $e) => $e->state !== $first->state || $e->status !== $first->status) === []) {
+            return ['kind' => 'badge', 'state' => $first->state === DepartureDisplayStateEnum::Scheduled ? $first->state : null, 'status' => $first->status];
+        }
+        // 状態がバラけていて、欠航・運休・条件付・遅延が混じる
+        if (array_filter($entries, static fn (PortBoardEntry $e) => $e->isAlert()) !== []) {
+            return ['kind' => 'changed', 'state' => null, 'status' => null];
+        }
+
+        $statuses = array_map(static fn (PortBoardEntry $e) => $e->status, $entries);
+        foreach ([OperationStatusEnum::Operating, OperationStatusEnum::Unknown] as $status) {
+            if (\in_array($status, $statuses, true)) {
+                return ['kind' => 'badge', 'state' => null, 'status' => $status];
+            }
+        }
+
+        return ['kind' => 'badge', 'state' => DepartureDisplayStateEnum::Scheduled, 'status' => null];
     }
 
     #[Route('/company/{id}', name: 'app_status_company')]
@@ -211,7 +251,7 @@ class StatusController extends AbstractController
     /**
      * 全港・今日〜3日先のボード。$statuses を渡せばそれで作る（会社別ページは同じ行を日付の状態の判定にも使うため）。
      *
-     * @param list<array{direction: \App\Enum\RouteDirectionEnum, departurePorts: list<\App\Entity\Port>, arrivalPort: \App\Entity\Port}> $boardStops
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<\App\Entity\Port>, arrivalPort: \App\Entity\Port}> $boardStops
      * @param list<\App\Entity\DepartureStatus>|null $statuses
      */
     private function buildFullBoard(array $boardStops, \DateTimeImmutable $today, ?array $statuses = null): PortBoard
