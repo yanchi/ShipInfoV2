@@ -1,10 +1,12 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}ShipInfo - フェリー運航情報{% endblock %}
+{% block title %}現在の運航状況{% endblock %}
+{% block full_title %}{{ site_top_title }}{% endblock %}
+{% block description %}Aライン・マリックスラインの鹿児島〜那覇・奄美大島間フェリーの最新運航状況。欠航・遅延情報を毎時更新。旅行前に出発港・到着港の運航状況をご確認ください。{% endblock %}
 
 {% block body %}
 <div class="container pt-3 pb-4">
-    <h1 class="h4 mb-1">ShipInfo - フェリー運航情報</h1>
+    <h1 class="h4 mb-1 page-heading">現在の運航状況</h1>
     <p class="text-muted mb-3">{{ today|date('Y年n月j日（') }}{{ ['日','月','火','水','木','金','土'][today|date('w')] }}）の運航状況</p>
 
     {# FR-015: 異常の要約 → 保存した港の今日の便（無ければ港別ページへのボタン）→ 会社一覧 #}
@@ -45,7 +47,7 @@
     {% endif %}
 
     {% if companies is empty and idleCompanies is empty %}
-        <div class="alert alert-secondary">現在情報がありません。</div>
+        <div class="no-data">現在情報がありません。</div>
     {% else %}
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
             {% for companyData in companies %}
@@ -66,13 +68,18 @@
                             {% for routeData in companyData.routes %}
                                 {% set route = routeData.route %}
                                 {% set status = routeData.status %}
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span>{{ route.name }}</span>
-                                    {% if routesDepartingMidway[route.id] is defined %}
-                                        {# 航路単位では便なし（始発港を出る便が無い）でも、途中の港を出る便がある（tasks T054a） #}
-                                        <a href="{{ path('app_status_company', {id: company.id}) }}" class="route-midway small">途中の港を出る便あり</a>
-                                    {% else %}
-                                        {{ include('status/_status_badge.html.twig', {state: null, status: status ? status.status : null}) }}
+                                <li class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>{{ route.name }}</span>
+                                        {% if routesDepartingMidway[route.id] is defined %}
+                                            {# 航路単位では便なし（始発港を出る便が無い）でも、途中の港を出る便がある（tasks T054a） #}
+                                            <a href="{{ path('app_status_company', {id: company.id}) }}" class="route-midway small">途中の港を出る便あり</a>
+                                        {% else %}
+                                            {{ include('status/_status_badge.html.twig', {state: null, status: status ? status.status : null}) }}
+                                        {% endif %}
+                                    </div>
+                                    {% if routesDepartingMidway[route.id] is not defined %}
+                                        {{ include('status/_status_warning.html.twig', {status: status ? status.status : null}) }}
                                     {% endif %}
                                 </li>
                             {% else %}
@@ -93,8 +100,8 @@
         {% endif %}
     {% endif %}
 
-    <footer class="text-muted small mt-4">
+    <p class="page-note mt-4">
         運航情報はスクレイピングにより収集しています。最新情報は各社公式サイトをご確認ください。
-    </footer>
+    </p>
 </div>
 {% endblock %}

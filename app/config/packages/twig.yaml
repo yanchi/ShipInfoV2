@@ -1,5 +1,12 @@
 twig:
     file_name_pattern: '*.twig'
+    globals:
+        # V1 の文言を引き継ぐ（specs/7-v1-branding/data-model.md）。「ShipInfo」は画面に出さない
+        site_name: '鹿児島〜沖縄・奄美大島 フェリー運航情報'
+        site_top_title: '鹿児島〜沖縄・奄美大島フェリー運航情報'
+        title_suffix: ' | 鹿児島〜沖縄フェリー運航状況'
+        og_site_name: '鹿児島〜沖縄フェリー運航情報サービス'
+        copyright: '© 2025 鹿児島〜沖縄・奄美大島 フェリー運航情報サービス'
 
 when@test:
     twig:

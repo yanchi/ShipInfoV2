@@ -1,10 +1,11 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}港別運航情報 | ShipInfo{% endblock %}
+{% block title %}港別運航情報{% endblock %}
+{% block description %}鹿児島〜那覇・奄美大島間の各港を出るフェリーの出港時刻と運航状況。Aライン・マリックスラインの今日から4日分の欠航・遅延情報を港ごとに確認できます。{% endblock %}
 
 {% block body %}
 <div class="container pt-3 pb-4">
-    <h1 class="h4 mb-2">港別運航情報</h1>
+    <h1 class="h4 mb-2 page-heading">港別運航情報</h1>
 
     {% if not fullBoard.isEmpty %}
         <nav class="date-nav d-flex gap-1 py-2 mb-2" aria-label="日付">
@@ -51,11 +52,11 @@
     {{ include('status/_status_legend.html.twig') }}
 
     {% if fullBoard.isEmpty %}
-        <div class="alert alert-secondary">港別の情報がありません。</div>
+        <div class="no-data">港別の情報がありません。</div>
     {% else %}
         {% for day in board.days %}
             <section class="mb-4" id="d-{{ day.date|date('Y-m-d') }}">
-                <h2 class="h5 border-bottom pb-1 mb-3">
+                <h2 class="h5 page-heading mb-3">
                     {{ day.date|date('n月j日（') }}{{ ['日','月','火','水','木','金','土'][day.date|date('w')] }}）
                 </h2>
                 {% if day.directions is empty %}
@@ -86,8 +87,8 @@
         {% endfor %}
     {% endif %}
 
-    <footer class="text-muted small mt-4">
+    <p class="page-note mt-4">
         運航情報はスクレイピングにより収集しています。最新情報は各社公式サイトをご確認ください。
-    </footer>
+    </p>
 </div>
 {% endblock %}

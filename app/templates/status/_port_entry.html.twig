@@ -26,6 +26,9 @@
             <span class="small text-muted">出港済み</span>
         {% endif %}
     </div>
+    {% if entry.state.value == 'status' %}
+        {{ include('status/_status_warning.html.twig', {status: entry.status}) }}
+    {% endif %}
     {%- set showCheckedAt = entry.checkedAtDiffersFrom(commonCheckedAt|default(null)) -%}
     {% if entry.shipName or entry.companyName or entry.arrivalAt or showCheckedAt %}
         <div class="small text-muted d-flex flex-wrap column-gap-2">
