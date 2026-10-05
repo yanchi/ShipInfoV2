@@ -1,0 +1,26 @@
+{#
+    運航に変更がある便の通知メール本文（テキスト）。形は specs/8-schedule-change-mail/contracts/notification-mail.md
+    引数: items: list<App\View\IrregularService>
+    Twig はタグだけの行の改行を取り除くので、タグは行頭に置く
+#}
+{% autoescape false %}
+{% set weekdays = ['日', '月', '火', '水', '木', '金', '土'] %}
+以下の運航情報で通常運航以外のステータスが検出されました。
+{% for item in items %}
+
+  会社名: {{ item.company.name }}
+  運航日: {{ item.date|date('Y-m-d') }}（{{ weekdays[item.date|date('w')] }}）
+  方向　: {{ item.directionLabel }}
+  状況　: {{ item.statusText }}
+{% if item.detail %}
+  備考　: {{ item.detail }}
+{% endif %}
+{% if item.ports %}
+  港　　:
+{% for port in item.ports %}
+    - {{ port.portName }}{% if port.departureAt %} {{ port.departureAt|date('H:i') }}発{% endif %}{% if port.shipName %} {{ port.shipName }}{% endif %}：{{ port.status.label() }}{% if port.detail %}（{{ port.detail }}）{% endif %}
+
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endautoescape %}

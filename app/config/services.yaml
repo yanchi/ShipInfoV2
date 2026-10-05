@@ -1,4 +1,8 @@
 parameters:
+    # 本番イメージの .env は空なので、未設定でもコンテナが起動するよう既定値を置く（specs/8-schedule-change-mail research R7）
+    env(MAILER_DSN): 'null://null'
+    env(NOTIFY_FROM): ''
+    env(NOTIFY_TO): ''
 
 services:
     _defaults:

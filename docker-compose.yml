@@ -24,6 +24,10 @@ services:
     environment:
       APP_ENV: "${APP_ENV:-dev}"
       DATABASE_URL: "mysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}?serverVersion=8.0&charset=utf8mb4"
+      # 運航の変更の通知メール。make up-tools で起動する Mailpit（http://localhost:8025）に届く
+      MAILER_DSN: "${MAILER_DSN:-smtp://mailpit:1025}"
+      NOTIFY_FROM: "${NOTIFY_FROM:-shipinfo-v2@localhost}"
+      NOTIFY_TO: "${NOTIFY_TO:-ops@localhost}"
     depends_on:
       mysql:
         condition: service_healthy
@@ -89,6 +93,16 @@ services:
       - "${PMA_PORT:-8081}:80"
     depends_on:
       - mysql
+    networks:
+      - shipinfo
+    profiles:
+      - tools
+
+  # Mailpit (optional, dev only - 通知メールの受け口。start with: docker compose --profile tools up)
+  mailpit:
+    image: axllent/mailpit:v1.31.4
+    ports:
+      - "${MAILPIT_PORT:-8025}:8025"
     networks:
       - shipinfo
     profiles:

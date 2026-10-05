@@ -3,6 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\DepartureStatus;
+use App\Enum\OperationStatusEnum;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -76,5 +77,42 @@ class DepartureStatusRepository extends ServiceEntityRepository
         }
 
         return $result;
+    }
+
+    /**
+     * 通知用: findForBoard と同じ範囲・条件のうち、通常運航以外（OperationStatusEnum::isIrregular()）の港別ステータス。
+     * 運航予定（status が null）・便なし・通常運航は含まない。
+     *
+     * @return list<DepartureStatus>
+     */
+    public function findIrregularBetween(\DateTimeImmutable $from, int $days): array
+    {
+        $to = $from->modify(sprintf('+%d days', $days - 1));
+
+        /** @var list<DepartureStatus> $rows */
+        $rows = $this->createQueryBuilder('d')
+            ->select('d', 'r', 'fc', 'p')
+            ->join('d.route', 'r')
+            ->join('r.ferryCompany', 'fc')
+            ->join('d.port', 'p')
+            ->where('d.departureDate BETWEEN :from AND :to')
+            ->andWhere('r.active = :active')
+            ->andWhere('fc.active = :active')
+            ->andWhere('r.direction IS NOT NULL')
+            ->andWhere('d.status IN (:statuses)')
+            ->setParameter('active', true)
+            ->setParameter('from', $from->format('Y-m-d'))
+            ->setParameter('to', $to->format('Y-m-d'))
+            ->setParameter('statuses', array_map(
+                static fn (OperationStatusEnum $status): string => $status->value,
+                OperationStatusEnum::irregularCases(),
+            ))
+            ->orderBy('d.departureDate', 'ASC')
+            ->addOrderBy('d.scheduledDepartureAt', 'ASC')
+            ->addOrderBy('fc.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        return $rows;
     }
 }

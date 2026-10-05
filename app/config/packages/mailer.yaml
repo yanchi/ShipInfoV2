@@ -1,0 +1,9 @@
+framework:
+    mailer:
+        dsn: '%env(MAILER_DSN)%'
+
+when@test:
+    framework:
+        mailer:
+            # テストでは実際に送らない（中身は MailerAssertionsTrait で確かめる）
+            dsn: 'null://null'
