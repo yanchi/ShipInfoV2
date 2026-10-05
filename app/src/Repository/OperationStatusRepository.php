@@ -165,4 +165,57 @@ class OperationStatusRepository extends ServiceEntityRepository
 
         return $result;
     }
+
+    /**
+     * 通知用: $from から $days 日分の、有効な会社・有効な航路の運航状況（航路・日付ごとに最新の1件。全状態）。
+     * 港だけ通常以外の便にも航路×日付の状態を添えるため、状態では絞らない（対象かどうかは呼び出し側が見る）。
+     * 並びは日付 → 航路 ID。
+     *
+     * @return list<OperationStatus>
+     */
+    public function findLatestBetween(\DateTimeImmutable $from, int $days): array
+    {
+        $from = $from->setTime(0, 0);
+        $to   = $from->modify(sprintf('+%d days', $days - 1));
+
+        $sql = '
+            SELECT os.id
+            FROM operation_statuses os
+            INNER JOIN routes r ON r.id = os.route_id
+            INNER JOIN ferry_companies fc ON fc.id = r.ferry_company_id
+            INNER JOIN (
+                SELECT route_id, valid_date, MAX(scraped_at) AS latest_scraped_at
+                FROM operation_statuses
+                WHERE valid_date BETWEEN :from AND :to
+                GROUP BY route_id, valid_date
+            ) latest ON os.route_id   = latest.route_id
+                    AND os.valid_date  = latest.valid_date
+                    AND os.scraped_at  = latest.latest_scraped_at
+            WHERE os.valid_date BETWEEN :from AND :to
+              AND r.active = 1
+              AND fc.active = 1
+        ';
+        $ids = $this->getEntityManager()->getConnection()->executeQuery($sql, [
+            'from' => $from->format('Y-m-d'),
+            'to'   => $to->format('Y-m-d'),
+        ])->fetchFirstColumn();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        /** @var list<OperationStatus> $statuses */
+        $statuses = $this->createQueryBuilder('os')
+            ->select('os', 'r', 'fc')
+            ->join('os.route', 'r')
+            ->join('r.ferryCompany', 'fc')
+            ->where('os.id IN (:ids)')
+            ->setParameter('ids', $ids)
+            ->orderBy('os.validDate', 'ASC')
+            ->addOrderBy('r.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        return $statuses;
+    }
 }

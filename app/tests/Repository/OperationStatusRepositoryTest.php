@@ -122,4 +122,55 @@ class OperationStatusRepositoryTest extends KernelTestCase
             }
         }
     }
+
+    /** 今日〜3日先の最新の1件（全状態）。昨日・4日先・無効な航路・無効な会社は入らない */
+    public function testFindLatestBetween(): void
+    {
+        $em       = static::getContainer()->get(EntityManagerInterface::class);
+        $company  = (new FerryCompany())->setName('通知リポジトリテスト会社')->setActive(true);
+        $inactive = (new FerryCompany())->setName('通知リポジトリテスト無効会社')->setActive(false);
+        $route    = (new Route())->setFerryCompany($company)->setName('有効航路')->setActive(true);
+        $offRoute = (new Route())->setFerryCompany($company)->setName('無効航路')->setActive(false);
+        $other    = (new Route())->setFerryCompany($inactive)->setName('無効会社の航路')->setActive(true);
+        foreach ([$company, $inactive, $route, $offRoute, $other] as $entity) {
+            $em->persist($entity);
+        }
+
+        $today = new \DateTimeImmutable('today');
+        $make  = static fn (Route $r, int $offset, OperationStatusEnum $status, string $scrapedAt = '-1 hour') => (new OperationStatus())
+            ->setRoute($r)
+            ->setStatus($status)
+            ->setValidDate(\DateTime::createFromImmutable($today->modify("{$offset} days")))
+            ->setScrapedAt(new \DateTime($scrapedAt))
+            ->setSourceUrl('https://example.invalid/test');
+        foreach ([-1, 0, 3, 4] as $offset) {
+            $em->persist($make($route, $offset, OperationStatusEnum::Operating));
+        }
+        $em->persist($make($route, 0, OperationStatusEnum::Cancelled, 'now'));
+        $em->persist($make($offRoute, 1, OperationStatusEnum::Cancelled));
+        $em->persist($make($other, 1, OperationStatusEnum::Cancelled));
+        $em->flush();
+
+        try {
+            $result = array_values(array_filter(
+                $this->repository->findLatestBetween($today, 4),
+                static fn (OperationStatus $s) => $s->getRoute()->getFerryCompany()->getName() === '通知リポジトリテスト会社',
+            ));
+
+            $this->assertSame(
+                [
+                    [$today->format('Y-m-d'), OperationStatusEnum::Cancelled],
+                    [$today->modify('+3 days')->format('Y-m-d'), OperationStatusEnum::Operating],
+                ],
+                array_map(static fn (OperationStatus $s) => [$s->getValidDate()->format('Y-m-d'), $s->getStatus()], $result),
+            );
+        } finally {
+            $conn = $em->getConnection();
+            foreach ([$company->getId(), $inactive->getId()] as $id) {
+                $conn->executeStatement('DELETE os FROM operation_statuses os JOIN routes r ON r.id = os.route_id WHERE r.ferry_company_id = ?', [$id]);
+                $conn->executeStatement('DELETE FROM routes WHERE ferry_company_id = ?', [$id]);
+                $conn->executeStatement('DELETE FROM ferry_companies WHERE id = ?', [$id]);
+            }
+        }
+    }
 }

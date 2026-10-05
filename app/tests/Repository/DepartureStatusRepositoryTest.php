@@ -244,4 +244,59 @@ class DepartureStatusRepositoryTest extends KernelTestCase
         $this->assertArrayNotHasKey($inactive->getId(), $result);
         $this->assertArrayNotHasKey($old->getId(), $result);
     }
+
+    /** 通常運航以外の状態だけ。運航予定（null）・通常運航・便なし、範囲外、無効な会社・航路、direction の無い航路は返らない */
+    public function testFindIrregularBetween(): void
+    {
+        $port  = $this->em->getRepository(Port::class)->findOneBy(['name' => '名瀬']);
+        $today = new \DateTimeImmutable('today');
+
+        $main     = (new FerryCompany())->setName('通知テスト会社')->setActive(true);
+        $inactive = (new FerryCompany())->setName('通知テスト無効会社')->setActive(false);
+        $make     = fn (FerryCompany $c, string $name, ?RouteDirectionEnum $d, bool $active = true) => (new Route())
+            ->setFerryCompany($c)->setName($name)->setDirection($d)->setActive($active);
+        $route         = $make($main, '通知テスト航路', RouteDirectionEnum::Down);
+        $inactiveRoute = $make($main, '通知テスト無効航路', RouteDirectionEnum::Down, false);
+        $noDirection   = $make($main, '通知テスト方向なし', null);
+        $otherRoute    = $make($inactive, '通知テスト無効会社の航路', RouteDirectionEnum::Down);
+        foreach ([$main, $inactive, $route, $inactiveRoute, $noDirection, $otherRoute] as $entity) {
+            $this->em->persist($entity);
+        }
+
+        $row = fn (Route $r, int $offset, string $ship, ?OperationStatusEnum $status) => (new DepartureStatus())
+            ->setRoute($r)
+            ->setPort($port)
+            ->setDepartureDate(\DateTime::createFromImmutable($today->modify("{$offset} days")))
+            ->setShipName($ship)
+            ->setStatus($status)
+            ->setContentHash(str_repeat('a', 64));
+        foreach ([
+            $row($route, 0, 'cancelled', OperationStatusEnum::Cancelled),
+            $row($route, 1, 'delayed', OperationStatusEnum::Delayed),
+            $row($route, 2, 'suspended', OperationStatusEnum::Suspended),
+            $row($route, 3, 'unknown', OperationStatusEnum::Unknown),
+            $row($route, 0, 'operating', OperationStatusEnum::Operating),
+            $row($route, 0, 'no_service', OperationStatusEnum::NoService),
+            $row($route, 0, 'null', null),
+            $row($route, -1, 'yesterday', OperationStatusEnum::Cancelled),
+            $row($route, 4, 'day4', OperationStatusEnum::Cancelled),
+            $row($inactiveRoute, 0, 'inactive-route', OperationStatusEnum::Cancelled),
+            $row($noDirection, 0, 'no-direction', OperationStatusEnum::Cancelled),
+            $row($otherRoute, 0, 'inactive-company', OperationStatusEnum::Cancelled),
+        ] as $status) {
+            $this->em->persist($status);
+        }
+        $this->em->flush();
+        $this->companyId       = $main->getId();
+        $this->extraCompanyIds = [$inactive->getId()];
+        $this->em->clear();
+
+        $ships = array_map(
+            static fn (DepartureStatus $d) => $d->getShipName(),
+            $this->repository->findIrregularBetween($today, 4),
+        );
+        $ships = array_values(array_intersect($ships, ['cancelled', 'delayed', 'suspended', 'unknown', 'operating', 'no_service', 'null', 'yesterday', 'day4', 'inactive-route', 'no-direction', 'inactive-company']));
+
+        $this->assertSame(['cancelled', 'delayed', 'suspended', 'unknown'], $ships);
+    }
 }
