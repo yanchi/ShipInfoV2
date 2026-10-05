@@ -169,11 +169,11 @@
 
 **Independent Test**: `GET /details/today` → 301 `Location: /ports`。`GET /robots.txt`・`GET /sitemap.xml` が contracts/http-routes.md のとおり。`make test-php` で T033 が通る
 
-- [ ] T032 [US3] PR1 のマージ後、`master` から `7-v1-branding-seo` ブランチを切る。`make test-php` が通ることを確認する
+- [X] T032 [US3] PR1 のマージ後、`master` から `7-v1-branding-seo` ブランチを切る。`make test-php` が通ることを確認する
 
 ### Tests for User Story 3
 
-- [ ] T033 [US3] `app/tests/Controller/SeoControllerTest.php` を新しく作る（contracts/http-routes.md）。データの入れ方・後片付けは `StatusControllerTest` の `setUp`・`tearDown` に合わせる
+- [X] T033 [US3] `app/tests/Controller/SeoControllerTest.php` を新しく作る（contracts/http-routes.md）。データの入れ方・後片付けは `StatusControllerTest` の `setUp`・`tearDown` に合わせる
   - `testDetailsTodayRedirectsToPorts`：`GET /details/today` → 301、`Location` が `/ports`。`GET /details/today?foo=1` も `Location` が `/ports`（クエリを捨てる）
   - `testRobotsTxt`：200、`Content-Type` が `text/plain; charset=UTF-8`、本文に `User-agent: *`・`Allow: /`・`Sitemap: http://localhost/sitemap.xml`。`Disallow` が無い
   - `testSitemapXml`：200、`Content-Type` が `application/xml; charset=UTF-8`。`loc` に `http://localhost/`・`http://localhost/ports`・有効な会社の `http://localhost/company/{id}` があり、無効な会社（`active = 0`）の URL が無い。`changefreq` が `hourly`、`priority` がトップ `1.0`・港別 `0.9`・会社別 `0.8`
@@ -181,12 +181,12 @@
 
 ### Implementation for User Story 3
 
-- [ ] T034 [P] [US3] `app/config/routes.yaml` に `app_legacy_details_today`（`path: /details/today`、`controller: Symfony\Bundle\FrameworkBundle\Controller\RedirectController`、`defaults: { route: app_status_ports, permanent: true, keepQueryParams: false }`）を足す（FR-017、research R8）
-- [ ] T035 [P] [US3] `app/src/Controller/SeoController.php` を新しく作る（FR-018・019、research R9）。`AbstractController` を継承し、attribute でルートを定義する
+- [X] T034 [P] [US3] `app/config/routes.yaml` に `app_legacy_details_today`（`path: /details/today`、`controller: Symfony\Bundle\FrameworkBundle\Controller\RedirectController`、`defaults: { route: app_status_ports, permanent: true, keepQueryParams: false }`）を足す（FR-017、research R8）
+- [X] T035 [P] [US3] `app/src/Controller/SeoController.php` を新しく作る（FR-018・019、research R9）。`AbstractController` を継承し、attribute でルートを定義する
   - `#[Route('/robots.txt', name: 'app_seo_robots', methods: ['GET'])]`：`$request->getSchemeAndHttpHost() . '/sitemap.xml'` を Sitemap に入れた本文を `Response` で返す。`Content-Type: text/plain; charset=UTF-8`
   - `#[Route('/sitemap.xml', name: 'app_seo_sitemap', methods: ['GET'])]`：`FerryCompanyRepository::findActive()` で会社を取り、トップ・港別・会社別の `loc`（`generateUrl(..., UrlGeneratorInterface::ABSOLUTE_URL)`）・`changefreq`・`priority` の配列を作って `seo/sitemap.xml.twig` を描画する。`Content-Type: application/xml; charset=UTF-8`
-- [ ] T036 [P] [US3] `app/templates/seo/sitemap.xml.twig` を新しく作る（contracts/http-routes.md の XML のとおり。`lastmod` は出さない）。`loc` は Twig の自動エスケープ（`.xml.twig` なので XML 用）に任せる
-- [ ] T037 [US3] `make test-php`・`make lint-php`・`make phpstan`・`make cs-php` を通す。`make up` で `http://localhost:8080/robots.txt`・`/sitemap.xml`・`/details/today` を開いて確かめる（`public/` に `robots.txt`・`sitemap.xml` が無いので nginx から Symfony に回ること）
+- [X] T036 [P] [US3] `app/templates/seo/sitemap.xml.twig` を新しく作る（contracts/http-routes.md の XML のとおり。`lastmod` は出さない）。`loc` は Twig の自動エスケープ（`.xml.twig` なので XML 用）に任せる
+- [X] T037 [US3] `make test-php`・`make lint-php`・`make phpstan`・`make cs-php` を通す。`make up` で `http://localhost:8080/robots.txt`・`/sitemap.xml`・`/details/today` を開いて確かめる（`public/` に `robots.txt`・`sitemap.xml` が無いので nginx から Symfony に回ること）
 
 **Checkpoint**: US3 の Acceptance Scenarios 1〜3 を満たす → コミット
 

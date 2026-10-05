@@ -15,8 +15,8 @@ V1 の URL。V2 の港別ページへ転送する（FR-017）。
 
 | リクエスト | レスポンス |
 |---|---|
-| `GET /details/today` | **301** `Location: /ports` |
-| `GET /details/today?foo=1` | **301** `Location: /ports`（クエリは捨てる） |
+| `GET /details/today` | **301** `Location: {スキーム}://{ホスト}/ports`（RedirectController が絶対 URL にする） |
+| `GET /details/today?foo=1` | **301** `Location: {スキーム}://{ホスト}/ports`（クエリは捨てる） |
 
 - `config/routes.yaml` に `Symfony\Bundle\FrameworkBundle\Controller\RedirectController`（`route: app_status_ports`・`permanent: true`・`keepQueryParams: false`）で定義する。ルート名は `app_legacy_details_today`
 - `/ports` の Cookie による絞り込みはリダイレクト先でそのまま効く（転送自体は Cookie を見ない・書かない）
