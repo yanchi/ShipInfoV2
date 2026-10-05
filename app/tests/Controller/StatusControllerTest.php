@@ -72,7 +72,7 @@ class StatusControllerTest extends WebTestCase
         $this->client->request('GET', '/');
 
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('h1', 'ShipInfo');
+        $this->assertSelectorTextContains('h1', '現在の運航状況');
     }
 
     public function testIndexRendersCompanyGrid(): void
@@ -203,11 +203,8 @@ class StatusControllerTest extends WebTestCase
             );
             $this->assertSame('/favicon.svg', $crawler->filter('link[rel="icon"]')->attr('href'), $url);
             $this->assertSame('light', $crawler->filter('html')->attr('data-bs-theme'), $url);
-            // トップの本文は元のまま（注記は本文側の footer）。港別・会社別だけ footer 1つ・p.page-note
-            if ($url !== '/') {
-                $this->assertCount(1, $crawler->filter('footer'), $url);
-                $this->assertCount(1, $crawler->filter('p.page-note'), $url);
-            }
+            $this->assertCount(1, $crawler->filter('footer'), $url);
+            $this->assertCount(1, $crawler->filter('p.page-note'), $url);
         }
     }
 
@@ -239,14 +236,19 @@ class StatusControllerTest extends WebTestCase
         $this->assertCount(0, $this->findPortRow($crawler, 1, '名瀬')->filter('.status-warning'));
     }
 
-    public function testStatusWarningOnCompanySummary(): void
+    public function testStatusWarningOnIndexCardAndCompanySummary(): void
     {
         $companyId = $this->createCompanyWithRoute('注意書きテスト会社', OperationStatusEnum::Cancelled);
-        $crawler   = $this->client->request('GET', "/company/{$companyId}");
+        $crawler   = $this->client->request('GET', '/');
+        $this->assertCount(1, $this->findCard($crawler, '注意書きテスト会社')->filter('.list-group-item .status-warning'));
+
+        $crawler = $this->client->request('GET', "/company/{$companyId}");
         $this->assertCount(1, $crawler->filter('.route-summaries li .status-warning'));
 
         $operatingId = $this->createCompanyWithRoute('注意書きなし会社', OperationStatusEnum::Operating);
-        $crawler     = $this->client->request('GET', "/company/{$operatingId}");
+        $crawler     = $this->client->request('GET', '/');
+        $this->assertCount(0, $this->findCard($crawler, '注意書きなし会社')->filter('.status-warning'));
+        $crawler = $this->client->request('GET', "/company/{$operatingId}");
         $this->assertCount(0, $crawler->filter('.route-summaries .status-warning'));
     }
 
@@ -254,15 +256,14 @@ class StatusControllerTest extends WebTestCase
     {
         foreach ($this->threePages() as $url => $kind) {
             $crawler = $this->client->request('GET', $url);
-            if ($kind === 'top') {
-                continue; // トップの本文は元のまま
-            }
             if ($kind === 'company') {
                 $this->assertCount(1, $crawler->filter('div.page-heading > h1'), $url);
             } else {
                 $this->assertCount(1, $crawler->filter('h1.page-heading'), $url);
             }
-            $this->assertGreaterThan(0, $crawler->filter('h2.page-heading')->count(), $url);
+            if ($kind !== 'top') {
+                $this->assertGreaterThan(0, $crawler->filter('h2.page-heading')->count(), $url);
+            }
         }
     }
 
@@ -339,9 +340,6 @@ class StatusControllerTest extends WebTestCase
     public function testNoShipInfoAnywhere(): void
     {
         foreach (array_keys($this->threePages()) as $url) {
-            if ($url === '/') {
-                continue; // トップの本文は元のまま（h1 に ShipInfo が残る）
-            }
             $this->client->request('GET', $url);
             $this->assertStringNotContainsString('ShipInfo', (string) $this->client->getResponse()->getContent(), $url);
         }
