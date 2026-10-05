@@ -24,10 +24,16 @@ Actual HTML structure (confirmed 2026-03-07):
       </a>
     </div>
 
-CSS class → status mapping (div.status_single_cover のクラスで判定):
-    normal                   → operating
-    conditional + alert      → delayed（条件付き）
-    alert (conditional なし) → cancelled（欠航）
+CSS class → status mapping (div.status_single_cover・詳細ページの div.single のクラスで判定):
+    normal              → operating
+    conditional alert   → delayed（条件付運航）
+    route alert         → delayed（航行経路変更。運航はする）
+    cancel alert        → cancelled（欠航）
+    alert だけ          → cancelled（2026-03 時点の一覧の欠航）
+    no_status           → cancelled（詳細ページの港のみ。「―」寄港しません＝抜港。
+                          2025-10〜2026-10 の1年分では、航行経路変更の便にだけ出ていた）
+    それ以外            → unknown（読み飛ばすと前回のステータスが残るので書く）
+    ※「運航遅延」は見出しの【】に出るだけで、港のクラスは conditional・route だった（同じ1年分）
 
 Direction (div.info2 の出発港で判定):
     "鹿児島" + "発" → 下り（鹿児島 → 那覇）
@@ -71,6 +77,25 @@ from scraper.utils.ports import PortResolver
 
 SOURCE_URL = "https://marixline.com/service/"
 
+# 一覧（div.status_single_cover）と詳細ページの港（div.single）で共通のステータスのクラス
+# （実例: 2026-06-24 航行経路変更、2026-06-26 欠航）
+_STATUS_BY_CLASS = {
+    "normal": OperationStatusEnum.operating,
+    "conditional": OperationStatusEnum.delayed,  # 条件付運航
+    "route": OperationStatusEnum.delayed,  # 航行経路変更（運航はする。寄らない港は no_status）
+    "cancel": OperationStatusEnum.cancelled,
+}
+# ステータスを表さないクラス（alert は条件付・経路変更・欠航のどれにも付く）
+_LAYOUT_CLASSES = {
+    "status_single_cover",
+    "status_single",
+    "single",
+    "firstport",
+    "alert",
+}
+# 詳細ページで、その港に寄らない（表示は「―」「寄港しません」）
+_SKIPPED_PORT_CLASS = "no_status"
+
 
 class MarixLine(BaseScraper):
     def fetch(self) -> str:
@@ -109,11 +134,6 @@ class MarixLine(BaseScraper):
             if "status_single_cover" not in cls:
                 continue
 
-            status = self._parse_status_from_classes(cls)
-            if status is None:
-                self._log.debug("unknown_status_class", classes=cls)
-                continue
-
             info2 = block.find("div", class_="info2")
             if not info2:
                 continue
@@ -141,6 +161,12 @@ class MarixLine(BaseScraper):
                 continue
             seen.add(key)
 
+            status = self._parse_status_from_classes(cls)
+            if status is None:
+                # 読み飛ばすと前回のステータス（通常運航など）が残るので unknown で書く
+                self._log.warning("unknown_status_class", classes=cls)
+                status = OperationStatusEnum.unknown
+
             exp = block.find("p", class_="exp")
             exp_text = exp.get_text(strip=True) if exp else None
             detail = exp_text if status != OperationStatusEnum.operating else None
@@ -156,32 +182,16 @@ class MarixLine(BaseScraper):
                 }
             )
 
-        # 今日の便が存在しないルートに no_service / unknown を記録
+        # 今日の便が存在しないルートに no_service を記録
+        # （日付は info2 の最初の日付＝出発日なので、到着日としてのみ今日がある便は「便なし」）
         today = date.today()
-        today_text = f"{today.year}年{today.month}月{today.day}日"
         now = datetime.now()
-        # ルートごとに出発港名から today の出発ブロック有無を確認
-        # (到着日としてのみ存在する場合は has_today=False とする)
         for route in [r for r in [down_route, up_route] if r]:
             if (route.id, today) not in seen:
-                direction_pat = rf"{re.escape(route.origin_port)}\S*発"
-                has_today = bool(
-                    re.search(rf"{re.escape(today_text)}\s+{direction_pat}", html)
-                )
-                if has_today:
-                    # 今日のブロックはあるが seen に入っていない = パース不具合の可能性
-                    self._log.warning(
-                        "today_block_present_but_not_seen",
-                        route_id=route.id,
-                        today=str(today),
-                    )
-                    status = OperationStatusEnum.unknown
-                else:
-                    status = OperationStatusEnum.no_service
                 records.append(
                     {
                         "route_id": route.id,
-                        "status": status,
+                        "status": OperationStatusEnum.no_service,
                         "status_detail": None,
                         "valid_date": today,
                         "scraped_at": now,
@@ -208,10 +218,14 @@ class MarixLine(BaseScraper):
         soup = BeautifulSoup(list_html, "lxml")
         records: list[dict] = []
         for block in soup.select("div.status_single_cover"):
-            status = self._parse_status_from_classes(block.get("class", []))
+            # 便のクラスを読めなくても、詳細ページの港ごとのクラスで判定する（parse で warning 済み）
+            status = (
+                self._parse_status_from_classes(block.get("class", []))
+                or OperationStatusEnum.unknown
+            )
             info2 = block.find("div", class_="info2")
             link = block.select_one("a.status_single[href]")
-            if status is None or info2 is None or link is None:
+            if info2 is None or link is None:
                 continue
             info2_text = info2.get_text(separator=" ", strip=True)
             start_date = self._parse_date(info2_text)
@@ -225,7 +239,13 @@ class MarixLine(BaseScraper):
             detail_html = detail_pages.get(url)
             detail_records = (
                 self._departures_from_detail(
-                    detail_html, route, stops[route.id], start_date, url, resolver
+                    detail_html,
+                    route,
+                    stops[route.id],
+                    start_date,
+                    status,
+                    url,
+                    resolver,
                 )
                 if detail_html
                 else None
@@ -256,6 +276,7 @@ class MarixLine(BaseScraper):
         route: Route,
         stops: list[RouteStop],
         start_date: date,
+        voyage_status: OperationStatusEnum,
         url: str,
         resolver: PortResolver,
     ) -> list[dict] | None:
@@ -276,7 +297,12 @@ class MarixLine(BaseScraper):
             if port is None or port.id not in stop_port_ids:
                 self._log.warning("detail_port_not_in_stops", url=url, port=name)
                 continue
-            status = self._parse_status_from_classes(single.get("class", []))
+            classes = single.get("class", [])
+            status = (
+                OperationStatusEnum.cancelled
+                if _SKIPPED_PORT_CLASS in classes
+                else self._parse_status_from_classes(classes)
+            )
             if status is None:
                 self._log.warning(
                     "detail_status_unknown",
@@ -297,7 +323,9 @@ class MarixLine(BaseScraper):
                 ),
             }
 
-        ship_name, reasons = self._parse_detail_heading(soup)
+        ship_name, reasons = self._parse_detail_heading(
+            soup, with_notes=voyage_status != OperationStatusEnum.operating
+        )
         arrival_at = by_port.get(terminal_port_id, {}).get("entry_at")
         records: list[dict] = []
         for stop in stops[:-1]:
@@ -381,17 +409,30 @@ class MarixLine(BaseScraper):
             )
         return records
 
-    def _parse_detail_heading(self, soup: BeautifulSoup) -> tuple[str, list[str]]:
-        """(船名, 理由の見出し) を返す。船名は h1.heading1 の後の最初の h4。"""
+    def _parse_detail_heading(
+        self, soup: BeautifulSoup, with_notes: bool
+    ) -> tuple[str, list[str]]:
+        """(船名, 理由の見出し) を返す。船名は h1.heading1 の後の最初の h4。
+
+        理由は残りの h4（「海上荒天(台風)の影響による船舶動静」）と、with_notes なら
+        h2（「航行経路を「鹿児島 → 名瀬」に変更し運航」）。通常の便の h2 は
+        「通常通り運航します。」なので、便全体が通常運航のときは入れない。
+        """
         h1 = soup.select_one("h1.heading1")
         container = h1.parent if h1 else soup
-        h4s = [
-            h.get_text(strip=True) for h in container.find_all("h4", recursive=False)
+        names = ["h4", "h2"] if with_notes else ["h4"]
+        headings = [
+            (h.name, h.get_text(strip=True))
+            for h in container.find_all(names, recursive=False)
         ]
-        h4s = [t for t in h4s if t]
-        if not h4s:
+        headings = [(name, t) for name, t in headings if t]
+        first_h4 = next(
+            (i for i, (name, _) in enumerate(headings) if name == "h4"), None
+        )
+        if first_h4 is None:
             return "", []
-        return h4s[0], h4s[1:]
+        ship_name = headings.pop(first_h4)[1]
+        return ship_name, [t for _, t in headings]
 
     def _parse_detail_time(self, el: Tag | None, start_date: date) -> datetime | None:
         """「09月30日 07:00」を始発日の年で補って datetime にする（始発日より前の月日なら翌年）。"""
@@ -453,11 +494,12 @@ class MarixLine(BaseScraper):
     def _parse_status_from_classes(
         self, classes: list[str]
     ) -> OperationStatusEnum | None:
-        if "normal" in classes:
-            return OperationStatusEnum.operating
-        if "conditional" in classes and "alert" in classes:
-            return OperationStatusEnum.delayed
-        if "alert" in classes:
+        """ステータスのクラスがちょうど1つあればそのステータス。無い・複数・知らないクラスは None。"""
+        matched = {s for c, s in _STATUS_BY_CLASS.items() if c in classes}
+        if len(matched) == 1:
+            return matched.pop()
+        if not matched and "alert" in classes and set(classes) <= _LAYOUT_CLASSES:
+            # 2026-03 時点の一覧は、欠航が alert だけだった
             return OperationStatusEnum.cancelled
         return None
 

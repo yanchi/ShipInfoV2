@@ -503,6 +503,214 @@ def test_route_level_parse_unchanged_with_real_list(db_session, marix_line_compa
 
 
 # ---------------------------------------------------------------------------
+# 航行経路変更・欠航・抜港（実サイト 2026-06-24 / 06-26 の詳細ページ）
+# ---------------------------------------------------------------------------
+
+
+def _list_with_down(ymd: str, next_day: str, classes: str, exp: str) -> str:
+    """一覧フィクスチャの下り便（9/30 通常運航）を、別の日付・クラスの便に差し替える。"""
+    html = read_fixture("marix/list.html")
+    head, sep, up_part = html.partition('<div class="up_stream_services">')
+    y, m, d = int(ymd[:4]), int(ymd[4:6]), int(ymd[6:])
+    head = (
+        head.replace("status_single_cover normal", f"status_single_cover {classes}")
+        .replace("status_single normal", f"status_single {classes}")
+        .replace("downstream20260930", f"downstream{ymd}")
+        .replace("2026年9月30日", f"{y}年{m}月{d}日")
+        .replace("2026年10月1日", next_day)
+        .replace('<p class="exp">通常運航</p>', f'<p class="exp">{exp}</p>')
+    )
+    return head + sep + up_part
+
+
+def _down_url(ymd: str) -> str:
+    return f"https://marixline.com/service/downstream{ymd}/"
+
+
+def _mock_down_voyage(ymd, next_day, classes, exp, down_html):
+    resp_mock.add(
+        resp_mock.GET,
+        SOURCE_URL,
+        body=_list_with_down(ymd, next_day, classes, exp),
+    )
+    resp_mock.add(resp_mock.GET, _down_url(ymd), body=down_html)
+    resp_mock.add(
+        resp_mock.GET, UP_URL, body=read_fixture("marix/upstream_conditional.html")
+    )
+
+
+def _mock_route_change():
+    _mock_down_voyage(
+        "20260624",
+        "2026年6月25日",
+        "route alert",
+        "航行経路変更",
+        read_fixture("marix/downstream_route_change.html"),
+    )
+
+
+@resp_mock.activate
+def test_route_change_voyage_is_delayed_not_cancelled(db_session, marix_line_company):
+    """一覧の航行経路変更（route alert）は運航するので、欠航ではなく delayed。"""
+    _mock_route_change()
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 6, 24))):
+        records = scraper.parse(scraper.fetch())
+
+    down, _ = _routes(db_session, marix_line_company)
+    rec = next(
+        r
+        for r in records
+        if r["route_id"] == down.id and r["valid_date"] == date(2026, 6, 24)
+    )
+    assert rec["status"] == OperationStatusEnum.delayed
+    assert rec["status_detail"] == "航行経路変更"
+
+
+@resp_mock.activate
+def test_departures_route_change_skipped_ports(db_session, marix_line_company):
+    """経路変更（鹿児島 → 名瀬）：寄る港は delayed、寄らない港（no_status）は cancelled。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_route_change()
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with structlog.testing.capture_logs() as logs:
+        scraper.fetch()
+        records = scraper.parse_departures()
+
+    down, _ = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, down)
+    assert list(rows) == ["鹿児島", "名瀬", "亀徳", "和泊", "与論", "本部"]
+    for name in ["鹿児島", "名瀬"]:
+        assert rows[name]["status"] == OperationStatusEnum.delayed
+        assert "航行経路を「鹿児島 → 名瀬」に変更し運航" in rows[name]["status_detail"]
+    for name in ["亀徳", "和泊", "与論", "本部"]:
+        assert rows[name]["status"] == OperationStatusEnum.cancelled
+        assert "寄港しません" in rows[name]["status_detail"]
+    assert rows["鹿児島"]["ship_name"] == "クイーンコーラルプラス"
+    assert not any(log["event"] == "detail_status_unknown" for log in logs)
+
+
+@resp_mock.activate
+def test_departures_cancelled_voyage(db_session, marix_line_company):
+    """欠航（cancel alert）の便は全港 cancelled。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_down_voyage(
+        "20260626",
+        "2026年6月27日",
+        "cancel alert",
+        "欠航",
+        read_fixture("marix/downstream_cancel.html"),
+    )
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 6, 26))):
+        route_records = scraper.parse(scraper.fetch())
+    records = scraper.parse_departures()
+
+    down, _ = _routes(db_session, marix_line_company)
+    rec = next(
+        r
+        for r in route_records
+        if r["route_id"] == down.id and r["valid_date"] == date(2026, 6, 26)
+    )
+    assert rec["status"] == OperationStatusEnum.cancelled
+    rows = _by_port(records, ports, down)
+    assert len(rows) == 6
+    assert all(r["status"] == OperationStatusEnum.cancelled for r in rows.values())
+    assert "欠航のため、船の運航は行いません。" in rows["名瀬"]["status_detail"]
+
+
+def _list_with_unknown_down_class() -> str:
+    return read_fixture("marix/list.html").replace(
+        "status_single_cover normal", "status_single_cover delay alert"
+    )
+
+
+def _down_with_unknown_port_class() -> str:
+    """下り便の途中港（firstport 以外の normal）を知らないクラスにした詳細ページ。"""
+    html = read_fixture("marix/downstream.html").replace(
+        'class="single normal"', 'class="single delay alert"'
+    )
+    assert 'class="single delay alert"' in html
+    return html
+
+
+@resp_mock.activate
+def test_unknown_class_voyage_is_unknown_not_cancelled(db_session, marix_line_company):
+    """知らないクラス（例：delay alert）の便は欠航にせず unknown。今日以外の日も書く（前回のステータスを残さない）。"""
+    _mock_pages(list_html=_list_with_unknown_down_class())
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with structlog.testing.capture_logs() as logs:
+        # 便は 9/30 発。今日（10/1）以外の日でも書かれること
+        with patch(
+            "scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 10, 1))
+        ):
+            records = scraper.parse(scraper.fetch())
+
+    down, _ = _routes(db_session, marix_line_company)
+    rec = next(
+        r
+        for r in records
+        if r["route_id"] == down.id and r["valid_date"] == date(2026, 9, 30)
+    )
+    assert rec["status"] == OperationStatusEnum.unknown
+    assert rec["status_detail"] == "通常運航"  # 一覧の表示をそのまま残す
+    assert any(log["event"] == "unknown_status_class" for log in logs)
+
+
+@resp_mock.activate
+def test_unknown_class_voyage_departures_use_port_classes(
+    db_session, marix_line_company
+):
+    """便のクラスを読めなくても詳細ページを読み、港ごとのクラスで判定する。港も読めなければ unknown。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages(
+        list_html=_list_with_unknown_down_class(),
+        down=_down_with_unknown_port_class(),
+    )
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    records = scraper.parse_departures()
+
+    down, _ = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, down)
+    assert len(rows) == 6
+    assert rows["鹿児島"]["status"] == OperationStatusEnum.operating  # firstport normal
+    for name in ["名瀬", "亀徳", "和泊", "与論", "本部"]:
+        assert rows[name]["status"] == OperationStatusEnum.unknown
+    assert all(r["ship_name"] == "クイーンコーラルクロス" for r in rows.values())
+
+
+@resp_mock.activate
+def test_unknown_class_voyage_fallback_is_unknown(db_session, marix_line_company):
+    """便のクラスを読めず詳細ページも取れないときは、予備ルートの行を unknown で書く。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages(list_html=_list_with_unknown_down_class(), down_status=500)
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    records = scraper.parse_departures()
+
+    down, _ = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, down)
+    assert len(rows) == 6
+    assert all(r["status"] == OperationStatusEnum.unknown for r in rows.values())
+
+
+@resp_mock.activate
+def test_normal_voyage_notes_not_in_unknown_port_detail(db_session, marix_line_company):
+    """通常の便の h2「通常通り運航します。」は、港を読めず unknown になっても理由に入れない。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_pages(down=_down_with_unknown_port_class())
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    records = scraper.parse_departures()
+
+    down, _ = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, down)
+    assert rows["名瀬"]["status"] == OperationStatusEnum.unknown
+    assert "通常通り運航します" not in (rows["名瀬"]["status_detail"] or "")
+
+
+# ---------------------------------------------------------------------------
 # 日またぎ（US5）
 # ---------------------------------------------------------------------------
 
