@@ -12,6 +12,10 @@
         <server name="SHELL_VERBOSITY" value="-1" />
         <server name="SYMFONY_PHPUNIT_REMOVE" value="" />
         <server name="SYMFONY_PHPUNIT_VERSION" value="11.5" />
+        <!-- 通知サービスからは「設定あり」に見せる。Mailer 本体は when@test で null://null なので実際には送らない -->
+        <server name="MAILER_DSN" value="smtp://mailer.test.invalid" force="true" />
+        <server name="NOTIFY_FROM" value="noreply@example.com" force="true" />
+        <server name="NOTIFY_TO" value="ops1@example.com, ,ops2@example.com" force="true" />
     </php>
 
     <testsuites>

@@ -2,6 +2,7 @@
         shell-php shell-scraper \
         migrate migrate-diff fixtures cache-clear \
         verify-prod \
+        notify notify-dry-run \
         test-php test-scraper lint-scraper format-scraper cs-php cs-fix-php lint-php phpstan audit check-schema \
         init init-test-db reset-test-db check-test-token
 
@@ -24,7 +25,7 @@ help:
 up: ## Start all services (detached)
 	$(DOCKER_COMPOSE) up -d
 
-up-tools: ## Start all services including phpMyAdmin
+up-tools: ## Start all services including phpMyAdmin and Mailpit
 	$(DOCKER_COMPOSE) --profile tools up -d
 
 down: ## Stop and remove containers
@@ -61,6 +62,14 @@ fixtures: ## Load dev data fixtures
 
 cache-clear: ## Clear Symfony cache
 	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) bin/console cache:clear
+
+SLOT ?= 6
+
+notify-dry-run: ## Print the irregular-status notification mail (no send, no run record)
+	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) bin/console app:notify-irregular-statuses --slot=6 --dry-run
+
+notify: ## Send the notification mail to Mailpit (SLOT=1|6|15; needs make up-tools)
+	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) bin/console app:notify-irregular-statuses --slot=$(SLOT)
 
 test-php: ## Run PHPUnit tests
 	$(DOCKER_COMPOSE) exec $(PHP_SERVICE) bin/phpunit
@@ -154,3 +163,4 @@ init: ## First-time project setup
 	@echo "Setup complete!"
 	@echo "  API:        http://localhost:8080/api"
 	@echo "  phpMyAdmin: make up-tools && open http://localhost:8081"
+	@echo "  Mailpit:    make up-tools && open http://localhost:8025"
