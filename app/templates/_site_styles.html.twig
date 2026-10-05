@@ -1,0 +1,90 @@
+<style>
+    /* 共通の CSS（アセットのビルド環境は入れないので、ここに置く）。V1 の配色（specs/7-v1-branding/contracts/ui-theme.md） */
+    :root {
+        color-scheme: light;
+        --v1-primary: #0073e6;
+        --v1-text: #333;
+        --v1-text-muted: #555;
+        --v1-text-light: #666;
+        --v1-bg: #f4f4f9;
+        --v1-bg-light: #f9f9f9;
+        --v1-border: #ddd;
+        --v1-footer-bg: #333;
+        --v1-warning-text: #c0392b;
+        --bs-body-bg: var(--v1-bg);
+        --bs-body-color: var(--v1-text);
+        --bs-body-font-family: "Hiragino Kaku Gothic Pro", "Yu Gothic", YuGothic, Arial, sans-serif;
+        --bs-primary: var(--v1-primary);
+        --bs-primary-rgb: 0, 115, 230;
+        --bs-link-color: var(--v1-primary);
+        --bs-link-color-rgb: 0, 115, 230;
+    }
+
+    /* 共通ヘッダー（FR-022）。青い帯にサイト名とナビを中央寄せ。「各社」は <details> のドロップダウン */
+    .site-header { background: var(--v1-primary); color: #fff; text-align: center; padding: 1rem .5rem .75rem; }
+    .site-name { display: block; color: #fff; font-weight: 700; font-size: 1.8rem; text-decoration: none; }
+    .site-name span { display: inline-block; }
+    .site-nav { display: flex; justify-content: center; flex-wrap: nowrap; gap: 1.25rem; margin-top: .5rem; }
+    .site-nav a, .site-nav summary { color: #fff; font-weight: 700; text-decoration: none; }
+    .site-nav a:hover, .site-nav summary:hover, .site-nav a.active, .site-nav summary.active { text-decoration: underline; }
+    .site-companies { position: relative; }
+    .site-companies > summary { cursor: pointer; list-style: none; }
+    .site-companies > summary::-webkit-details-marker { display: none; }
+    .site-companies > summary::after { content: " ▾"; }
+    .site-companies-menu { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); z-index: 30; min-width: 12rem; max-width: calc(100vw - 1rem); margin-top: .25rem; background: #fff; text-align: left; }
+    .site-nav .site-companies-menu a { color: var(--v1-text); font-weight: 400; }
+    .site-nav .site-companies-menu a.active { color: #fff; background-color: var(--v1-primary); }
+    @media (max-width: 768px) {
+        .site-name { font-size: 1.5rem; }
+        .site-nav { font-size: .9rem; gap: 1rem; }
+    }
+    @media (max-width: 480px) {
+        .site-name { font-size: 1.25rem; }
+    }
+
+    /* フッター（FR-014） */
+    .site-footer { background: var(--v1-footer-bg); color: #fff; text-align: center; padding: 1rem 0; margin-top: 2rem; }
+    @media (max-width: 768px) {
+        .site-footer { font-size: .8rem; }
+    }
+
+    /* 本文（FR-010〜012） */
+    .card { --bs-card-border-width: 0; --bs-card-border-radius: 8px; --bs-card-bg: #fff; box-shadow: 0 2px 4px rgba(0, 0, 0, .1); }
+    .page-heading { border-bottom: 2px solid var(--v1-primary); padding-bottom: .5rem; }
+    .no-data { background: var(--v1-bg-light); border-radius: 5px; font-style: italic; color: var(--v1-text-light); text-align: center; padding: 1rem; }
+    .page-note { color: var(--bs-secondary-color); font-size: .875em; }
+
+    /* ステータス表示（形は共通。記号・文言は specs/5-ui-readability/contracts/ui-status.md） */
+    .status-badge { display: inline-block; font-weight: 700; padding: .2rem .6rem; border-radius: 12px; font-size: .85em; white-space: nowrap; }
+    .status-badge--operating { background: #d4edda; color: #155724; }
+    .status-badge--delayed { background: #fff3cd; color: #856404; }
+    .status-badge--cancelled { background: #f8d7da; color: #721c24; }
+    .status-badge--suspended { background: #e2e3e5; color: #383d41; }
+    .status-badge--muted { background: #e2e3e5; color: #6c757d; }
+    .status-badge--scheduled { background: #fff; color: var(--v1-text); border: 1px dashed #6c757d; }
+
+    /* 欠航・遅延の注意書き（FR-016） */
+    .status-warning { color: var(--v1-warning-text); font-size: .85em; margin: 0 0 .3rem; }
+
+    /* 異常の行（FR-014）：左の太い線・薄い背景・太字 */
+    .port-entry--alert { border-left: 4px solid; padding: .25rem .5rem; }
+    .port-entry--alert .status-badge { font-weight: 800; }
+    .port-entry--cancelled { border-left-color: #721c24; background: #fdf2f3; }
+    .port-entry--delayed { border-left-color: #856404; background: #fffbeb; }
+    .port-entry--suspended { border-left-color: #383d41; background: #f3f4f5; }
+
+    /* 異常の要約。1項目1行に収め、会社名は省略して詰める */
+    .alert-item { font-size: .875rem; min-width: 0; }
+
+    /* 出港済みの行（FR-008） */
+    .port-entry--departed { opacity: .55; }
+
+    /* 日付ボタン（FR-007）。スクロールしても上に残し、飛んだ先の見出しが隠れないようにする */
+    .date-nav { position: sticky; top: 0; z-index: 10; background: var(--bs-body-bg); }
+    .date-nav .btn { white-space: nowrap; padding-left: .25rem; padding-right: .25rem; }
+    section[id^="d-"], li[id^="r-"] { scroll-margin-top: 3.25rem; }
+
+    /* 絞り込みフォーム。375px でも1行に収める */
+    .port-filter { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; gap: .25rem; align-items: center; }
+    .port-filter .form-select { padding-left: .5rem; }
+</style>

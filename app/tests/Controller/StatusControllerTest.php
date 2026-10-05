@@ -72,7 +72,7 @@ class StatusControllerTest extends WebTestCase
         $this->client->request('GET', '/');
 
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('h1', 'ShipInfo');
+        $this->assertSelectorTextContains('h1', '現在の運航状況');
     }
 
     public function testIndexRendersCompanyGrid(): void
@@ -110,7 +110,7 @@ class StatusControllerTest extends WebTestCase
         $this->assertCount(1, $card->filter('.card-header a[href^="/company/"]'));
         $this->assertCount(1, $card->filter('.card-header a[target="_blank"][rel="noopener noreferrer"]'));
         $this->assertStringContainsString('グリッドテスト航路', $card->filter('.list-group')->text());
-        $this->assertCount(1, $card->filter('.list-group .list-group-item .badge.bg-success'));
+        $this->assertCount(1, $card->filter('.list-group .list-group-item .status-badge--operating'));
     }
 
     /**
@@ -164,6 +164,197 @@ class StatusControllerTest extends WebTestCase
             $this->assertCount(1, $nav->filter('[aria-current="page"]'), $url);
             $this->assertCount(1, $nav->filter($current . '[aria-current="page"]'), $url);
             $this->assertStringNotContainsString('トップへ戻る', $crawler->filter('body')->text(), $url);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // V1 の見た目・<head>（specs/7-v1-branding）
+    // ------------------------------------------------------------------
+
+    /** @return array<string, string> URL => 説明 */
+    private function threePages(): array
+    {
+        $this->createPortBoardData();
+        $companyId = $this->companyId('港別テスト運航会社');
+
+        return ['/' => 'top', '/ports' => 'ports', "/company/{$companyId}" => 'company'];
+    }
+
+    public function testSiteChromeOnAllPages(): void
+    {
+        foreach (array_keys($this->threePages()) as $url) {
+            $crawler = $this->client->request('GET', $url);
+            $this->assertResponseIsSuccessful($url);
+
+            $name = $crawler->filter('.site-header .site-name');
+            $this->assertCount(1, $name, $url);
+            $this->assertSame('/', $name->attr('href'), $url);
+            $this->assertStringContainsString('鹿児島〜沖縄・奄美大島', $name->text(), $url);
+            $this->assertStringContainsString('フェリー運航情報', $name->text(), $url);
+
+            $nav = $crawler->filter('.site-header nav')->text();
+            foreach (['トップ', '港別', '各社'] as $label) {
+                $this->assertStringContainsString($label, $nav, $url);
+            }
+            $this->assertSame(
+                '© 2025 鹿児島〜沖縄・奄美大島 フェリー運航情報サービス',
+                trim($crawler->filter('footer.site-footer')->text()),
+                $url,
+            );
+            $this->assertSame('/favicon.svg', $crawler->filter('link[rel="icon"]')->attr('href'), $url);
+            $this->assertSame('light', $crawler->filter('html')->attr('data-bs-theme'), $url);
+            $this->assertCount(1, $crawler->filter('footer'), $url);
+            $this->assertCount(1, $crawler->filter('p.page-note'), $url);
+        }
+    }
+
+    public function testCurrentPageIsMarkedInNav(): void
+    {
+        $crawler = $this->client->request('GET', '/ports');
+        $this->assertSame('港別', trim($crawler->filter('.site-header nav [aria-current="page"]')->text()));
+
+        $crawler = $this->client->request('GET', '/');
+        $this->assertSame('トップ', trim($crawler->filter('.site-header nav [aria-current="page"]')->text()));
+    }
+
+    /** 欠航・条件付・遅延の便にだけ V1 の注意書き（FR-016） */
+    public function testStatusWarningShownForCancelledAndDelayed(): void
+    {
+        $this->createPortBoardData(OperationStatusEnum::Cancelled);
+
+        $crawler = $this->client->request('GET', '/ports');
+        $this->assertCount(1, $this->findPortRow($crawler, 1, '名瀬')->filter('.port-entry .status-warning'));
+        $this->assertStringContainsString('出港時間・寄港地が変更になってる可能性があるので公式サイトをご確認ください', $this->findPortRow($crawler, 1, '名瀬')->filter('.status-warning')->text());
+        $this->assertCount(0, $this->findPortRow($crawler, 0, '名瀬')->filter('.status-warning'));
+
+        $this->updateTestDeparture(1, 'status', OperationStatusEnum::Delayed);
+        $crawler = $this->client->request('GET', '/ports');
+        $this->assertCount(1, $this->findPortRow($crawler, 1, '名瀬')->filter('.status-warning'));
+
+        $this->updateTestDeparture(1, 'status', OperationStatusEnum::Suspended);
+        $crawler = $this->client->request('GET', '/ports');
+        $this->assertCount(0, $this->findPortRow($crawler, 1, '名瀬')->filter('.status-warning'));
+    }
+
+    public function testStatusWarningOnIndexCardAndCompanySummary(): void
+    {
+        $companyId = $this->createCompanyWithRoute('注意書きテスト会社', OperationStatusEnum::Cancelled);
+        $crawler   = $this->client->request('GET', '/');
+        $this->assertCount(1, $this->findCard($crawler, '注意書きテスト会社')->filter('.list-group-item .status-warning'));
+
+        $crawler = $this->client->request('GET', "/company/{$companyId}");
+        $this->assertCount(1, $crawler->filter('.route-summaries li .status-warning'));
+
+        $operatingId = $this->createCompanyWithRoute('注意書きなし会社', OperationStatusEnum::Operating);
+        $crawler     = $this->client->request('GET', '/');
+        $this->assertCount(0, $this->findCard($crawler, '注意書きなし会社')->filter('.status-warning'));
+        $crawler = $this->client->request('GET', "/company/{$operatingId}");
+        $this->assertCount(0, $crawler->filter('.route-summaries .status-warning'));
+    }
+
+    public function testPageHeadingsHaveClass(): void
+    {
+        foreach ($this->threePages() as $url => $kind) {
+            $crawler = $this->client->request('GET', $url);
+            if ($kind === 'company') {
+                $this->assertCount(1, $crawler->filter('div.page-heading > h1'), $url);
+            } else {
+                $this->assertCount(1, $crawler->filter('h1.page-heading'), $url);
+            }
+            if ($kind !== 'top') {
+                $this->assertGreaterThan(0, $crawler->filter('h2.page-heading')->count(), $url);
+            }
+        }
+    }
+
+    public function testNoDataMessagesUseV1Style(): void
+    {
+        $crawler = $this->client->request('GET', '/ports');
+        $this->assertResponseIsSuccessful();
+        // 既存データの有無に依存するので、あるときは .alert-secondary で出さないことだけを確かめる
+        $this->assertCount(0, $crawler->filter('.alert-secondary'));
+        foreach (['/' => '現在情報がありません。', '/ports' => '港別の情報がありません。'] as $url => $message) {
+            $crawler = $this->client->request('GET', $url);
+            $noData  = $crawler->filter('.no-data');
+            if ($noData->count() > 0) {
+                $this->assertStringContainsString($message, $noData->text(), $url);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // <head>（US2）
+    // ------------------------------------------------------------------
+
+    public function testHeadMetaOnAllPages(): void
+    {
+        foreach (array_keys($this->threePages()) as $url) {
+            $crawler = $this->client->request('GET', $url);
+            $this->assertResponseIsSuccessful($url);
+
+            $title       = $crawler->filter('title')->text();
+            $description = $crawler->filter('meta[name="description"]')->attr('content');
+            $canonical   = $crawler->filter('link[rel="canonical"]')->attr('href');
+            $this->assertNotSame('', $description, $url);
+            $this->assertSame($title, $crawler->filter('meta[property="og:title"]')->attr('content'), $url);
+            $this->assertSame($description, $crawler->filter('meta[property="og:description"]')->attr('content'), $url);
+            $this->assertSame($canonical, $crawler->filter('meta[property="og:url"]')->attr('content'), $url);
+            $this->assertSame('website', $crawler->filter('meta[property="og:type"]')->attr('content'), $url);
+            $this->assertSame('鹿児島〜沖縄フェリー運航情報サービス', $crawler->filter('meta[property="og:site_name"]')->attr('content'), $url);
+            $this->assertSame('summary', $crawler->filter('meta[name="twitter:card"]')->attr('content'), $url);
+            $this->assertCount(0, $crawler->filter('meta[property="og:image"]'), $url);
+        }
+    }
+
+    public function testTopTitleAndDescription(): void
+    {
+        $crawler = $this->client->request('GET', '/');
+
+        $this->assertSame('鹿児島〜沖縄・奄美大島フェリー運航情報', $crawler->filter('title')->text());
+        $this->assertSame(
+            'Aライン・マリックスラインの鹿児島〜那覇・奄美大島間フェリーの最新運航状況。欠航・遅延情報を毎時更新。旅行前に出発港・到着港の運航状況をご確認ください。',
+            $crawler->filter('meta[name="description"]')->attr('content'),
+        );
+    }
+
+    public function testPageTitleFormat(): void
+    {
+        $crawler = $this->client->request('GET', '/ports');
+        $this->assertSame('港別運航情報 | 鹿児島〜沖縄フェリー運航状況', $crawler->filter('title')->text());
+
+        $this->createPortBoardData();
+        $id      = $this->companyId('港別テスト運航会社');
+        $crawler = $this->client->request('GET', "/company/{$id}");
+        $this->assertSame('港別テスト運航会社 運航状況 | 鹿児島〜沖縄フェリー運航状況', $crawler->filter('title')->text());
+        $this->assertStringContainsString('港別テスト運航会社', $crawler->filter('meta[name="description"]')->attr('content'));
+    }
+
+    /** 社名に & < " ' を含んでも og タグが二重にエスケープされない */
+    public function testOgTagsAreNotDoubleEscaped(): void
+    {
+        $id = $this->createCompanyWithRoute('A&B<汽船>"\'');
+
+        $crawler = $this->client->request('GET', "/company/{$id}");
+
+        $this->assertSame("A&B<汽船>\"' 運航状況 | 鹿児島〜沖縄フェリー運航状況", $crawler->filter('title')->text());
+        $this->assertSame($crawler->filter('title')->text(), $crawler->filter('meta[property="og:title"]')->attr('content'));
+        $this->assertSame($crawler->filter('meta[name="description"]')->attr('content'), $crawler->filter('meta[property="og:description"]')->attr('content'));
+        $this->assertStringContainsString('A&B<汽船>"\'', $crawler->filter('meta[property="og:description"]')->attr('content'));
+    }
+
+    public function testCanonicalExcludesQueryString(): void
+    {
+        $crawler = $this->client->request('GET', '/ports?port=all&dir=down');
+
+        $this->assertSame('http://localhost/ports', $crawler->filter('link[rel="canonical"]')->attr('href'));
+        $this->assertSame('http://localhost/ports', $crawler->filter('meta[property="og:url"]')->attr('content'));
+    }
+
+    public function testNoShipInfoAnywhere(): void
+    {
+        foreach (array_keys($this->threePages()) as $url) {
+            $this->client->request('GET', $url);
+            $this->assertStringNotContainsString('ShipInfo', (string) $this->client->getResponse()->getContent(), $url);
         }
     }
 
@@ -326,7 +517,7 @@ class StatusControllerTest extends WebTestCase
         $row = $this->findPortRow($crawler, 0, '名瀬');
         $this->assertStringContainsString('港別テスト丸／港別テスト運航会社', $row->text());
         $this->assertStringContainsString('05:50発', $row->text());
-        $this->assertCount(1, $row->filter('.badge.bg-success'));
+        $this->assertCount(1, $row->filter('.status-badge--operating'));
         $this->assertStringNotContainsString('便なし', $row->text());
         $this->assertStringNotContainsString('港別テスト非運航会社', $row->text());
     }
@@ -338,8 +529,8 @@ class StatusControllerTest extends WebTestCase
         $crawler = $this->client->request('GET', '/ports');
 
         $row = $this->findPortRow($crawler, 3, '名瀬');
-        $this->assertStringContainsString('運航予定', $row->filter('.badge')->text());
-        $this->assertCount(0, $row->filter('.badge.bg-success'));
+        $this->assertStringContainsString('運航予定', $row->filter('.status-badge--scheduled')->text());
+        $this->assertCount(0, $row->filter('.status-badge--operating'));
     }
 
     /** 方向内の確認時刻が全部同じ分なら、方向の見出しに1回だけ出して、行には出さない（FR-006） */

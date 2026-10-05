@@ -1,10 +1,11 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}{{ company.name }} - 運航状況 | ShipInfo{% endblock %}
+{% block title %}{{ company.name }} 運航状況{% endblock %}
+{% block description %}{{ company.name }}の鹿児島〜那覇・奄美大島間フェリーの運航状況。今日から4日分の航路ごとの欠航・遅延情報と出港時刻を確認できます。{% endblock %}
 
 {% block body %}
 <div class="container pt-3 pb-4">
-    <div class="d-flex flex-wrap align-items-baseline column-gap-2 mb-4">
+    <div class="page-heading d-flex flex-wrap align-items-baseline column-gap-2 mb-4">
         <h1 class="h4 mb-0">{{ company.name }} 運航状況</h1>
         {% if company.websiteUrl %}
             <a href="{{ company.websiteUrl }}" target="_blank" rel="noopener noreferrer" class="text-muted small text-nowrap">
@@ -16,7 +17,7 @@
     {# FR-019〜021: 今日〜3日先。日付ごとに航路の要約行と便の行。便あり・便なし・情報なしを区別する #}
     {% for day in days %}
         <section class="company-day mb-4" id="d-{{ day.date|date('Y-m-d') }}">
-            <h2 class="h5 border-bottom pb-1 mb-3">
+            <h2 class="h5 page-heading mb-3">
                 {{ day.date|date('n月j日（') }}{{ ['日','月','火','水','木','金','土'][day.date|date('w')] }}）
             </h2>
 
@@ -28,6 +29,7 @@
                                 <span>{{ summary.route.name }}</span>
                                 {{ include('status/_status_badge.html.twig', {state: null, status: summary.status}) }}
                             </div>
+                            {{ include('status/_status_warning.html.twig', {status: summary.status}) }}
                             {% if summary.statusDetail %}
                                 {% if summary.statusDetail|length > 60 %}
                                     <details class="small text-muted mt-1">
@@ -73,8 +75,8 @@
         </section>
     {% endfor %}
 
-    <footer class="text-muted small mt-4">
+    <p class="page-note mt-4">
         運航情報はスクレイピングにより収集しています。最新情報は各社公式サイトをご確認ください。
-    </footer>
+    </p>
 </div>
 {% endblock %}

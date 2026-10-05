@@ -1,0 +1,11 @@
+{#
+    欠航・遅延の注意書き（V1 引き継ぎ。specs/7-v1-branding/research.md R5）
+
+    引数:
+      status: App\Enum\OperationStatusEnum|null
+              cancelled・delayed のときだけ出す
+#}
+{%- set status = status|default(null) -%}
+{%- if status is not null and (status.value == 'cancelled' or status.value == 'delayed') -%}
+    <p class="status-warning">出港時間・寄港地が変更になってる可能性があるので公式サイトをご確認ください</p>
+{%- endif -%}

@@ -1,0 +1,14 @@
+{# エラーページ。DB を読む部品（「各社」メニュー・最終確認時刻）は出さない（specs/7-v1-branding/research.md R7） #}
+{% extends 'base.html.twig' %}
+
+{% block title %}ページが見つかりません{% endblock %}
+{% block site_companies_menu %}{% endblock %}
+{% block site_freshness %}{% endblock %}
+
+{% block body %}
+<div class="container py-3">
+    <h1 class="h4 page-heading">ページが見つかりません</h1>
+    <p>お探しのページは移動または削除された可能性があります。</p>
+    <p><a href="{{ path('app_status_index') }}">トップへ戻る</a></p>
+</div>
+{% endblock %}
