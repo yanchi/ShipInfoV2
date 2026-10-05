@@ -31,16 +31,16 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
 
 ## Phase 1: Setup
 
-- [ ] T001 `8-schedule-change-mail` ブランチで `make up` → `make test-php` が全部通ることを確認してから始める
-- [ ] T002 php コンテナで `composer require symfony/mailer:7.4.*` を実行し、`app/composer.json`・`app/composer.lock`・`app/symfony.lock` を更新する（research R8。Messenger・Scheduler は入れない）
+- [X] T001 `8-schedule-change-mail` ブランチで `make up` → `make test-php` が全部通ることを確認してから始める
+- [X] T002 php コンテナで `composer require symfony/mailer:7.4.*` を実行し、`app/composer.json`・`app/composer.lock`・`app/symfony.lock` を更新する（research R8。Messenger・Scheduler は入れない）
   - Flex のレシピが作った `app/config/packages/mailer.yaml` を `framework.mailer.dsn: '%env(MAILER_DSN)%'` にし、`when@test:` で `framework.mailer.dsn: 'null://null'` に固定する（research R7）
   - レシピが `app/compose.yaml`・`app/compose.override.yaml` に足した mailer のサービスは戻す（このリポジトリはルートの `docker-compose.yml` を使う）。`app/.env` に足された `MAILER_DSN=null://null` の行は残してよい
-- [ ] T003 [P] `app/config/services.yaml` の `parameters:` に既定値を足す：`env(MAILER_DSN): 'null://null'`・`env(NOTIFY_FROM): ''`・`env(NOTIFY_TO): ''`（本番イメージの `.env` は空なので、未設定でもコンテナが起動するように。research R7）
-- [ ] T004 [P] `app/phpunit.xml.dist` の `<php>` に `<server name="MAILER_DSN" value="smtp://mailer.test.invalid" force="true" />`・`NOTIFY_FROM`（`noreply@example.com`）・`NOTIFY_TO`（`ops1@example.com, ,ops2@example.com`）を足す。Mailer 本体は `when@test` で `null://null` なので実際には送らず、通知サービスからは「設定あり」に見える（research R7）
-- [ ] T005 [P] `docker-compose.yml` に Mailpit を足す（FR-011、research R7）
+- [X] T003 [P] `app/config/services.yaml` の `parameters:` に既定値を足す：`env(MAILER_DSN): 'null://null'`・`env(NOTIFY_FROM): ''`・`env(NOTIFY_TO): ''`（本番イメージの `.env` は空なので、未設定でもコンテナが起動するように。research R7）
+- [X] T004 [P] `app/phpunit.xml.dist` の `<php>` に `<server name="MAILER_DSN" value="smtp://mailer.test.invalid" force="true" />`・`NOTIFY_FROM`（`noreply@example.com`）・`NOTIFY_TO`（`ops1@example.com, ,ops2@example.com`）を足す。Mailer 本体は `when@test` で `null://null` なので実際には送らず、通知サービスからは「設定あり」に見える（research R7）
+- [X] T005 [P] `docker-compose.yml` に Mailpit を足す（FR-011、research R7）
   - `mailpit:` サービス：`image: axllent/mailpit:<タグ>`（実装のときに Docker Hub の最新の安定版のタグを確かめて固定する。`latest` にはしない）、`ports: "8025:8025"`、`networks: [shipinfo]`、`profiles: [tools]`（phpMyAdmin と同じ扱い）
   - php の `environment` に `MAILER_DSN: "${MAILER_DSN:-smtp://mailpit:1025}"`・`NOTIFY_FROM: "${NOTIFY_FROM:-shipinfo-v2@localhost}"`・`NOTIFY_TO: "${NOTIFY_TO:-ops@localhost}"`
-- [ ] T006 [P] `Makefile` に `notify-dry-run`（`bin/console app:notify-irregular-statuses --slot=6 --dry-run`）と `notify`（`SLOT ?= 6` で `--slot=$(SLOT)`）を足す。既存のターゲットと同じく php コンテナで `exec` し、`.PHONY` と `## ` のヘルプも付ける。`help` の末尾の phpMyAdmin の行の下に `Mailpit: make up-tools && open http://localhost:8025` を足す（contracts/console-command.md「Make」）
+- [X] T006 [P] `Makefile` に `notify-dry-run`（`bin/console app:notify-irregular-statuses --slot=6 --dry-run`）と `notify`（`SLOT ?= 6` で `--slot=$(SLOT)`）を足す。既存のターゲットと同じく php コンテナで `exec` し、`.PHONY` と `## ` のヘルプも付ける。`help` の末尾の phpMyAdmin の行の下に `Mailpit: make up-tools && open http://localhost:8025` を足す（contracts/console-command.md「Make」）
 
 **Checkpoint**: `make up` が通り、`make up-tools` で Mailpit が `http://localhost:8025` で開く。`make test-php`・`make lint-php` が通る → コミット
 
@@ -52,21 +52,21 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
 
 **⚠️ CRITICAL**: この Phase が終わるまで US の実装を始めないこと
 
-- [ ] T007 [P] `app/src/Enum/OperationStatusEnum.php` に `label(): string`（data-model §3 の表：通常運航・条件付・遅延・欠航・運休・不明・便なし）と `isIrregular(): bool`（Delayed・Cancelled・Suspended・Unknown で true）を足す。`/** @return list<self> */ public static function irregularCases(): array` も足し、Repository の `IN` 条件はこれから作る（判定を 1 か所に集める）
-- [ ] T008 [P] `app/tests/Enum/OperationStatusEnumTest.php` を新しく作り、6 つの値すべての `label()` と `isIrregular()`、`irregularCases()` が `isIrregular()` が true のものと一致することを確かめる
-- [ ] T009 `app/templates/status/_status_badge.html.twig` で、operating・delayed・cancelled・suspended・unknown の各分岐の文言を `{{ status.label() }}` にする（`✓ {{ status.label() }}` のように記号は残す。クラス・分岐の順番・no_service の行は変えない。T007 の後）。画面の文言は今と同じなので `app/tests/Controller/StatusControllerTest.php` は変えずに通ること（FR-003、research R6）
-- [ ] T010 [P] `app/src/Service/PortBoardBuilder.php` に `public const DAYS = 4;` を足し、`app/src/Controller/StatusController.php` の `PORT_BOARD_DAYS` を消して `PortBoardBuilder::DAYS` を使う（research R5。振る舞いは変えない）
-- [ ] T011 [P] `app/src/Enum/NotificationResultEnum.php` を新しく作る：`Pending = 'pending'`・`Sent = 'sent'`・`None = 'none'`・`NotConfigured = 'not_configured'`・`Failed = 'failed'`（data-model §1）
-- [ ] T012 `app/src/Entity/NotificationRun.php` を新しく作る（T011 の後。data-model §1 の列・型どおり）
+- [X] T007 [P] `app/src/Enum/OperationStatusEnum.php` に `label(): string`（data-model §3 の表：通常運航・条件付・遅延・欠航・運休・不明・便なし）と `isIrregular(): bool`（Delayed・Cancelled・Suspended・Unknown で true）を足す。`/** @return list<self> */ public static function irregularCases(): array` も足し、Repository の `IN` 条件はこれから作る（判定を 1 か所に集める）
+- [X] T008 [P] `app/tests/Enum/OperationStatusEnumTest.php` を新しく作り、6 つの値すべての `label()` と `isIrregular()`、`irregularCases()` が `isIrregular()` が true のものと一致することを確かめる
+- [X] T009 `app/templates/status/_status_badge.html.twig` で、operating・delayed・cancelled・suspended・unknown の各分岐の文言を `{{ status.label() }}` にする（`✓ {{ status.label() }}` のように記号は残す。クラス・分岐の順番・no_service の行は変えない。T007 の後）。画面の文言は今と同じなので `app/tests/Controller/StatusControllerTest.php` は変えずに通ること（FR-003、research R6）
+- [X] T010 [P] `app/src/Service/PortBoardBuilder.php` に `public const DAYS = 4;` を足し、`app/src/Controller/StatusController.php` の `PORT_BOARD_DAYS` を消して `PortBoardBuilder::DAYS` を使う（research R5。振る舞いは変えない）
+- [X] T011 [P] `app/src/Enum/NotificationResultEnum.php` を新しく作る：`Pending = 'pending'`・`Sent = 'sent'`・`None = 'none'`・`NotConfigured = 'not_configured'`・`Failed = 'failed'`（data-model §1）
+- [X] T012 `app/src/Entity/NotificationRun.php` を新しく作る（T011 の後。data-model §1 の列・型どおり）
   - `#[ORM\Table(name: 'notification_runs')]`、`#[ORM\UniqueConstraint(name: 'uniq_notification_run', columns: ['run_date', 'slot'])]`、`repositoryClass: NotificationRunRepository::class`
   - `id`（unsigned）・`runDate`（`date_immutable`）・`slot`（`smallint` unsigned。MySQL では TINYINT にしたいのでマイグレーション側で型を合わせ、`schema:validate` が通る組み合わせにする）・`result`（`enumType: NotificationResultEnum`, length 32）・`itemCount`（unsigned int）・`errorMessage`（text, nullable）・`createdAt`・`updatedAt`
   - 時刻は `app/src/Entity/ScraperLog.php` と同じく `#[ORM\HasLifecycleCallbacks]` の `PrePersist`・`PreUpdate` で入れる
-- [ ] T013 `app/migrations/Version20261006000000.php` を新しく作り、`notification_runs` を作る（T012 の後）。列・NULL・一意キー `uniq_notification_run (run_date, slot)` は data-model §1 のとおり。`down()` で DROP。`make migrate` のあと `make lint-php`（`doctrine:schema:validate`）が通ること
-- [ ] T014 `app/src/Repository/NotificationRunRepository.php` を新しく作る（T013 の後。research R3）
+- [X] T013 `app/migrations/Version20261006000000.php` を新しく作り、`notification_runs` を作る（T012 の後）。列・NULL・一意キー `uniq_notification_run (run_date, slot)` は data-model §1 のとおり。`down()` で DROP。`make migrate` のあと `make lint-php`（`doctrine:schema:validate`）が通ること
+- [X] T014 `app/src/Repository/NotificationRunRepository.php` を新しく作る（T013 の後。research R3）
   - `claim(\DateTimeImmutable $runDate, int $slot): bool`：DBAL の `Connection::insert('notification_runs', …)` で `result = pending`・`item_count = 0` の行を入れて true。`UniqueConstraintViolationException` を捕まえたら false（ORM の `flush()` で例外を出すと EntityManager が閉じるので、確保だけは DBAL で行う）
   - `finish(\DateTimeImmutable $runDate, int $slot, NotificationResultEnum $result, int $itemCount, ?string $errorMessage): void`：`result = 'pending'` の行だけを `UPDATE` する（pending 以外は書き換えない。data-model §1「状態の遷移」）。`updated_at` も更新する
   - `deleteOlderThan(\DateTimeImmutable $date): int`：`run_date < :date` の行を消し、消した行数を返す
-- [ ] T015 `app/tests/Repository/NotificationRunRepositoryTest.php` を新しく作る（T014 の後）：初回の `claim` が true・同じ (日付, 回) の 2 回目が false・別の回は true、`finish` で pending → sent になり、sent の行にもう一度 `finish(failed)` しても sent のまま、`deleteOlderThan` で 91 日前の行だけ消えて 90 日前の行は残る。テストで作った行は `tearDown` で消す（既存の Repository テストのやり方に合わせる）
+- [X] T015 `app/tests/Repository/NotificationRunRepositoryTest.php` を新しく作る（T014 の後）：初回の `claim` が true・同じ (日付, 回) の 2 回目が false・別の回は true、`finish` で pending → sent になり、sent の行にもう一度 `finish(failed)` しても sent のまま、`deleteOlderThan` で 91 日前の行だけ消えて 90 日前の行は残る。テストで作った行は `tearDown` で消す（既存の Repository テストのやり方に合わせる）
 
 **Checkpoint**: `notification_runs` がマイグレーションで作られ、回の確保が一意キーで 1 回だけ成功する。バッジの文言は変わらない。全テスト・phpstan・lint が通る → コミット
 
@@ -82,9 +82,9 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
 
 > **NOTE: 先に書いて、実装前に FAIL することを確認する**
 
-- [ ] T016 [P] [US1] `app/tests/Repository/OperationStatusRepositoryTest.php` に `findLatestBetween` のテストを足す：同じ航路・日付に `scraped_at` の違う 2 行があると新しい方だけ返る、昨日と 4 日先は返らない、無効な会社・無効な航路の行は返らない、通常運航の行も返る（状態で絞らない。data-model §3）
-- [ ] T017 [P] [US1] `app/tests/Repository/DepartureStatusRepositoryTest.php` に `findIrregularBetween` のテストを足す：cancelled・delayed・suspended・unknown は返る、operating・no_service・status null は返らない、昨日・4 日先・無効な会社・無効な航路・direction の無い航路は返らない
-- [ ] T018 [P] [US1] `app/tests/Service/IrregularServiceCollectorTest.php` を新しく作る（DB を使わない単体テスト。エンティティを `new` して組み立てる）。contracts/notification-mail.md「テストで押さえる例」の まとめ方の行をすべて押さえる
+- [X] T016 [P] [US1] `app/tests/Repository/OperationStatusRepositoryTest.php` に `findLatestBetween` のテストを足す：同じ航路・日付に `scraped_at` の違う 2 行があると新しい方だけ返る、昨日と 4 日先は返らない、無効な会社・無効な航路の行は返らない、通常運航の行も返る（状態で絞らない。data-model §3）
+- [X] T017 [P] [US1] `app/tests/Repository/DepartureStatusRepositoryTest.php` に `findIrregularBetween` のテストを足す：cancelled・delayed・suspended・unknown は返る、operating・no_service・status null は返らない、昨日・4 日先・無効な会社・無効な航路・direction の無い航路は返らない
+- [X] T018 [P] [US1] `app/tests/Service/IrregularServiceCollectorTest.php` を新しく作る（DB を使わない単体テスト。エンティティを `new` して組み立てる）。contracts/notification-mail.md「テストで押さえる例」の まとめ方の行をすべて押さえる
   - 航路×日付が欠航・港なし → 1 件、`statusText()` が `欠航`、`detail()` が備考
   - 同じ航路・日付で航路×日付が欠航・港 2 つが欠航 → 1 件で `ports` が 2 つ（出港予定時刻順、時刻なしは最後）
   - 航路×日付は通常運航・港 1 つだけ欠航 → 1 件、`通常運航（途中の港に変更あり）`、`detail()` は null
@@ -93,9 +93,9 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
   - unknown → `不明`、suspended → `運休`
   - 並びが会社 ID → 日付 → 航路 ID
   - `directionLabel()` が direction のある航路は `RouteDirectionEnum::label()`、無い航路は航路名
-- [ ] T019 [P] [US1] `app/tests/Service/NotificationSlotResolverTest.php` を新しく作る（research R4）：`01:00`・`01:09:59` → 1、`01:10:00` → null、`00:59` → null、`06:05` → 6、`15:00` → 15、`03:12` → null。`fromOption('1'|'6'|'15')` は int を返し、`'0'`・`'7'`・`'abc'`・`''` は `\InvalidArgumentException`
-- [ ] T020 [P] [US1] `app/tests/Service/IrregularStatusMailerTest.php` を新しく作る（Mailer は `MailerInterface` のモック。設定ありの経路だけ。US3 の経路は T033 で足す）：送った `Email` の From・To（`NOTIFY_TO=" a@example.com, ,b@example.com "` → 2 つ）・件名 `【ShipInfo V2】非通常運航ステータスを検出 (2件)`・HTML パートが無いこと・本文に会社名・`運航日: 2026-10-07（水）` の形・`方向　:`・`状況　:`・`港　　:` の下の `    - 名瀬 07:00発 フェリーなみのうえ：欠航（台風接近のため）` の形の行があること（contracts/notification-mail.md「本文」）。戻り値の `NotificationOutcome` の `result` が `Sent`
-- [ ] T021 [US1] `app/tests/Command/NotifyIrregularStatusesCommandTest.php` を新しく作る（`KernelTestCase` ＋ `CommandTester` ＋ `MailerAssertionsTrait`。実 DB に今日の欠航の `operation_statuses` を作る。テストで作った行と今日の `notification_runs` は `tearDown` で消す）
+- [X] T019 [P] [US1] `app/tests/Service/NotificationSlotResolverTest.php` を新しく作る（research R4）：`01:00`・`01:09:59` → 1、`01:10:00` → null、`00:59` → null、`06:05` → 6、`15:00` → 15、`03:12` → null。`fromOption('1'|'6'|'15')` は int を返し、`'0'`・`'7'`・`'abc'`・`''` は `\InvalidArgumentException`
+- [X] T020 [P] [US1] `app/tests/Service/IrregularStatusMailerTest.php` を新しく作る（Mailer は `MailerInterface` のモック。設定ありの経路だけ。US3 の経路は T033 で足す）：送った `Email` の From・To（`NOTIFY_TO=" a@example.com, ,b@example.com "` → 2 つ）・件名 `【ShipInfo V2】非通常運航ステータスを検出 (2件)`・HTML パートが無いこと・本文に会社名・`運航日: 2026-10-07（水）` の形・`方向　:`・`状況　:`・`港　　:` の下の `    - 名瀬 07:00発 フェリーなみのうえ：欠航（台風接近のため）` の形の行があること（contracts/notification-mail.md「本文」）。戻り値の `NotificationOutcome` の `result` が `Sent`
+- [X] T021 [US1] `app/tests/Command/NotifyIrregularStatusesCommandTest.php` を新しく作る（`KernelTestCase` ＋ `CommandTester` ＋ `MailerAssertionsTrait`。実 DB に今日の欠航の `operation_statuses` を作る。テストで作った行と今日の `notification_runs` は `tearDown` で消す）
   - **テスト DB の既存の行に依存しない**：`setUp` で、今日〜3 日先の `operation_statuses`・`departure_statuses` と今日の `notification_runs` を消してから、テストに要る行だけを作る（テスト DB は `_test` の別 DB なので消してよい。seed の会社・航路・港は消さない）。件数・`none` の判定がほかのテストの消し忘れや seed で変わらないようにする
   - `--slot=6` → 終了コード 0、`assertEmailCount(1)`、件名・本文に作った便、`notification_runs` の今日の 6 時の行が `sent`・`item_count` が件数
   - 同じ `--slot=6` を 2 回 → 2 回目は `この回は処理済みです` を含む出力で、メールは増えない（FR-009）
@@ -105,29 +105,29 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
 
 ### Implementation for User Story 1
 
-- [ ] T022 [P] [US1] `app/src/Repository/OperationStatusRepository.php` に `findLatestBetween(\DateTimeImmutable $from, int $days): array`（`@return list<OperationStatus>`）を足す（data-model §3）。`findUpcomingByCompany` と同じく (航路, 日付) ごとの `MAX(scraped_at)` の行を取り、航路・会社を JOIN して `r.active`・`fc.active` で絞る。状態では絞らない
-- [ ] T023 [P] [US1] `app/src/Repository/DepartureStatusRepository.php` に `findIrregularBetween(\DateTimeImmutable $from, int $days): array`（`@return list<DepartureStatus>`）を足す。`findForBoard` と同じ JOIN・範囲・条件に `d.status IN (:statuses)`（`OperationStatusEnum::irregularCases()`）を足す
-- [ ] T024 [P] [US1] `app/src/View/IrregularPort.php` を新しく作る（data-model §2。`final readonly` のプロパティ：`portName`・`shipName`（空文字は null）・`departureAt`・`status`・`detail`）
-- [ ] T025 [US1] `app/src/View/IrregularService.php` を新しく作る（T024 の後。data-model §2）：`company`・`route`・`date`・`routeStatus`・`ports` と、`isRouteIrregular()`・`directionLabel()`・`statusText()`・`detail()`。`statusText()` の文言は contracts/notification-mail.md「状況の文言」の表のとおり
-- [ ] T026 [US1] `app/src/Service/IrregularServiceCollector.php` を新しく作る（T022〜T025 の後。research R5）
+- [X] T022 [P] [US1] `app/src/Repository/OperationStatusRepository.php` に `findLatestBetween(\DateTimeImmutable $from, int $days): array`（`@return list<OperationStatus>`）を足す（data-model §3）。`findUpcomingByCompany` と同じく (航路, 日付) ごとの `MAX(scraped_at)` の行を取り、航路・会社を JOIN して `r.active`・`fc.active` で絞る。状態では絞らない
+- [X] T023 [P] [US1] `app/src/Repository/DepartureStatusRepository.php` に `findIrregularBetween(\DateTimeImmutable $from, int $days): array`（`@return list<DepartureStatus>`）を足す。`findForBoard` と同じ JOIN・範囲・条件に `d.status IN (:statuses)`（`OperationStatusEnum::irregularCases()`）を足す
+- [X] T024 [P] [US1] `app/src/View/IrregularPort.php` を新しく作る（data-model §2。`final readonly` のプロパティ：`portName`・`shipName`（空文字は null）・`departureAt`・`status`・`detail`）
+- [X] T025 [US1] `app/src/View/IrregularService.php` を新しく作る（T024 の後。data-model §2）：`company`・`route`・`date`・`routeStatus`・`ports` と、`isRouteIrregular()`・`directionLabel()`・`statusText()`・`detail()`。`statusText()` の文言は contracts/notification-mail.md「状況の文言」の表のとおり
+- [X] T026 [US1] `app/src/Service/IrregularServiceCollector.php` を新しく作る（T022〜T025 の後。research R5）
   - `collect(\DateTimeImmutable $today): array`（`@return list<IrregularService>`）：`findLatestBetween($today, PortBoardBuilder::DAYS)` と `findIrregularBetween($today, PortBoardBuilder::DAYS)` を読み、`build()` に渡す
   - `build(array $operationStatuses, array $departureStatuses): array`：DB を使わない純粋なメソッド（T018 はこれを呼ぶ）。キーは `routeId|Y-m-d`。航路×日付が `isIrregular()` か、通常以外の港がある (航路, 日付) だけを `IrregularService` にする。並びは会社 ID → 日付 → 航路 ID、港は出港予定時刻順（時刻なしは最後）
-- [ ] T027 [P] [US1] `app/src/Service/NotificationSlotResolver.php` を新しく作る（research R4）：`public const SLOTS = [1, 6, 15]`・`WINDOW_MINUTES = 10`、`resolve(\DateTimeImmutable $now): ?int`（その日の各時刻から 10 分未満ならその回）、`fromOption(string $value): int`（不正値は `\InvalidArgumentException`）
-- [ ] T028 [P] [US1] `app/templates/email/irregular_statuses.txt.twig` を新しく作る（contracts/notification-mail.md「本文」の形をそのまま。research R6 の例と 1 文字ずつ同じになること）。曜日は `['日','月','火','水','木','金','土'][date.format('w')]` で出す。テキストなので `{% autoescape false %}` で囲む（`&` などがエスケープされないように）
-- [ ] T029 [US1] `app/src/Service/IrregularStatusMailer.php` を新しく作る（T028 の後。research R6・R7）
+- [X] T027 [P] [US1] `app/src/Service/NotificationSlotResolver.php` を新しく作る（research R4）：`public const SLOTS = [1, 6, 15]`・`WINDOW_MINUTES = 10`、`resolve(\DateTimeImmutable $now): ?int`（その日の各時刻から 10 分未満ならその回）、`fromOption(string $value): int`（不正値は `\InvalidArgumentException`）
+- [X] T028 [P] [US1] `app/templates/email/irregular_statuses.txt.twig` を新しく作る（contracts/notification-mail.md「本文」の形をそのまま。research R6 の例と 1 文字ずつ同じになること）。曜日は `['日','月','火','水','木','金','土'][date.format('w')]` で出す。テキストなので `{% autoescape false %}` で囲む（`&` などがエスケープされないように）
+- [X] T029 [US1] `app/src/Service/IrregularStatusMailer.php` を新しく作る（T028 の後。research R6・R7）
   - コンストラクタ：`MailerInterface`・`Twig\Environment`・`#[Autowire(env: 'MAILER_DSN')] string $mailerDsn`・`#[Autowire(env: 'NOTIFY_FROM')] string $from`・`#[Autowire(env: 'NOTIFY_TO')] string $to`（または `services.yaml` の `bind`。どちらか 1 つに揃える）
   - `public const SUBJECT_PREFIX = '【ShipInfo V2】';`、`subject(int $count): string` → `【ShipInfo V2】非通常運航ステータスを検出 (N件)`、`body(list<IrregularService> $items): string`（テンプレートを描画）
   - `recipients(): list<string>`：`NOTIFY_TO` をカンマで分け、前後の空白を除き、空を捨てる
   - `send(list<IrregularService> $items): NotificationOutcome`：`Email` を `from`・`to(...recipients)`・`subject`・`text(body)` で作って送り、`result = Sent` を返す（設定なし・失敗の分岐は US3 の T034 で足す）
   - `app/src/View/NotificationOutcome.php` を新しく作る：`final readonly` で `result`（`NotificationResultEnum`）・`errorSummary`（`?string`）・`missingSettings`（`list<string>`）
-- [ ] T030 [US1] `app/src/Command/NotifyIrregularStatusesCommand.php` を新しく作る（T014・T026・T027・T029 の後。contracts/console-command.md「処理の順番」1〜4・6・8）
+- [X] T030 [US1] `app/src/Command/NotifyIrregularStatusesCommand.php` を新しく作る（T014・T026・T027・T029 の後。contracts/console-command.md「処理の順番」1〜4・6・8）
   - `#[AsCommand(name: 'app:notify-irregular-statuses', description: '運航に変更がある便をメールで知らせる')]`、オプション `--slot`（値必須）・`--dry-run`
   - `--slot` が不正 → エラーを出して `Command::INVALID`（2）。`--slot` 無し → `NotificationSlotResolver::resolve(new \DateTimeImmutable('now'))`、null なら `確認時刻ではありません（現在 HH:MM）` を出して 0
   - `--dry-run`：集めて件名と本文を出すだけ（確保しない・送らない・消さない）。0 件なら 0 件の文言を出す
   - それ以外：`claim()` が false → `Y-m-d N時の回は処理済みです` で 0。集めて 0 件 → `finish(None)`・`Y-m-d N時：通常運航以外の便はありません`。1 件以上 → `send()` → `finish(Sent, 件数)`・`Y-m-d N時：N件を送りました（宛先 M）`
   - 最後に `deleteOlderThan(今日 - 90 日)`（research R3）
   - 出力は `SymfonyStyle`（info は `writeln`/`success`、warning は `warning`、error は `error`）で、contracts/console-command.md「出力」の文言どおり
-- [ ] T031 [US1] `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` を通す（T016〜T021 が通る）。そのあと quickstart.md「開発環境で中身を見る」「開発環境で送ってみる」を手で確かめる（`make notify-dry-run`、`make up-tools` → `make notify SLOT=6` → Mailpit に 1 通、もう一度で「処理済み」）
+- [X] T031 [US1] `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` を通す（T016〜T021 が通る）。そのあと quickstart.md「開発環境で中身を見る」「開発環境で送ってみる」を手で確かめる（`make notify-dry-run`、`make up-tools` → `make notify SLOT=6` → Mailpit に 1 通、もう一度で「処理済み」）
 
 **Checkpoint**: 手動の `--slot` で、まとめた 1 通が届き、同じ回は 2 通目が届かない。US1 の Acceptance Scenarios 1〜4 を満たす（5 の「確認時刻以外は送らない」はコマンド側の窓まで。自動起動は PR2）→ コミット
 
@@ -139,7 +139,7 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
 
 **Independent Test**: `make test-php` で T032 が通る。Mailpit で件名が `【ShipInfo V2】` で始まる
 
-- [ ] T032 [US2] `app/tests/Service/IrregularStatusMailerTest.php` に、件名が `IrregularStatusMailer::SUBJECT_PREFIX`（`【ShipInfo V2】`）で始まり、`str_starts_with($subject, '【ShipInfo】')` が false であることを、件数 1・3・10 で確かめるテストを足す（contracts/notification-mail.md「ヘッダー」、SC-006）。`app/tests/Command/NotifyIrregularStatusesCommandTest.php` の送信のテストでも、実際に送られた `Email` の件名が `【ShipInfo V2】` で始まることを確かめる
+- [X] T032 [US2] `app/tests/Service/IrregularStatusMailerTest.php` に、件名が `IrregularStatusMailer::SUBJECT_PREFIX`（`【ShipInfo V2】`）で始まり、`str_starts_with($subject, '【ShipInfo】')` が false であることを、件数 1・3・10 で確かめるテストを足す（contracts/notification-mail.md「ヘッダー」、SC-006）。`app/tests/Command/NotifyIrregularStatusesCommandTest.php` の送信のテストでも、実際に送られた `Email` の件名が `【ShipInfo V2】` で始まることを確かめる
 
 **Checkpoint**: 件名で V1 と見分けられることがテストで固定される → コミット
 
@@ -153,18 +153,18 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
 
 ### Tests for User Story 3
 
-- [ ] T033 [US3] `app/tests/Service/IrregularStatusMailerTest.php` に足す（Mailer はモック）
+- [X] T033 [US3] `app/tests/Service/IrregularStatusMailerTest.php` に足す（Mailer はモック）
   - `MAILER_DSN` が空・`null://null`、`NOTIFY_FROM` が空、`NOTIFY_TO` が空・`" , "` のそれぞれ → `NotConfigured` を返し、Mailer の `send` が呼ばれない。警告の文言に足りない設定の名前（`NOTIFY_TO` など）が入り、DSN の値は入らない
   - Mailer の `send` が `TransportException('Connection refused')` を投げる → `Failed` を返し、エラーの要約が取れる。要約に DSN のユーザー名・パスワード（`smtp://user:secret@…` の `secret`）が入らない
   - コマンドのテスト（`app/tests/Command/NotifyIrregularStatusesCommandTest.php`）に、`IrregularStatusMailer` を `static::getContainer()->set()` で失敗するものに差し替えて `--slot=15` → 終了コード 1、結果 `failed`、もう一度動かすと「処理済み」で再送しないテストを足す（US3-2）
 
 ### Implementation for User Story 3
 
-- [ ] T034 [US3] `app/src/Service/IrregularStatusMailer.php` の `send()` に分岐を足す（research R7）
+- [X] T034 [US3] `app/src/Service/IrregularStatusMailer.php` の `send()` に分岐を足す（research R7）
   - 送る前に設定を確かめる：`MAILER_DSN` が空か `null://` で始まる、`NOTIFY_FROM` が空、`recipients()` が空 → `NotificationOutcome` の `result = NotConfigured`・`missingSettings` に足りない設定の名前（`MAILER_DSN`・`NOTIFY_FROM`・`NOTIFY_TO`）
   - `TransportExceptionInterface` を捕まえて `result = Failed`・`errorSummary`。要約は例外のメッセージから作り、DSN（`MAILER_DSN` の値・`user:pass@` の部分）を伏せる。長さは 1000 文字までに切る
-- [ ] T035 [US3] `app/src/Command/NotifyIrregularStatusesCommand.php` に contracts/console-command.md「処理の順番」5・7 を足す：`NotConfigured` → `{設定名} が未設定のためメールを送りませんでした` を warning で出し、`finish(NotConfigured, 0)`・終了コード 0。`Failed` → `メールの送信に失敗しました: {要約}` を error で出し、`finish(Failed, 0, 要約)`・終了コード 1。どちらでも最後の `deleteOlderThan` は動かす
-- [ ] T036 [US3] `make test-php`・`make phpstan`・`make cs-php` を通す。quickstart.md「設定なし・送信失敗を確かめる」の 2 つのコマンドを動かし、そのあと `make scraper-run` とトップページが普段どおり動くことを確かめる（SC-005）
+- [X] T035 [US3] `app/src/Command/NotifyIrregularStatusesCommand.php` に contracts/console-command.md「処理の順番」5・7 を足す：`NotConfigured` → `{設定名} が未設定のためメールを送りませんでした` を warning で出し、`finish(NotConfigured, 0)`・終了コード 0。`Failed` → `メールの送信に失敗しました: {要約}` を error で出し、`finish(Failed, 0, 要約)`・終了コード 1。どちらでも最後の `deleteOlderThan` は動かす
+- [X] T036 [US3] `make test-php`・`make phpstan`・`make cs-php` を通す。quickstart.md「設定なし・送信失敗を確かめる」の 2 つのコマンドを動かし、そのあと `make scraper-run` とトップページが普段どおり動くことを確かめる（SC-005）
 
 **Checkpoint**: 設定なし・送信失敗でも記録が残り、再送しない。US3 の Acceptance Scenarios 1・2 を満たす → コミット → PR1 を作る（PR の本文に「cron は PR2。PR1 だけでは自動で送らない」と書く）
 
