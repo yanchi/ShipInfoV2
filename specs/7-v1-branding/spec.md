@@ -117,6 +117,7 @@ V1 のブックマークや検索結果（`/`、`/details/today`）から来た�
 - **FR-006**: すべてのページに og:title・og:description・og:url・og:type（website）・og:site_name（「鹿児島〜沖縄フェリー運航情報サービス」）・twitter:card（summary）を出すこと。og:title はページタイトル、og:description は説明文と同じにすること
 - **FR-007**: すべてのページに canonical を出し、og:url と同じ、そのページ自身の URL（スキーム・ホストを含み、クエリ文字列を除く）にすること
 - **FR-008**: OG 画像は V1 に無いため、今回は出さないこと（V1 と同じ表示にそろえる）
+  - 10-og-image で置き換えた（全ページ共通の OG 画像を出し、twitter:card を summary_large_image にする）
 
 **ページのテイスト**
 
