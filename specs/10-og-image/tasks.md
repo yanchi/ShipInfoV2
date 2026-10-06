@@ -44,7 +44,7 @@ Setup・Foundational は無し（新しい依存・DB の変更が無い。既�
 
 ## Phase 3: Polish
 
-- [ ] T009 [P] `CLAUDE.md` の「重要な設計決定」のサイト名・OG の行に「OG 画像は全ページ共通の `app/public/og-image.png`（元は `specs/10-og-image/og-image.html`）」を足す
+- [X] T009 [P] `CLAUDE.md` の「重要な設計決定」のサイト名・OG の行に「OG 画像は全ページ共通の `app/public/og-image.png`（元は `specs/10-og-image/og-image.html`）」を足す
 - [ ] T010 本番に出した後、quickstart.md の「4. 本番で確かめる」を行う（SC-003。PR マージ後に手で行う）
 
 **Checkpoint**: コミット `docs: OG 画像の置き場所を CLAUDE.md に書く (10-og-image polish)`
