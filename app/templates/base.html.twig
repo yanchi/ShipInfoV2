@@ -6,7 +6,7 @@
         {#- canonical・og:url はクエリ無しの URL（全ページ同じ式）。og:image も同じスキーム＋ホスト。title・description は og でも同じ値を使う -#}
         {%- set canonical_url = app.request.schemeAndHttpHost ~ app.request.pathInfo -%}
         <title>{% block full_title %}{% block title %}{% endblock %}{{ title_suffix }}{% endblock %}</title>
-        <meta name="description" content="{% block description %}鹿児島〜沖縄・奄美大島を結ぶAライン・マリックスラインのリアルタイム運航状況。欠航・遅延・通常運航を毎時更新でお知らせします。{% endblock %}">
+        <meta name="description" content="{% block description %}鹿児島〜沖縄・奄美大島を結ぶマルエーフェリー・マリックスラインのリアルタイム運航状況。欠航・遅延・通常運航を毎時更新でお知らせします。{% endblock %}">
         <link rel="canonical" href="{{ canonical_url }}">
         <meta property="og:title" content="{{ block('full_title')|trim|raw }}">
         <meta property="og:description" content="{{ block('description')|trim|raw }}">

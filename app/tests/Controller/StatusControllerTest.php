@@ -345,7 +345,7 @@ class StatusControllerTest extends WebTestCase
 
         $this->assertSame('鹿児島〜沖縄・奄美大島フェリー運航情報', $crawler->filter('title')->text());
         $this->assertSame(
-            'Aライン・マリックスラインの鹿児島〜那覇・奄美大島間フェリーの最新運航状況。欠航・遅延情報を毎時更新。旅行前に出発港・到着港の運航状況をご確認ください。',
+            'マルエーフェリー・マリックスラインの鹿児島〜那覇・奄美大島間フェリーの最新運航状況。欠航・遅延情報を毎時更新。旅行前に出発港・到着港の運航状況をご確認ください。',
             $crawler->filter('meta[name="description"]')->attr('content'),
         );
     }

@@ -62,6 +62,10 @@
 - **FR-007**: twitter:card を summary_large_image にすること
 - **FR-008**: 7-v1-branding の FR-008（OG 画像は出さない）はこの機能で置き換える。それ以外の OG・Twitter カード・canonical の値（7-v1-branding の FR-006・FR-007）は変えないこと
 
+**会社名の表記**
+
+- **FR-009**: 会社の呼び名は「Aライン」ではなく「マルエーフェリー」で出すこと。OG 画像の文字と、説明文（description・og:description）の両方に当てはめる。検索でよく使われる表記に合わせ、「A"LINE」のような記号入りの表記は使わない
+
 ### Key Entities
 
 - **OG 画像**: 全ページ共通の 1 枚の画像。サイトの公開ディレクトリに置き、固定の URL で取得できる。幅・高さ・代わりの文（alt）を持つ
@@ -87,5 +91,5 @@
 
 - ページごと・会社ごと・運航状況ごとに異なる OG 画像
 - 実行時に画像を作る仕組み
-- og:title・og:description などの文言の変更
+- og:title・og:description などの文言の変更（FR-009 の会社名の表記を除く）
 - SNS 側のキャッシュを消す作業（必要なら公開後に各 SNS のツールで行う）
