@@ -33,7 +33,7 @@ final readonly class PortBoardEntry
     public function isAlert(): bool
     {
         return $this->state === DepartureDisplayStateEnum::Status
-            && \in_array($this->status, [OperationStatusEnum::Cancelled, OperationStatusEnum::Delayed, OperationStatusEnum::Suspended], true);
+            && \in_array($this->status, [OperationStatusEnum::Cancelled, OperationStatusEnum::Delayed, OperationStatusEnum::Skipped, OperationStatusEnum::Suspended], true);
     }
 
     /** 出港時刻を過ぎた通常運航・運航予定の便（異常の便は薄くしない） */

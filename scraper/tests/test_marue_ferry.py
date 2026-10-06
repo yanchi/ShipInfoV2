@@ -775,15 +775,15 @@ def test_cancelled_ship_ignores_port_notices(db_session, marue_with_ports):
 
 
 @resp_mock.activate
-def test_skip_port_is_cancelled_only_there(db_session, marue_with_ports):
-    """抜港 → その港だけ cancelled、他は船ステータス（US4 シナリオ3）。"""
+def test_skip_port_is_skipped_only_there(db_session, marue_with_ports):
+    """抜港 → その港だけ skipped（欠航ではない）、他は船ステータス（US4 シナリオ3）。"""
     company, ports = marue_with_ports
     departures, _ = run_with_ships(
         db_session, company, ("通常運航", "本日、与論港は抜港となります。")
     )
 
     rows = down_statuses(db_session, company, ports, departures)
-    assert rows["与論"]["status"] == OperationStatusEnum.cancelled
+    assert rows["与論"]["status"] == OperationStatusEnum.skipped
     assert "与論港は抜港" in rows["与論"]["status_detail"]
     for name in ["鹿児島", "名瀬", "亀徳", "和泊", "本部"]:
         assert rows[name]["status"] == OperationStatusEnum.operating
@@ -813,7 +813,7 @@ def test_other_direction_ship_is_not_mixed(db_session, marue_with_ports):
 
     assert (
         down_statuses(db_session, company, ports, departures)["与論"]["status"]
-        == OperationStatusEnum.cancelled
+        == OperationStatusEnum.skipped
     )
     up = up_statuses(db_session, company, ports, departures)
     assert all(r["status"] == OperationStatusEnum.operating for r in up.values())
@@ -1095,7 +1095,7 @@ def test_delayed_voyage_uses_searched_arrival_not_frozen_rows(
 
 @resp_mock.activate
 def test_delayed_ship_keeps_delayed_on_unmentioned_ports(db_session, marue_with_ports):
-    """船が「遅延」（条件付ではない）で抜港の記載 → 与論だけ欠航、他の港は遅れたまま delayed（FR-006）。"""
+    """船が「遅延」（条件付ではない）で抜港の記載 → 与論だけ抜港、他の港は遅れたまま delayed（FR-006）。"""
     company, ports = marue_with_ports
     departures, logs = run_with_ships(
         db_session,
@@ -1104,7 +1104,7 @@ def test_delayed_ship_keeps_delayed_on_unmentioned_ports(db_session, marue_with_
     )
 
     rows = down_statuses(db_session, company, ports, departures)
-    assert rows["与論"]["status"] == OperationStatusEnum.cancelled
+    assert rows["与論"]["status"] == OperationStatusEnum.skipped
     for name in ["鹿児島", "名瀬", "亀徳", "和泊", "本部"]:
         assert rows[name]["status"] == OperationStatusEnum.delayed
         assert "約2時間遅れて" in rows[name]["status_detail"]
@@ -1123,3 +1123,383 @@ def test_delayed_ship_without_port_notice_has_no_unmatched_warning(
     rows = down_statuses(db_session, company, ports, departures)
     assert all(r["status"] == OperationStatusEnum.delayed for r in rows.values())
     assert not any(log["event"] == "port_notice_unmatched" for log in logs)
+
+
+# ---------------------------------------------------------------------------
+# 抜港 → skipped（specs/9-marue-port-skip）。保存版（2026-10-06 09:28）を使う
+# ---------------------------------------------------------------------------
+
+NOW_1006 = datetime(2026, 10, 6, 9, 28)
+D1006 = "2026年10月06日"
+NAMINOUE_22921 = (
+    "https://www.aline-ferry.com/status/route-kagoshima/ferry-naminoue/22921/"
+)
+NAMINOUE_ARR = "2026年10月6日 18:20"
+# 下りの各港（保存版の詳細ページの時刻。和泊・与論は通常ダイヤ）
+DOWN_1006 = {
+    NAZE: "2026年10月6日 06:30",
+    KAMETOKU: "2026年10月6日 09:40",
+    WADOMARI: "2026年10月6日 11:30",
+    YORON: "2026年10月6日 13:50",
+    MOTOBU: "2026年10月6日 16:30",
+}
+PORT_NAME_BY_CODE = {
+    NAZE: "名瀬",
+    KAMETOKU: "亀徳",
+    WADOMARI: "和泊",
+    YORON: "与論",
+    MOTOBU: "本部",
+}
+
+
+def searches_1006(overrides: dict[str, str] | None = None) -> dict:
+    """保存版の便検索。overrides は港コード → 検索結果の HTML（差し替え）。"""
+    results = {
+        (code, NAHA, D1006): search_html([marue("フェリー波之上", dep, NAMINOUE_ARR)])
+        for code, dep in DOWN_1006.items()
+    }
+    for code, html in (overrides or {}).items():
+        results[(code, NAHA, D1006)] = html
+    return results
+
+
+def mock_20261006(searches: dict | None = None, naminoue_detail: str | None = None):
+    mock_search(searches if searches is not None else searches_1006())
+    resp_mock.add(
+        resp_mock.GET, KAGOSHIMA_URL, body=read_fixture("marue/kagoshima_20261006.html")
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        "https://www.aline-ferry.com/status/route-kagoshima/ferry-akebono/21525/",
+        body=read_fixture("marue/ship_detail_normal.html"),
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        NAMINOUE_22921,
+        body=naminoue_detail
+        or read_fixture("marue/ship_detail_naminoue_20261006.html"),
+    )
+
+
+def run_1006(db_session, company_id):
+    scraper = MarueFerry(db_session, company_id)
+    with structlog.testing.capture_logs() as logs, fixed_now(NOW_1006):
+        records = scraper.parse(scraper.fetch())
+        departures = scraper.parse_departures()
+    return scraper, records, departures, logs
+
+
+def rows_1006(db_session, company, ports, departures):
+    down, _ = routes_of(db_session, company)
+    return {
+        name: find(departures, down, ports[name], date(2026, 10, 6))
+        for name in PORT_NAME_BY_CODE.values()
+    }
+
+
+def without_skip_lines(html: str) -> str:
+    """保存版の詳細ページから「抜港」の2行を取り除く（「寄港いたしません」だけの版）。"""
+    result, n = re.subn(
+        r"<p>10月6日\(火\)(?:和泊|与論)港[^\n]*抜港[^\n]*</p>\n?", "", html
+    )
+    assert n == 2
+    return result
+
+
+def assert_saved_version_result(db_session, company, ports, departures, records):
+    rows = rows_1006(db_session, company, ports, departures)
+    assert rows["和泊"]["status"] == OperationStatusEnum.skipped
+    assert rows["与論"]["status"] == OperationStatusEnum.skipped
+    assert (
+        "抜港" in rows["和泊"]["status_detail"]
+        or "寄港いたしません" in rows["和泊"]["status_detail"]
+    )
+    assert rows["亀徳"]["status"] == OperationStatusEnum.delayed
+    for name in ["名瀬", "本部"]:
+        assert rows[name]["status"] == OperationStatusEnum.delayed
+    assert not [r for r in departures if r["status"] == OperationStatusEnum.cancelled]
+    assert not [r for r in records if r["status"] == OperationStatusEnum.skipped]
+
+
+@resp_mock.activate
+def test_saved_version_skips_wadomari_and_yoron(db_session, marue_with_ports):
+    """保存版（2026-10-06）：和泊・与論 → skipped、亀徳 → delayed、欠航0件（SC-001・FR-010）。"""
+    company, ports = marue_with_ports
+    mock_20261006()
+
+    _, records, departures, _ = run_1006(db_session, company.id)
+
+    assert_saved_version_result(db_session, company, ports, departures, records)
+    rows = rows_1006(db_session, company, ports, departures)
+    assert "和泊港" in rows["和泊"]["status_detail"]
+
+
+@resp_mock.activate
+def test_saved_version_with_only_kikou_itashimasen(db_session, marue_with_ports):
+    """「抜港」の行が無く「寄港いたしません」だけでも同じ結果（US3、FR-010）。"""
+    company, ports = marue_with_ports
+    mock_20261006(
+        naminoue_detail=without_skip_lines(
+            read_fixture("marue/ship_detail_naminoue_20261006.html")
+        )
+    )
+
+    _, records, departures, _ = run_1006(db_session, company.id)
+
+    assert_saved_version_result(db_session, company, ports, departures, records)
+    rows = rows_1006(db_session, company, ports, departures)
+    assert "寄港いたしません" in rows["和泊"]["status_detail"]
+
+
+def test_saved_version_ship_info(db_session, marue_with_ports):
+    """保存版の波之上：delayed・条件付・スケジュール変更（US4 シナリオ1）。"""
+    company, _ = marue_with_ports
+    scraper = MarueFerry(db_session, company.id)
+
+    ship = scraper._parse_ships(read_fixture("marue/kagoshima_20261006.html"))[
+        "フェリー波之上"
+    ]
+
+    assert ship.status == OperationStatusEnum.delayed
+    assert ship.conditional is True
+    assert ship.schedule_changed is True
+
+
+def test_tag_order_does_not_change_result(db_session, marue_with_ports):
+    """タグの並びを入れ替えても ShipInfo は同じ（SC-004）。"""
+    company, _ = marue_with_ports
+    scraper = MarueFerry(db_session, company.id)
+    html = read_fixture("marue/kagoshima_20261006.html")
+    swapped = re.sub(
+        r'(<span class="tag-sche">スケジュール変更</span>)(\s*)(<span class="tag-conditionally">条件付運航</span>)',
+        r"\3\2\1",
+        html,
+    )
+    assert swapped != html
+
+    assert scraper._parse_ships(swapped) == scraper._parse_ships(html)
+
+
+def test_cancelled_tag_wins_over_conditional(db_session, marue_with_ports):
+    """「欠航」＋「条件付運航」→ 欠航（一番重いもの。US4 シナリオ3）。"""
+    company, _ = marue_with_ports
+    scraper = MarueFerry(db_session, company.id)
+    html = read_fixture("marue/kagoshima_20261006.html").replace(
+        '<span class="tag-sche">スケジュール変更</span>',
+        '<span class="tag-cancel">欠航</span>',
+    )
+
+    ship = scraper._parse_ships(html)["フェリー波之上"]
+
+    assert ship.status == OperationStatusEnum.cancelled
+    assert ship.conditional is True
+
+
+def test_unknown_tag_is_ignored_with_warning(db_session, marue_with_ports):
+    company, _ = marue_with_ports
+    scraper = MarueFerry(db_session, company.id)
+    html = read_fixture("marue/kagoshima_20261006.html").replace(
+        '<span class="tag-sche">スケジュール変更</span>',
+        '<span class="tag-x">謎のタグ</span>',
+    )
+
+    with structlog.testing.capture_logs() as logs:
+        ship = scraper._parse_ships(html)["フェリー波之上"]
+
+    assert ship.status == OperationStatusEnum.delayed
+    assert ship.conditional is True
+    assert ship.schedule_changed is False
+    assert any(log["event"] == "unknown_status_text" for log in logs)
+
+
+@resp_mock.activate
+def test_cancelled_ship_makes_every_port_cancelled_not_skipped(
+    db_session, marue_with_ports
+):
+    """船が欠航なら、抜港の告知があっても全港 cancelled（FR-005・SC-003）。"""
+    company, ports = marue_with_ports
+    html = read_fixture("marue/kagoshima_20261006.html").replace(
+        '<span class="tag-sche">スケジュール変更</span>',
+        '<span class="tag-cancel">欠航</span>',
+    )
+    mock_search(searches_1006())
+    resp_mock.add(resp_mock.GET, KAGOSHIMA_URL, body=html)
+    resp_mock.add(
+        resp_mock.GET,
+        "https://www.aline-ferry.com/status/route-kagoshima/ferry-akebono/21525/",
+        body=read_fixture("marue/ship_detail_normal.html"),
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        NAMINOUE_22921,
+        body=read_fixture("marue/ship_detail_naminoue_20261006.html"),
+    )
+
+    _, _, departures, _ = run_1006(db_session, company.id)
+
+    rows = rows_1006(db_session, company, ports, departures)
+    assert all(r["status"] == OperationStatusEnum.cancelled for r in rows.values())
+    assert not [r for r in departures if r["status"] == OperationStatusEnum.skipped]
+
+
+@resp_mock.activate
+def test_conditional_only_ship_keeps_unmentioned_ports_operating(
+    db_session, marue_with_ports
+):
+    """条件付だけの船は言及の無い港が operating、条件付＋スケジュール変更は delayed（research R5）。"""
+    company, ports = marue_with_ports
+    mock_20261006()
+    html = read_fixture("marue/kagoshima_20261006.html").replace(
+        '<span class="tag-sche">スケジュール変更</span>', ""
+    )
+    resp_mock.replace(resp_mock.GET, KAGOSHIMA_URL, body=html)
+
+    _, _, departures, _ = run_1006(db_session, company.id)
+
+    rows = rows_1006(db_session, company, ports, departures)
+    assert rows["和泊"]["status"] == OperationStatusEnum.skipped
+    assert rows["亀徳"]["status"] == OperationStatusEnum.delayed
+    assert rows["名瀬"]["status"] == OperationStatusEnum.operating
+    assert rows["本部"]["status"] == OperationStatusEnum.operating
+
+
+# ---- 時刻・便が無い抜港の港（research R6）----------------------------------
+
+DASH_ROW = ("フェリー波之上", "－", "－", "マルエーフェリー")
+
+
+@resp_mock.activate
+def test_search_row_without_datetime_is_kept_with_warning(db_session, marue_with_ports):
+    company, _ = marue_with_ports
+    mock_20261006(searches_1006({YORON: search_html([DASH_ROW])}))
+
+    scraper, _, _, logs = run_1006(db_session, company.id)
+
+    rows = scraper._searches[
+        (
+            routes_of(db_session, company)[0].id,
+            _port_id(db_session, "与論"),
+            date(2026, 10, 6),
+        )
+    ]
+    assert (
+        rows is not None and rows[0].departure_at is None and rows[0].arrival_at is None
+    )
+    assert any(log["event"] == "search_datetime_missing" for log in logs)
+
+
+def _port_id(db_session, name):
+    from scraper.db.models import Port
+
+    return db_session.execute(select(Port.id).where(Port.name == name)).scalar()
+
+
+@resp_mock.activate
+def test_skipped_port_without_datetime_is_skipped_without_time(
+    db_session, marue_with_ports
+):
+    company, ports = marue_with_ports
+    mock_20261006(searches_1006({YORON: search_html([DASH_ROW])}))
+
+    _, _, departures, _ = run_1006(db_session, company.id)
+
+    row = rows_1006(db_session, company, ports, departures)["与論"]
+    assert row["status"] == OperationStatusEnum.skipped
+    assert row["scheduled_departure_at"] is None and row["scheduled_arrival_at"] is None
+    assert row["ship_name"] == "フェリー波之上"
+    assert "与論港" in row["status_detail"]
+
+
+@resp_mock.activate
+def test_not_skipped_port_without_datetime_is_not_written(db_session, marue_with_ports):
+    """抜港でない港（名瀬）の日時なしの行は書かない。"""
+    company, ports = marue_with_ports
+    mock_20261006(searches_1006({NAZE: search_html([DASH_ROW])}))
+    down, _ = routes_of(db_session, company)
+
+    _, _, departures, logs = run_1006(db_session, company.id)
+
+    assert not [
+        r
+        for r in departures
+        if r["route_id"] == down.id
+        and r["port_id"] == ports["名瀬"].id
+        and r["departure_date"] == date(2026, 10, 6)
+    ]
+    assert any(log["event"] == "search_row_without_datetime_skipped" for log in logs)
+
+
+@resp_mock.activate
+def test_skipped_port_without_datetime_on_other_date_is_not_written(
+    db_session, marue_with_ports
+):
+    """今の便は 10/6 着なのに、10/8 の与論発に日時なしの行 → 書かない（出港日が合わない）。"""
+    company, ports = marue_with_ports
+    searches = searches_1006()
+    searches[(YORON, NAHA, "2026年10月08日")] = search_html([DASH_ROW])
+    mock_20261006(searches)
+    down, _ = routes_of(db_session, company)
+
+    _, _, departures, _ = run_1006(db_session, company.id)
+
+    assert not [
+        r
+        for r in departures
+        if r["route_id"] == down.id
+        and r["port_id"] == ports["与論"].id
+        and r["departure_date"] == date(2026, 10, 8)
+    ]
+
+
+@resp_mock.activate
+def test_skipped_port_with_empty_search_is_skipped_with_ship_name(
+    db_session, marue_with_ports
+):
+    """与論発の検索が0件でも、今の便の抜港の日なら skipped（船名つき・時刻なし）。"""
+    company, ports = marue_with_ports
+    mock_20261006(searches_1006({YORON: read_fixture("marue/search_empty.html")}))
+
+    _, _, departures, _ = run_1006(db_session, company.id)
+
+    row = rows_1006(db_session, company, ports, departures)["与論"]
+    assert row["status"] == OperationStatusEnum.skipped
+    assert row["ship_name"] == "フェリー波之上"
+    assert row["scheduled_departure_at"] is None
+    assert "与論港" in row["status_detail"]
+
+
+@resp_mock.activate
+def test_empty_search_for_not_skipped_port_or_other_date_is_no_service(
+    db_session, marue_with_ports
+):
+    company, ports = marue_with_ports
+    searches = searches_1006({NAZE: read_fixture("marue/search_empty.html")})
+    searches[(YORON, NAHA, "2026年10月07日")] = read_fixture("marue/search_empty.html")
+    mock_20261006(searches)
+    down, _ = routes_of(db_session, company)
+
+    _, _, departures, _ = run_1006(db_session, company.id)
+
+    assert (
+        rows_1006(db_session, company, ports, departures)["名瀬"]["status"]
+        == OperationStatusEnum.no_service
+    )
+    assert (
+        find(departures, down, ports["与論"], date(2026, 10, 7))["status"]
+        == OperationStatusEnum.no_service
+    )
+
+
+@resp_mock.activate
+def test_no_current_voyage_does_not_create_skipped(db_session, marue_with_ports):
+    """今の便が決まらない（船ブロックに無い）→ skipped を作らない。"""
+    company, ports = marue_with_ports
+    html = read_fixture("marue/kagoshima_20261006.html").replace(
+        "フェリー波之上", "フェリー別船"
+    )
+    mock_20261006(searches_1006({YORON: read_fixture("marue/search_empty.html")}))
+    resp_mock.replace(resp_mock.GET, KAGOSHIMA_URL, body=html)
+
+    _, _, departures, _ = run_1006(db_session, company.id)
+
+    assert not [r for r in departures if r["status"] == OperationStatusEnum.skipped]

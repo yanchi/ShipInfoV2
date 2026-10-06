@@ -1,10 +1,11 @@
 {#
-    ステータスの凡例（FR-026。contracts/ui-status.md の8種類）
+    ステータスの凡例（FR-026。contracts/ui-status.md の9種類。抜港は specs/9-marue-port-skip/contracts/ui-status.md）
 #}
 {%- set legend = [
     {status: constant('App\\Enum\\OperationStatusEnum::Operating'), note: '発表どおり運航する'},
     {state: constant('App\\Enum\\DepartureDisplayStateEnum::Scheduled'), note: 'まだ運航状況が発表されていない便'},
     {status: constant('App\\Enum\\OperationStatusEnum::Delayed'), note: '条件付きの運航（寄港しない・引き返す場合あり）や遅れ'},
+    {status: constant('App\\Enum\\OperationStatusEnum::Skipped'), note: '船は運航するが、この港には寄らない'},
     {status: constant('App\\Enum\\OperationStatusEnum::Cancelled'), note: 'この便は運航しない'},
     {status: constant('App\\Enum\\OperationStatusEnum::Suspended'), note: 'ドック入りなどでしばらく運航しない'},
     {state: constant('App\\Enum\\DepartureDisplayStateEnum::NoService'), note: 'この日この港を出る便がない'},

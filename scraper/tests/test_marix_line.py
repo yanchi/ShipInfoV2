@@ -569,7 +569,7 @@ def test_route_change_voyage_is_delayed_not_cancelled(db_session, marix_line_com
 
 @resp_mock.activate
 def test_departures_route_change_skipped_ports(db_session, marix_line_company):
-    """経路変更（鹿児島 → 名瀬）：寄る港は delayed、寄らない港（no_status）は cancelled。"""
+    """経路変更（鹿児島 → 名瀬）：寄る港は delayed、寄らない港（no_status）は skipped（抜港）。"""
     ports = setup_port_master(db_session, marix_line_company)
     _mock_route_change()
     scraper = MarixLine(db_session, marix_line_company.id)
@@ -584,10 +584,45 @@ def test_departures_route_change_skipped_ports(db_session, marix_line_company):
         assert rows[name]["status"] == OperationStatusEnum.delayed
         assert "航行経路を「鹿児島 → 名瀬」に変更し運航" in rows[name]["status_detail"]
     for name in ["亀徳", "和泊", "与論", "本部"]:
-        assert rows[name]["status"] == OperationStatusEnum.cancelled
+        assert rows[name]["status"] == OperationStatusEnum.skipped
         assert "寄港しません" in rows[name]["status_detail"]
     assert rows["鹿児島"]["ship_name"] == "クイーンコーラルプラス"
     assert not any(log["event"] == "detail_status_unknown" for log in logs)
+
+
+@resp_mock.activate
+def test_route_level_has_no_skipped_with_route_change(db_session, marix_line_company):
+    """航路単位（operation_statuses）には抜港を書かない（FR-011）。"""
+    _mock_route_change()
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 6, 24))):
+        records = scraper.parse(scraper.fetch())
+
+    assert records
+    assert not any(r["status"] == OperationStatusEnum.skipped for r in records)
+
+
+@resp_mock.activate
+def test_no_status_port_follows_cancelled_voyage(db_session, marix_line_company):
+    """一覧の便が欠航なら、詳細ページの一部の港だけ no_status でも抜港にならず欠航（FR-005）。"""
+    ports = setup_port_master(db_session, marix_line_company)
+    _mock_down_voyage(
+        "20260624",
+        "2026年6月25日",
+        "cancel alert",
+        "欠航",
+        read_fixture("marix/downstream_route_change.html"),
+    )
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with patch("scraper.scrapers.marix_line.date", _make_date_mock(date(2026, 6, 24))):
+        scraper.fetch()
+    records = scraper.parse_departures()
+
+    down, _ = _routes(db_session, marix_line_company)
+    rows = _by_port(records, ports, down)
+    assert not any(r["status"] == OperationStatusEnum.skipped for r in rows.values())
+    for name in ["亀徳", "和泊", "与論", "本部"]:
+        assert rows[name]["status"] == OperationStatusEnum.cancelled
 
 
 @resp_mock.activate
@@ -616,7 +651,9 @@ def test_departures_cancelled_voyage(db_session, marix_line_company):
     rows = _by_port(records, ports, down)
     assert len(rows) == 6
     assert all(r["status"] == OperationStatusEnum.cancelled for r in rows.values())
+    assert not any(r["status"] == OperationStatusEnum.skipped for r in rows.values())
     assert "欠航のため、船の運航は行いません。" in rows["名瀬"]["status_detail"]
+    assert not any(r["status"] == OperationStatusEnum.skipped for r in route_records)
 
 
 def _list_with_unknown_down_class() -> str:

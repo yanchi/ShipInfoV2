@@ -26,7 +26,7 @@ class PortAlertSummaryBuilderTest extends TestCase
     protected function setUp(): void
     {
         $this->builder = new PortAlertSummaryBuilder();
-        foreach ([1 => '鹿児島', 3 => '名瀬', 5 => '和泊', 7 => '那覇'] as $id => $name) {
+        foreach ([1 => '鹿児島', 3 => '名瀬', 5 => '和泊', 6 => '与論', 7 => '那覇'] as $id => $name) {
             $this->ports[$id] = (new Port())->setName($name);
             (new \ReflectionProperty($this->ports[$id], 'id'))->setValue($this->ports[$id], $id);
         }
@@ -40,6 +40,7 @@ class PortAlertSummaryBuilderTest extends TestCase
                     1 => [$this->alertEntry(OperationStatusEnum::Operating), $this->alertEntry(OperationStatusEnum::Cancelled)],
                     3 => [$this->alertEntry(OperationStatusEnum::Delayed)],
                     5 => [$this->alertEntry(OperationStatusEnum::Suspended)],
+                    6 => [$this->alertEntry(OperationStatusEnum::Skipped)],
                 ],
                 'up' => [
                     7 => [new PortBoardEntry(DepartureDisplayStateEnum::Scheduled)],
@@ -52,7 +53,7 @@ class PortAlertSummaryBuilderTest extends TestCase
         $summary = $this->builder->build($board, PortFilter::none());
 
         $this->assertSame(
-            [OperationStatusEnum::Cancelled, OperationStatusEnum::Delayed, OperationStatusEnum::Suspended],
+            [OperationStatusEnum::Cancelled, OperationStatusEnum::Delayed, OperationStatusEnum::Suspended, OperationStatusEnum::Skipped],
             array_map(static fn (PortAlert $a) => $a->entry->status, $summary->alerts),
         );
         $this->assertSame(0, $summary->hiddenCount);

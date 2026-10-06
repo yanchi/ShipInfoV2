@@ -275,6 +275,7 @@ class DepartureStatusRepositoryTest extends KernelTestCase
             $row($route, 1, 'delayed', OperationStatusEnum::Delayed),
             $row($route, 2, 'suspended', OperationStatusEnum::Suspended),
             $row($route, 3, 'unknown', OperationStatusEnum::Unknown),
+            $row($route, 3, 'skipped', OperationStatusEnum::Skipped),
             $row($route, 0, 'operating', OperationStatusEnum::Operating),
             $row($route, 0, 'no_service', OperationStatusEnum::NoService),
             $row($route, 0, 'null', null),
@@ -295,8 +296,8 @@ class DepartureStatusRepositoryTest extends KernelTestCase
             static fn (DepartureStatus $d) => $d->getShipName(),
             $this->repository->findIrregularBetween($today, 4),
         );
-        $ships = array_values(array_intersect($ships, ['cancelled', 'delayed', 'suspended', 'unknown', 'operating', 'no_service', 'null', 'yesterday', 'day4', 'inactive-route', 'no-direction', 'inactive-company']));
+        $ships = array_values(array_intersect($ships, ['cancelled', 'delayed', 'suspended', 'unknown', 'skipped', 'operating', 'no_service', 'null', 'yesterday', 'day4', 'inactive-route', 'no-direction', 'inactive-company']));
 
-        $this->assertSame(['cancelled', 'delayed', 'suspended', 'unknown'], $ships);
+        $this->assertEqualsCanonicalizing(['cancelled', 'delayed', 'suspended', 'unknown', 'skipped'], $ships);
     }
 }
