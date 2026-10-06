@@ -1,4 +1,4 @@
-# Specification Quality Checklist: マルエーフェリーの抜港を取りこぼさない
+# Specification Quality Checklist: 抜港を「抜港」と表示する
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-10-06
@@ -31,7 +31,7 @@
 
 ## Notes
 
-- 1回目の検証で FR-010 にログのキー名（実装の詳細）が入っていたので言い換えた。出港済みの行の扱いが Edge Case にしか無かったので FR-011 に上げた
-- 「概要」の「考えられる原因」は調査結果としてサイトの文面・挙動のレベルで書いている（コードの場所は plan で扱う）
-- 「決行」＝本サイトの「通常運航」と解釈した（Assumptions に記載）。不具合を見た時刻は不明なので、原因 1・2 は推定
+- 入力の「決行」は「欠航」の変換ミスだとユーザーから訂正があったので、spec を作り直した（「抜港なのに通常運航」→「抜港なのに欠航」）。作り直した版で全項目を見直して OK
+- マリックスラインも「寄港しません」を欠航で出しているので対象に含めた（Assumptions に記載）
+- 前の版で扱っていた「条件付の船で言及の無い港が通常運航になる」「鹿児島新港18:00発の誤検出」は別件として Out of Scope に残した
 - `samples/` の公式ページは 2026-10-06 09:28 に取得したもの。plan でテスト用の fixture に移す
