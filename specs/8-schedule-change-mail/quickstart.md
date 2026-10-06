@@ -53,14 +53,14 @@ make verify-prod # 本番イメージで supercronic が起動しているか・
    NOTIFY_TO=a@example.com,b@example.com
    ```
 
-2. マージの前に、VPS から本番の SMTP で送れるか確かめる。V1 は証明書の検証をオフにしていたので、同じサーバーでも検証で落ちることがある。宛先は自分だけにし、`notification_runs` を使わない `--dry-run` の本文で中身も見る
+2. VPS から本番の SMTP で送れるか確かめる。V1 は証明書の検証をオフにしていたので、同じサーバーでも検証で落ちることがある。`mailer:test` は `notification_runs` を使わないので、その日の回を消費しない
 
    ```bash
-   # PR1 がデプロイ済みの app コンテナで。宛先を自分だけに上書きして、使わない回（その日の過ぎた回）を指定する
-   docker compose -f compose.prod.yml exec -e NOTIFY_TO=自分のアドレス app php bin/console app:notify-irregular-statuses --slot=1
+   # PR2 のデプロイ後（compose.prod.yml が MAILER_DSN などを app に渡すようになってから）
+   docker compose -f compose.prod.yml exec app php bin/console mailer:test 自分のアドレス --from="<NOTIFY_FROM と同じ>" --subject="【ShipInfo V2】SMTP 確認"
    ```
 
-   `failed` になったら deploy/README の証明書の節を見る。試した回の行は消しておく（その日の 1 時の回が残っていても、過ぎた回なので実害は無い）
+   PR1 の時点の `compose.prod.yml` は設定を app に渡さないので、この確認は PR2 のデプロイ後に行う（`.env.production` に入れただけでは `null://null` のまま）。落ちたら deploy/README の証明書の節を見る
 
 3. master に push（CI がデプロイ）
 4. 次の確認時刻のあとに確かめる

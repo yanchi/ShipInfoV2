@@ -31,7 +31,7 @@ RUN composer dump-autoload --optimize --no-dev --classmap-authoritative
 # ---------- 2. 実行イメージ ----------
 FROM php:8.3-fpm-alpine AS runtime
 
-RUN apk add --no-cache nginx supervisor icu-libs \
+RUN apk add --no-cache nginx supervisor icu-libs tzdata \
     && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS icu-dev \
     && docker-php-ext-install -j"$(nproc)" pdo_mysql intl opcache \
     && apk del .build-deps
@@ -54,7 +54,18 @@ RUN echo 'clear_env = no' >> /usr/local/etc/php-fpm.d/www.conf
 
 ENV APP_ENV=prod \
     APP_DEBUG=0 \
-    APP_SHARE_DIR=var/share
+    APP_SHARE_DIR=var/share \
+    TZ=Asia/Tokyo
+
+# 確認時刻（1・6・15 時）に通知のコマンドを動かす cron。busybox の crond と違い環境変数をそのまま子に渡す。
+# Dependabot の対象外。更新はリリースのページで版と supercronic-linux-amd64 の SHA-1 を確かめて ARG を直す（deploy/README.md）。
+# CI のビルドは amd64 だけなので amd64 のバイナリだけを入れる
+ARG SUPERCRONIC_VERSION=v0.2.49
+ARG SUPERCRONIC_SHA1SUM=e63c11a9726b775a6a11801e81af4f3fb926aa68
+RUN curl -fsSLO "https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64" \
+    && echo "${SUPERCRONIC_SHA1SUM}  supercronic-linux-amd64" | sha1sum -c - \
+    && chmod +x supercronic-linux-amd64 \
+    && mv supercronic-linux-amd64 /usr/local/bin/supercronic
 
 WORKDIR /var/www/html
 
@@ -72,6 +83,7 @@ RUN chown -R www-data:www-data /var/lib/nginx /var/log/nginx
 
 COPY docker/production/app/nginx.conf       /etc/nginx/nginx.conf
 COPY docker/production/app/supervisord.conf /etc/supervisord.conf
+COPY docker/production/app/crontab          /etc/crontab
 COPY docker/production/app/entrypoint.sh    /usr/local/bin/entrypoint
 RUN chmod +x /usr/local/bin/entrypoint
 

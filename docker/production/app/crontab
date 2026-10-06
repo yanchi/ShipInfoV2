@@ -1,0 +1,2 @@
+# 日本時間（TZ=Asia/Tokyo）。運航に変更がある便を知らせる（specs/8-schedule-change-mail）
+0 1,6,15 * * * php /var/www/html/bin/console app:notify-irregular-statuses --no-interaction

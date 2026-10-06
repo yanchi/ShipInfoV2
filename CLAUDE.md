@@ -66,6 +66,8 @@ make lint-scraper  # Pythonのlint・フォーマットチェック（ruff）
 make format-scraper # Pythonの自動フォーマット（ruff format）
 make check-schema  # スクレイパーのモデルの列がマイグレーション後のDBにあるか
 make scraper-run   # スクレイパー即時実行
+make notify-dry-run # 通知メールの件名・本文を出すだけ（送らない・回を確保しない）
+make notify SLOT=6 # 通知メールを Mailpit に送る（make up-tools が前提）
 make verify-prod   # 本番用イメージで compose.prod.yml を起動するスモークテスト（CI でも全 PR で実行）
 ```
 
@@ -103,4 +105,5 @@ ShipInfoV2/
 - REST APIはMVP以降のフェーズで検討
 - 本番はさくら VPS。master に push すると CI が GHCR にイメージを push し、SSH で `compose.prod.yml` を入れ替える（手順・初回設定は [deploy/README.md](deploy/README.md)）
 - サイト名・タイトル・OG の文言は V1 を引き継ぎ、`app/config/packages/twig.yaml` の globals に置く（「ShipInfo」は画面に出さない）。GA は本番かつ `GOOGLE_ANALYTICS_ID` があるときだけ出す
+- 運航に変更がある便の通知は app コンテナの supercronic が 1・6・15 時に `app:notify-irregular-statuses` を動かす。同じ回は `notification_runs` の一意キーで 1 通まで（設定・確認は [deploy/README.md](deploy/README.md)）
 - 時刻はすべて日本時間（PHP・スクレイパー・MySQL とも）。MySQL は `docker-compose.yml`・`compose.prod.yml` の `--default-time-zone=+09:00`、CI は `.github/workflows/ci.yml` で設定している。本番（RDS など）を作るときもパラメータグループなどで `time_zone = '+09:00'` にすること（忘れると日本時間の 0:00〜9:00 に `CURDATE()` が前日になる）
