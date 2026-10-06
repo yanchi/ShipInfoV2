@@ -90,7 +90,7 @@ app コンテナの supercronic が、日本時間の 1・6・15 時に `app:not
 
 ```
 # ユーザー名・パスワードに記号があれば URL エンコードする（@ → %40、: → %3A、/ → %2F など）
-MAILER_DSN=smtp://USER:PASSWORD@SMTP_HOST:587
+MAILER_DSN=smtp://USER:PASSWORD@isl-mentor.sakura.ne.jp:587
 NOTIFY_FROM=...
 NOTIFY_TO=a@example.com,b@example.com
 ```
@@ -108,7 +108,9 @@ cd /opt/shipinfo-v2
 docker compose -f compose.prod.yml exec app php bin/console mailer:test 自分のアドレス --from="<NOTIFY_FROM と同じ>" --subject="【ShipInfo V2】SMTP 確認"
 ```
 
-TLS の証明書は検証する（Symfony の既定）。V1 は検証をオフにしていたので、同じサーバーでも落ちることがある。`certificate verify failed` などで落ちたら、まず DSN のホスト名を証明書の名前に合わせる。どうしても通らないときだけ DSN に `?verify_peer=0` を足し、その理由をここに書くこと。
+**SMTP のホストは `isl-mentor.sakura.ne.jp`**（`mail.isl-mentor.com` ではない）。どちらも同じさくらのレンタルサーバー（133.242.249.170）だが、証明書が共用の `*.sakura.ne.jp` なので、`mail.isl-mentor.com` では `subjectAltName did not match` で落ちる（2026-10-06 に確認。V1 は検証をオフにしていたので気づかなかった）。ユーザー名はメールアドレスなので `@` を `%40` にする。
+
+TLS の証明書は検証する（Symfony の既定）。`certificate verify failed` などで落ちたら、まず DSN のホスト名を証明書の名前に合わせる。どうしても通らないときだけ DSN に `?verify_peer=0` を足し、その理由をここに書くこと。
 
 ### 確認の仕方
 

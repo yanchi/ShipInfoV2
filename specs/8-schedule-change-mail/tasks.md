@@ -204,7 +204,7 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
 - [X] T042 [P] `deploy/README.md` に通知の節を足す：`.env.production` への 3 つの入れ方（DSN のユーザー名・パスワードの URL エンコード）、TLS の証明書は検証すること（通らないときはまずホスト名を合わせる。`verify_peer=0` を使うなら理由を書く。research R7）、確認の仕方（quickstart.md「本番に出すとき」4 のコマンド。`result = 'pending'` が残っている回は送信の途中で落ちた回）、本番で手で動かすときは必ず `--dry-run` を付けること（付けないと確認時刻より前ならその回を先に取ってしまう。research R4）、supercronic の更新手順（Dependabot の対象外なので、リリースのページでバージョンと SHA-1 を確かめて Dockerfile の `ARG` を直す。research R2）
 - [X] T043 [P] `CLAUDE.md` の「よく使うコマンド」に `make notify-dry-run`・`make notify SLOT=6` を、「重要な設計決定」に「運航に変更がある便の通知は app コンテナの supercronic が 1・6・15 時に `app:notify-irregular-statuses` を動かす。同じ回は `notification_runs` の一意キーで 1 通まで」を 1 行で足す
 - [X] T044 `make test-php`・`make phpstan`・`make cs-php`・`make lint-php`・`make audit`・`make verify-prod` を全部通す → コミット → PR2 を作る
-- [ ] T045 デプロイ後、quickstart.md「本番に出すとき」4 のコマンドで最初の確認時刻の結果を確かめ、並行運用の 1 週間、V1 と V2 の同じ回のメールを比べる（SC-004。V1 は 0 時、V2 は 1 時）
+- [ ] T045 デプロイ後、quickstart.md「本番に出すとき」4 のコマンドで最初の確認時刻の結果を確かめ、並行運用の 1 週間、V1 と V2 の同じ回のメールを比べる（SC-004。2026-10-06 時点で V1 もホストの crontab で 1・6・15 時に動いているので、同じ時刻に並ぶ。V1 は会社ごとに 1 通、V2 はまとめて 1 通）
 
 ---
 
