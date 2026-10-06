@@ -7,6 +7,8 @@ twig:
         title_suffix: ' | 鹿児島〜沖縄フェリー運航状況'
         og_site_name: '鹿児島〜沖縄フェリー運航情報サービス'
         copyright: '© 2025 鹿児島〜沖縄・奄美大島 フェリー運航情報サービス'
+        # OG 画像（public/og-image.png）の代わりの文（specs/10-og-image/data-model.md）
+        og_image_alt: '鹿児島〜沖縄フェリー運航情報 - 青地にフェリーの絵とサイト名'
         # 本番かつ値があるときだけ GA のタグを出す（V1 と同じ）
         ga_measurement_id: '%env(default::GOOGLE_ANALYTICS_ID)%'
 

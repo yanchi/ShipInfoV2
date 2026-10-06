@@ -23,20 +23,20 @@ Setup・Foundational は無し（新しい依存・DB の変更が無い。既�
 
 ### 画像
 
-- [ ] T001 [P] [US1] 画像の元を `specs/10-og-image/og-image.html` に書く。1200×630、背景 #0073e6、`app/public/favicon.svg` の SVG をそのまま埋め込んだ船の絵（約 200px）、白い太字のサイト名「鹿児島〜沖縄フェリー運航情報」（約 72px、ヒラギノ角ゴ）、その下に小さく「Aライン・マリックスライン　運航状況を毎時更新」、下に白い波の線。文字・絵は端から 10% 以上内側（research R7、FR-002・003）。「ShipInfo」は入れない
-- [ ] T002 [US1] quickstart.md の「画像を作り直す」のコマンドで `app/public/og-image.png` を作り、目で確かめる（幅 300px に縮めてもサイト名が読めるか、SC-004）。PNG・1200×630・300KB 以下であること（FR-001・004）。depends on T001
+- [X] T001 [P] [US1] 画像の元を `specs/10-og-image/og-image.html` に書く。1200×630、背景 #0073e6、`app/public/favicon.svg` の SVG をそのまま埋め込んだ船の絵（約 200px）、白い太字のサイト名「鹿児島〜沖縄フェリー運航情報」（約 64px、ヒラギノ角ゴ）、その下に小さく「Aライン・マリックスライン　運航状況を毎時更新」、下に白い波の線。文字・絵は端から 10% 以上内側（research R7、FR-002・003）。「ShipInfo」は入れない
+- [X] T002 [US1] quickstart.md の「画像を作り直す」のコマンドで `app/public/og-image.png` を作り、目で確かめる（幅 300px に縮めてもサイト名が読めるか、SC-004）。PNG・1200×630・300KB 以下であること（FR-001・004）。depends on T001
 
 ### テスト（先に書いて落ちるのを確かめる）
 
-- [ ] T003 [P] [US1] `app/tests/Controller/StatusControllerTest.php` の `testHeadMetaOnAllPages` を書き換える：`twitter:card` = `summary_large_image`、`og:image` = `http://localhost/og-image.png`（テストのホスト。canonical と同じスキーム＋ホスト＋`/og-image.png` で比べる）、`og:image:type` = `image/png`、`og:image:width` = `1200`、`og:image:height` = `630`、`og:image:alt` = `鹿児島〜沖縄フェリー運航情報 - 青地にフェリーの絵とサイト名`（contracts/head-meta.md）
-- [ ] T004 [P] [US1] `app/tests/Controller/StatusControllerTest.php` に画像ファイルのテストを足す：`public/og-image.png`（`kernel.project_dir` から組み立てる）を `getimagesize()` で読み、1200×630・`IMAGETYPE_PNG`、`filesize()` が 300 * 1024 以下（SC-002）
-- [ ] T005 [P] [US1] `app/tests/Controller/ErrorPageTest.php` の `testNotFoundPageHeadMeta` で、404 のページにも `og:image`・`og:image:type`・`og:image:width`・`og:image:height`・`og:image:alt` が 1 件ずつあり、`twitter:card` が `summary_large_image` であることを確かめる
+- [X] T003 [P] [US1] `app/tests/Controller/StatusControllerTest.php` の `testHeadMetaOnAllPages` を書き換える：`twitter:card` = `summary_large_image`、`og:image` = `http://localhost/og-image.png`（テストのホスト。canonical と同じスキーム＋ホスト＋`/og-image.png` で比べる）、`og:image:type` = `image/png`、`og:image:width` = `1200`、`og:image:height` = `630`、`og:image:alt` = `鹿児島〜沖縄フェリー運航情報 - 青地にフェリーの絵とサイト名`（contracts/head-meta.md）
+- [X] T004 [P] [US1] `app/tests/Controller/StatusControllerTest.php` に画像ファイルのテストを足す：`public/og-image.png`（`kernel.project_dir` から組み立てる）を `getimagesize()` で読み、1200×630・`IMAGETYPE_PNG`、`filesize()` が 300 * 1024 以下（SC-002）
+- [X] T005 [P] [US1] `app/tests/Controller/ErrorPageTest.php` の `testNotFoundPageHeadMeta` で、404 のページにも `og:image`・`og:image:type`・`og:image:width`・`og:image:height`・`og:image:alt` が 1 件ずつあり、`twitter:card` が `summary_large_image` であることを確かめる
 
 ### 実装
 
-- [ ] T006 [US1] `app/config/packages/twig.yaml` の globals に `og_image_alt: '鹿児島〜沖縄フェリー運航情報 - 青地にフェリーの絵とサイト名'` を足す（data-model.md）
-- [ ] T007 [US1] `app/templates/base.html.twig` の `og:site_name` の後に `og:image`（`{{ app.request.schemeAndHttpHost }}/og-image.png`）・`og:image:type`・`og:image:width`・`og:image:height`・`og:image:alt`（`{{ og_image_alt }}`）を足し、`twitter:card` を `summary_large_image` にする。上のコメントに og:image もリクエストのホストを使う旨を足す（research R4・R5）。depends on T006
-- [ ] T008 [US1] `make test-php`・`make lint-php`・`make phpstan`・`make cs-php` を通す。ローカルで quickstart.md の「3. ローカルで確かめる」の curl 2 本を確かめる
+- [X] T006 [US1] `app/config/packages/twig.yaml` の globals に `og_image_alt: '鹿児島〜沖縄フェリー運航情報 - 青地にフェリーの絵とサイト名'` を足す（data-model.md）
+- [X] T007 [US1] `app/templates/base.html.twig` の `og:site_name` の後に `og:image`（`{{ app.request.schemeAndHttpHost }}/og-image.png`）・`og:image:type`・`og:image:width`・`og:image:height`・`og:image:alt`（`{{ og_image_alt }}`）を足し、`twitter:card` を `summary_large_image` にする。上のコメントに og:image もリクエストのホストを使う旨を足す（research R4・R5）。depends on T006
+- [X] T008 [US1] `make test-php`・`make lint-php`・`make phpstan`・`make cs-php` を通す。ローカルで quickstart.md の「3. ローカルで確かめる」の curl 2 本を確かめる
 
 **Checkpoint**: コミット `feat(app): 全ページに OG 画像を出す (10-og-image implement)`
 
