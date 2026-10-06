@@ -86,6 +86,31 @@ class IrregularStatusMailerTest extends TestCase
 TEXT, $body);
     }
 
+    /** 港の行が抜港のとき「抜港（告知の文）」と出て、状況の行には抜港が出ない（US2 シナリオ1） */
+    public function testSkippedPortIsLabeledSkipped(): void
+    {
+        $company = (new FerryCompany())->setName('マルエーフェリー');
+        $route   = (new Route())->setFerryCompany($company)->setName('航路')->setDirection(RouteDirectionEnum::Down);
+        $status  = (new OperationStatus())
+            ->setRoute($route)
+            ->setStatus(OperationStatusEnum::Operating)
+            ->setValidDate(new \DateTime('2026-10-06'));
+        $items = [new IrregularService($company, $route, new \DateTimeImmutable('2026-10-06'), $status, [
+            new IrregularPort('与論', 'フェリー波之上', null, OperationStatusEnum::Skipped, '10月6日(火)与論港 抜港'),
+        ])];
+
+        $sent      = [];
+        $transport = $this->createMock(MailerInterface::class);
+        $transport->method('send')->willReturnCallback(static function (Email $email) use (&$sent): void {
+            $sent[] = $email;
+        });
+        $this->mailer($transport)->send($items);
+
+        $body = (string) $sent[0]->getTextBody();
+        $this->assertStringContainsString('    - 与論 フェリー波之上：抜港（10月6日(火)与論港 抜港）', $body);
+        $this->assertStringContainsString('  状況　: 通常運航（途中の港に変更あり）', $body);
+    }
+
     /**
      * @return iterable<string, array{int}>
      */

@@ -4,8 +4,9 @@
 誤判定より取りこぼしを選ぶ（拾えなければ船ステータスで表示する）。
 
 - 対象は鹿児島航路ページの抜粋と、船別詳細ページの h4 の後〜定型の注意書き（「台風の影響や」の段落）の手前
-- 文（「。」と改行）ごとに見る。仮定・案内の文（「場合」「ことがあります」「可能性」「問い合わせ」）は除外
-- 抜港 → skip、港変更・寄港地変更・「A港からB港へ／に」→ change（B が変更先）、条件付 → conditional
+- 文（「。」と改行）ごとに見る。港名・キーワードは、括弧書き（「和泊港(沖永良部島)」の島名など）を取り除いた文で探す
+  （括弧の中の島名が港の別名に当たったり、列挙が切れたりするため）。根拠として残す文（sentence）は元の文のまま。仮定・案内の文（「場合」「ことがあります」「可能性」「問い合わせ」）は除外
+- 抜港・「寄港いたしません」・寄港の取りやめ／見合わせ／中止 → skip、港変更・寄港地変更・「A港からB港へ／に」→ change（B が変更先）、条件付 → conditional
 - 対象の港は読点で区切った節ごとに決める
   - キーワードのある節：キーワードの直前の港と、それに「・」「と」でつながる港
     （「与論港は抜港して那覇港へ」なら与論だけ、「鹿児島新港を出港後与論港は抜港」も与論だけ）。
@@ -32,6 +33,13 @@ _HYPOTHETICAL = ("場合", "ことがあります", "可能性", "問い合わ�
 # 港名は漢字・カタカナだけで書かれる。ひらがなを含めると「鹿児島新港を出港後亀徳港から」のように
 # 前の文まで巻き込んで、変更元の港を取り違えるため
 _CHANGE_ROUTE = re.compile(r"([一-龥々ァ-ヶー]+?港)から([一-龥々ァ-ヶー]+?港)(?:へ|に)")
+# 「寄港しない場合があります」のような仮定は _HYPOTHETICAL で除外される
+_SKIP_PATTERN = re.compile(
+    r"抜港"
+    r"|寄港(?:いたし|致し|し)ません"
+    r"|寄港(?:を|は)?(?:取りやめ|取り止め|とりやめ|見合わせ|中止)"
+)
+_PARENTHESES = re.compile(r"\([^()]*\)|（[^（）]*）")
 _PRIORITY = {"skip": 3, "change": 2, "conditional": 1}
 # 港名の直後にこれが付いていたら、便・航路の説明（「鹿児島新港発の便」「鹿児島航路」）
 _VOYAGE_SUFFIXES = ("発", "着", "向け", "行き", "行", "航路")
@@ -104,7 +112,8 @@ def _kinds(text: str) -> list[str]:
 def _keyword_pos(text: str, kind: str) -> int | None:
     """節の中でその種類のキーワードが出てくる位置（無ければ None）。"""
     if kind == "skip":
-        positions = [text.find("抜港")]
+        m = _SKIP_PATTERN.search(text)
+        positions = [m.start() if m else -1]
     elif kind == "change":
         positions = [text.find("港変更"), text.find("寄港地変更")]
         m = _CHANGE_ROUTE.search(text)
@@ -116,7 +125,8 @@ def _keyword_pos(text: str, kind: str) -> int | None:
     return min(positions) if positions else None
 
 
-def _sentence_notices(sentence: str, resolver: PortResolver) -> list[PortNotice]:
+def _sentence_notices(original: str, resolver: PortResolver) -> list[PortNotice]:
+    sentence = _PARENTHESES.sub("", original)
     if not _kinds(sentence):
         return []
 
@@ -164,7 +174,7 @@ def _sentence_notices(sentence: str, resolver: PortResolver) -> list[PortNotice]
                     port_id=port.id,
                     kind=kind,
                     change_to=change_to.get(port.id) if kind == "change" else None,
-                    sentence=sentence,
+                    sentence=original,
                 )
             )
     return notices

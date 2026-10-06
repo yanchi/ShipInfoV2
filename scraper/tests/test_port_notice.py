@@ -175,3 +175,65 @@ def test_keyword_targets_only_adjacent_ports(resolver, text, expected):
     """キーワードの直前（無ければ直後）の港と、それに列挙でつながる港だけを対象にする。"""
     found = _names(extract_port_notices(text, resolver), resolver)
     assert {name: (n.kind, n.change_to) for name, n in found.items()} == expected
+
+
+# ---------------------------------------------------------------------------
+# 抜港の言い回し・括弧書き（specs/9-marue-port-skip research R2・R3）
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "与論港には寄港いたしません。",
+        "与論港には寄港致しません。",
+        "与論港には寄港しません。",
+        "与論港への寄港を取りやめます。",
+        "与論港への寄港を取り止めます。",
+        "与論港の寄港は見合わせます。",
+        "与論港は寄港中止。",
+    ],
+)
+def test_skip_expressions(resolver, text):
+    notices = _names(extract_port_notices(text, resolver), resolver)
+    assert list(notices) == ["与論"]
+    assert notices["与論"].kind == "skip"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "※和泊港(沖永良部島)・与論港(与論島)には寄港いたしません。",
+        "※和泊港（沖永良部島）・与論港（与論島）には寄港いたしません。",
+    ],
+)
+def test_skip_list_with_parentheses(resolver, text):
+    notices = _names(extract_port_notices(text, resolver), resolver)
+    assert set(notices) == {"和泊", "与論"}
+    assert all(n.kind == "skip" for n in notices.values())
+    assert all(
+        n.sentence == text.rstrip("。") for n in notices.values()
+    )  # 括弧を残した元の文
+
+
+def test_comma_inside_parentheses_does_not_split_clause(resolver):
+    text = "スケジュール変更および条件付き運航(港変更や抜港、入出港時間などの変更を含む)といたします"
+    assert extract_port_notices(text, resolver) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "天候により与論港に寄港しない場合があります。",
+        "与論港に寄港しないことがあります。",
+    ],
+)
+def test_hypothetical_skip_is_ignored(resolver, text):
+    assert extract_port_notices(text, resolver) == []
+
+
+def test_skip_wins_over_conditional_and_same_port_is_one_notice(resolver):
+    text = "※条件付寄港地 : 与論港。\n10月6日(火)与論港 抜港。\n与論港には寄港いたしません。"
+    notices = extract_port_notices(text, resolver)
+    assert len(notices) == 1
+    assert notices[0].kind == "skip"

@@ -30,8 +30,9 @@ CSS class → status mapping (div.status_single_cover・詳細ページの div.s
     route alert         → delayed（航行経路変更。運航はする）
     cancel alert        → cancelled（欠航）
     alert だけ          → cancelled（2026-03 時点の一覧の欠航）
-    no_status           → cancelled（詳細ページの港のみ。「―」寄港しません＝抜港。
+    no_status           → skipped（詳細ページの港のみ。「―」寄港しません＝抜港。便が欠航・運休ならそちら。
                           2025-10〜2026-10 の1年分では、航行経路変更の便にだけ出ていた）
+    ※ skipped は港の行（departure_statuses）だけ。航路単位（operation_statuses）には書かない
     それ以外            → unknown（読み飛ばすと前回のステータスが残るので書く）
     ※「運航遅延」は見出しの【】に出るだけで、港のクラスは conditional・route だった（同じ1年分）
 
@@ -298,11 +299,16 @@ class MarixLine(BaseScraper):
                 self._log.warning("detail_port_not_in_stops", url=url, port=name)
                 continue
             classes = single.get("class", [])
-            status = (
-                OperationStatusEnum.cancelled
-                if _SKIPPED_PORT_CLASS in classes
-                else self._parse_status_from_classes(classes)
-            )
+            if _SKIPPED_PORT_CLASS in classes:
+                # 便全体が欠航・運休のときは抜港ではなく便のステータス（FR-005）
+                status = (
+                    voyage_status
+                    if voyage_status
+                    in (OperationStatusEnum.cancelled, OperationStatusEnum.suspended)
+                    else OperationStatusEnum.skipped
+                )
+            else:
+                status = self._parse_status_from_classes(classes)
             if status is None:
                 self._log.warning(
                     "detail_status_unknown",

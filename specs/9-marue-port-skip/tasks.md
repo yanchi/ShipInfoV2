@@ -61,22 +61,22 @@
 
 ### Tests for User Story 1（画面）
 
-- [ ] T007 [P] [US1] `app/tests/View/PortBoardEntryTest.php` に、`status = Skipped`（state = Status）の行で `isAlert()` が true、予定出港時刻を過ぎた `$now` でも `isDeparted()` が false になるケースを足す（FR-002・FR-009）
-- [ ] T008 [P] [US1] `app/tests/Service/PortAlertSummaryBuilderTest.php` に、`skipped` の港の行が異常の要約（トップの「欠航・条件付などの便」）に入るケースを足す（US1 シナリオ4）
-- [ ] T009 [P] [US1] `app/tests/Controller/StatusControllerTest.php` に、`skipped` の港の行があるとき、港別ページ（`/ports`）・トップ（`/`）に `≫ 抜港` が出て行に `port-entry--skipped` が付くこと、注意書き「出港時間・寄港地が変更になってる可能性があるので公式サイトをご確認ください」が出ること、「ステータスの見かた」に `≫ 抜港` と「船は運航するが、この港には寄らない」があること、会社カード（航路単位）には `抜港` が出ないことを確かめるケースを足す（contracts/ui-status.md。既存のテストデータの作り方に合わせる）
+- [X] T007 [P] [US1] `app/tests/View/PortBoardEntryTest.php` に、`status = Skipped`（state = Status）の行で `isAlert()` が true、予定出港時刻を過ぎた `$now` でも `isDeparted()` が false になるケースを足す（FR-002・FR-009）
+- [X] T008 [P] [US1] `app/tests/Service/PortAlertSummaryBuilderTest.php` に、`skipped` の港の行が異常の要約（トップの「欠航・条件付などの便」）に入るケースを足す（US1 シナリオ4）
+- [X] T009 [P] [US1] `app/tests/Controller/StatusControllerTest.php` に、`skipped` の港の行があるとき、港別ページ（`/ports`）・トップ（`/`）に `≫ 抜港` が出て行に `port-entry--skipped` が付くこと、注意書き「出港時間・寄港地が変更になってる可能性があるので公式サイトをご確認ください」が出ること、「ステータスの見かた」に `≫ 抜港` と「船は運航するが、この港には寄らない」があること、会社カード（航路単位）には `抜港` が出ないことを確かめるケースを足す（contracts/ui-status.md。既存のテストデータの作り方に合わせる）
 
 ### Implementation for User Story 1（画面）
 
-- [ ] T010 [US1] `app/src/View/PortBoardEntry.php` の `isAlert()` の配列に `OperationStatusEnum::Skipped` を足す。`isDeparted()` は変えない（`isAlert()` の行を除外しているので抜港も出港済みにならない。data-model §5）
-- [ ] T011 [P] [US1] `app/templates/status/_status_badge.html.twig` に `delayed` と `cancelled` の分岐のあいだで `{%- elseif status.value == 'skipped' -%}<span class="status-badge status-badge--skipped">≫ {{ status.label() }}</span>` を足す（research R8）
-- [ ] T012 [P] [US1] `app/templates/status/_status_legend.html.twig` の一覧で、Delayed と Cancelled のあいだに `{status: constant('App\\Enum\\OperationStatusEnum::Skipped'), note: '船は運航するが、この港には寄らない'}` を足す。冒頭コメントの「8種類」を「9種類」にし、参照先に `specs/9-marue-port-skip/contracts/ui-status.md` を足す
-- [ ] T013 [P] [US1] `app/templates/status/_status_warning.html.twig` の条件に `status.value == 'skipped'` を足し、冒頭コメントの「cancelled・delayed のときだけ出す」を「cancelled・delayed・skipped」にする（contracts/ui-status.md「注意書き」）
-- [ ] T014 [P] [US1] `app/templates/_site_styles.html.twig` に `.status-badge--skipped { background: #ffe0c2; color: #8a3b00; }`（`--delayed` の下）と `.port-entry--skipped { border-left-color: #8a3b00; background: #fff3e8; }`（`.port-entry--delayed` の下）を足す（research R8）
-- [ ] T015 [P] [US1] `app/src/DataFixtures/AppFixtures.php` に、今日〜3日先のどれかの港の行を `OperationStatusEnum::Skipped`（詳細テキスト例：「10月6日(火)与論港 抜港」）で1件足す（画面確認用。既存のサンプル行の作り方に合わせる）
+- [X] T010 [US1] `app/src/View/PortBoardEntry.php` の `isAlert()` の配列に `OperationStatusEnum::Skipped` を足す。`isDeparted()` は変えない（`isAlert()` の行を除外しているので抜港も出港済みにならない。data-model §5）
+- [X] T011 [P] [US1] `app/templates/status/_status_badge.html.twig` に `delayed` と `cancelled` の分岐のあいだで `{%- elseif status.value == 'skipped' -%}<span class="status-badge status-badge--skipped">≫ {{ status.label() }}</span>` を足す（research R8）
+- [X] T012 [P] [US1] `app/templates/status/_status_legend.html.twig` の一覧で、Delayed と Cancelled のあいだに `{status: constant('App\\Enum\\OperationStatusEnum::Skipped'), note: '船は運航するが、この港には寄らない'}` を足す。冒頭コメントの「8種類」を「9種類」にし、参照先に `specs/9-marue-port-skip/contracts/ui-status.md` を足す
+- [X] T013 [P] [US1] `app/templates/status/_status_warning.html.twig` の条件に `status.value == 'skipped'` を足し、冒頭コメントの「cancelled・delayed のときだけ出す」を「cancelled・delayed・skipped」にする（contracts/ui-status.md「注意書き」）
+- [X] T014 [P] [US1] `app/templates/_site_styles.html.twig` に `.status-badge--skipped { background: #ffe0c2; color: #8a3b00; }`（`--delayed` の下）と `.port-entry--skipped { border-left-color: #8a3b00; background: #fff3e8; }`（`.port-entry--delayed` の下）を足す（research R8）
+- [X] T015 [P] [US1] `app/src/DataFixtures/AppFixtures.php` に、今日〜3日先のどれかの港の行を `OperationStatusEnum::Skipped`（詳細テキスト例：「10月6日(火)与論港 抜港」）で1件足す（画面確認用。既存のサンプル行の作り方に合わせる）
 
 ### Tests for User Story 1（マルエー）
 
-- [ ] T016 [US1] `scraper/tests/test_marue_ferry.py` に、保存版 `kagoshima_20261006.html`・`ship_detail_naminoue_20261006.html` を読ませるテストを足す。準備は helper（例：`mock_20261006()`）にまとめ、T024・T027・T029 でも使う
+- [X] T016 [US1] `scraper/tests/test_marue_ferry.py` に、保存版 `kagoshima_20261006.html`・`ship_detail_naminoue_20261006.html` を読ませるテストを足す。準備は helper（例：`mock_20261006()`）にまとめ、T024・T027・T029 でも使う
   - 時刻：`fixed_now(datetime(2026, 10, 6, 9, 28))`（保存した時刻。今の便＝10/6 18:20 那覇着の下り便が「まだ着いていない一番早い便」になる）
   - 鹿児島航路ページ：`kagoshima_20261006.html` を `KAGOSHIMA_URL` で返す
   - 船別詳細ページ：波之上は保存版の URL `https://www.aline-ferry.com/status/route-kagoshima/ferry-naminoue/22921/` で `ship_detail_naminoue_20261006.html` を返す（`mock_kagoshima()` がモックする `14640` ではない）。あけぼの（`21525`）は `ship_detail_normal.html`
@@ -89,7 +89,7 @@
 
 ### Implementation for User Story 1（マルエー）
 
-- [ ] T017 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `_current_voyage_status()` で、`notice.kind == "skip"` のときを `OperationStatusEnum.cancelled` → `OperationStatusEnum.skipped` にする（data-model §4 の3。船が `cancelled` / `suspended` / `no_service` のときは今どおり船のステータスを先に返す。FR-005）。モジュール docstring の「抜港 → cancelled」を「抜港 → skipped」にする（T016 の後）
+- [X] T017 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `_current_voyage_status()` で、`notice.kind == "skip"` のときを `OperationStatusEnum.cancelled` → `OperationStatusEnum.skipped` にする（data-model §4 の3。船が `cancelled` / `suspended` / `no_service` のときは今どおり船のステータスを先に返す。FR-005）。モジュール docstring の「抜港 → cancelled」を「抜港 → skipped」にする（T016 の後）
 
 **Checkpoint**: PHPUnit で抜港のバッジ・異常の要約・出港済みにならない・凡例・注意書きが通る。pytest で保存版の和泊・与論が `skipped` になる。既存テストが全部通る → コミット
 
@@ -101,9 +101,9 @@
 
 **Independent Test**: `make test-php` で T018〜T019 が通る。`skipped` の行がある状態で `make notify-dry-run` を動かし、その行が「…：抜港（…）」と出る
 
-- [ ] T018 [P] [US2] `app/tests/Service/IrregularServiceCollectorTest.php` に、航路単位が `operating` で港の行だけ `skipped` の (航路, 日付) が通知の対象に入り、港の行の状態が `Skipped` になるケースを足す（US2 シナリオ1。`findIrregularBetween()` が `irregularCases()` から `skipped` を拾うことの確認）
-- [ ] T019 [P] [US2] `app/tests/Service/IrregularStatusMailerTest.php` に、港の行が `skipped` のとき本文が `- 与論 フェリー波之上：抜港（10月6日(火)与論港 抜港）` の形になるケースを足す（contracts/notification-mail.md の例。「状況」の行には抜港が出ないこと）
-- [ ] T020 [US2] T018・T019 が Phase 2 の enum の変更だけで通ることを確かめる。通らなければ `app/src/Service/IrregularServiceCollector.php`・`app/templates/email/` の通知テンプレートで `status.value` を直接見て分岐している所を探し、`label()`・`isIrregular()` を使うように直す（テンプレートの書き方は変えない）
+- [X] T018 [P] [US2] `app/tests/Service/IrregularServiceCollectorTest.php` に、航路単位が `operating` で港の行だけ `skipped` の (航路, 日付) が通知の対象に入り、港の行の状態が `Skipped` になるケースを足す（US2 シナリオ1。`findIrregularBetween()` が `irregularCases()` から `skipped` を拾うことの確認）
+- [X] T019 [P] [US2] `app/tests/Service/IrregularStatusMailerTest.php` に、港の行が `skipped` のとき本文が `- 与論 フェリー波之上：抜港（10月6日(火)与論港 抜港）` の形になるケースを足す（contracts/notification-mail.md の例。「状況」の行には抜港が出ないこと）
+- [X] T020 [US2] T018・T019 が Phase 2 の enum の変更だけで通ることを確かめる。通らなければ `app/src/Service/IrregularServiceCollector.php`・`app/templates/email/` の通知テンプレートで `status.value` を直接見て分岐している所を探し、`label()`・`isIrregular()` を使うように直す（テンプレートの書き方は変えない）
 
 **Checkpoint**: 通知のテストが通る。`make notify-dry-run` で抜港の行が「抜港」と出る → コミット
 
@@ -117,7 +117,7 @@
 
 ### Tests
 
-- [ ] T021 [US1] `scraper/tests/test_marix_line.py` を直す・足す
+- [X] T021 [US1] `scraper/tests/test_marix_line.py` を直す・足す
   - `downstream_route_change.html` の `no_status` の港の行 → `skipped`、`status_detail` に「寄港しません」が入る（今 `cancelled` を期待しているテストを直す。US1 シナリオ2、FR-008）
   - `downstream_cancel.html` の全港 → `cancelled` のまま、`skipped` が0件（SC-003）
   - 一覧の便のステータスが `cancelled`（または `suspended`）で、詳細ページの一部の港だけ `no_status` の HTML をテストの中で作り（`downstream_route_change.html` の便を欠航に書き換える）、その港が `skipped` にならず便のステータスになる（FR-005）
@@ -125,7 +125,7 @@
 
 ### Implementation
 
-- [ ] T022 [US1] `scraper/scraper/scrapers/marix_line.py` の `_departures_from_detail()` で、`_SKIPPED_PORT_CLASS`（`no_status`）の港を、`voyage_status` が `cancelled` / `suspended` ならそのステータス、それ以外は `OperationStatusEnum.skipped` にする。詳細テキストは今と同じく `div.exp`。モジュール docstring の「no_status → cancelled」を「no_status → skipped（便が欠航・運休ならそちら）」にする（T021 の後）
+- [X] T022 [US1] `scraper/scraper/scrapers/marix_line.py` の `_departures_from_detail()` で、`_SKIPPED_PORT_CLASS`（`no_status`）の港を、`voyage_status` が `cancelled` / `suspended` ならそのステータス、それ以外は `OperationStatusEnum.skipped` にする。詳細テキストは今と同じく `div.exp`。モジュール docstring の「no_status → cancelled」を「no_status → skipped（便が欠航・運休ならそちら）」にする（T021 の後）
 
 **Checkpoint**: pytest が全部通る。港別ページでマルエーとマリックスの抜港が同じ「抜港」で出る → コミット
 
@@ -139,23 +139,23 @@
 
 ### Tests for User Story 3
 
-- [ ] T023 [P] [US3] `scraper/tests/test_port_notice.py` に足す
+- [X] T023 [P] [US3] `scraper/tests/test_port_notice.py` に足す
   - skip になる：「与論港には寄港いたしません」「与論港には寄港致しません」「与論港には寄港しません」「与論港への寄港を取りやめ」「与論港への寄港を取り止め」「与論港の寄港は見合わせ」「与論港は寄港中止」（US3 シナリオ2、research R2）
   - 括弧書き：「※和泊港(沖永良部島)・与論港(与論島)には寄港いたしません。」で和泊・与論の2港とも skip、`sentence` は括弧を残した元の文（US3 シナリオ1、research R3）。全角の「和泊港（沖永良部島）」でも同じ
   - 括弧の中の読点：「スケジュール変更および条件付き運航(港変更や抜港、入出港時間などの変更を含む)といたします」で港別情報が0件（research R3 の「結果は同じ」）
   - 仮定の文を除く：「天候により与論港に寄港しない場合があります」「与論港に寄港しないことがあります」で0件（US3 シナリオ3）
   - 同じ港が抜港と条件付寄港の両方に出たら skip、告知の「抜港」の行と「寄港いたしません」の文が同じ港なら1件（spec Edge Cases）
   - 既存の定型の注意書き（「抜港(港に接岸できず…)や港変更になることがあります」など）で0件のテストが今のまま通る
-- [ ] T024 [P] [US3] `scraper/tests/test_marue_ferry.py` に、`ship_detail_naminoue_20261006.html` から抜港の2行（「10月6日(火)和泊港 抜港」「10月6日(火)与論港 抜港」の `<p>`）をテストの中で取り除いた版（research R10。ファイルは増やさない）で、和泊発・与論発 → `skipped`、亀徳発 → `delayed`、`cancelled` 0件になるテストを足す（SC-001・FR-010 の「寄港いたしません」だけ版）
+- [X] T024 [P] [US3] `scraper/tests/test_marue_ferry.py` に、`ship_detail_naminoue_20261006.html` から抜港の2行（「10月6日(火)和泊港 抜港」「10月6日(火)与論港 抜港」の `<p>`）をテストの中で取り除いた版（research R10。ファイルは増やさない）で、和泊発・与論発 → `skipped`、亀徳発 → `delayed`、`cancelled` 0件になるテストを足す（SC-001・FR-010 の「寄港いたしません」だけ版）
 
 ### Implementation for User Story 3
 
-- [ ] T025 [US3] `scraper/scraper/utils/port_notice.py` を直す（T023 の後）
+- [X] T025 [US3] `scraper/scraper/utils/port_notice.py` を直す（T023 の後）
   - `_SKIP_PATTERN = re.compile(r"抜港|寄港(?:いたし|致し|し)ません|寄港(?:を|は)?(?:取りやめ|取り止め|とりやめ|見合わせ|中止)")` を足す（research R2）
   - `_keyword_pos(text, "skip")` を `_SKIP_PATTERN.search(text)` の開始位置にし、`_kinds()` の skip の判定も同じ正規表現にする
   - `_strip_parentheses(sentence)`：`\([^()]*\)` と `（[^（）]*）` を消す（入れ子は考えない）。`extract_port_notices()` で仮定の文の判定の後にかけ、`_sentence_notices()` には括弧を取った文で港・キーワードを探させ、`PortNotice.sentence` には元の文を入れる（plan「port_notice.py」）
   - モジュール docstring の「抜港 → skip」を、増やした表現と括弧書きの扱いに合わせて書き直す
-- [ ] T026 [US3] T024 が通ることを確かめる。通らなければ `marue_ferry.py` の `_ship_notices()` の告知の組み立て（抜粋＋詳細本文）を見直す（T025 の後）
+- [X] T026 [US3] T024 が通ることを確かめる。通らなければ `marue_ferry.py` の `_ship_notices()` の告知の組み立て（抜粋＋詳細本文）を見直す（T025 の後）
 
 **Checkpoint**: pytest が全部通る（既存の誤検出0件のテストを含む）→ コミット
 
@@ -169,7 +169,7 @@
 
 ### Tests for User Story 4
 
-- [ ] T027 [US4] `scraper/tests/test_marue_ferry.py` に足す
+- [X] T027 [US4] `scraper/tests/test_marue_ferry.py` に足す
   - 保存版 `kagoshima_20261006.html` のフェリー波之上：`ShipInfo` が `status=delayed`・`conditional=True`・`schedule_changed=True`（US4 シナリオ1）
   - 同じ船ブロックのタグの順を入れ替えた HTML（テストの中で書き換える）で、`ShipInfo` と全港の判定が同じ（US4 シナリオ2、SC-004）
   - 「欠航」＋「条件付運航」のタグの船 → `status=cancelled`、その便の全港が `cancelled`、`skipped` 0件（US4 シナリオ3、SC-003）
@@ -178,7 +178,7 @@
 
 ### Implementation for User Story 4
 
-- [ ] T028 [US4] `scraper/scraper/scrapers/marue_ferry.py` を直す（T027 の後）
+- [X] T028 [US4] `scraper/scraper/scrapers/marue_ferry.py` を直す（T027 の後）
   - `ShipInfo` に `schedule_changed: bool = False` を足す（data-model §2）
   - `_parse_ships()`：`block.select_one("div.tag-list span")` を `block.select("div.tag-list span")` にして全部読む。`status` は読めたタグのうち `_SEVERITY` で一番重いもの（1つも読めなければ None）、`conditional` はどれか1つに「条件付」、`schedule_changed` はどれか1つに「遅延」か「スケジュール変更」。読めないタグは `unknown_status_text` の warning を出して無視する（research R4）
   - `_current_voyage_status()`：「条件付の船で告知がどれかの港にあれば、言及の無い港は `operating`」を `ship.conditional and not ship.schedule_changed` のときだけにする（data-model §4 の5）
@@ -195,7 +195,7 @@
 
 ### Tests
 
-- [ ] T029 [US1] `scraper/tests/test_marue_ferry.py` に足す（便検索の HTML は `search_ship.html`・`search_empty.html` をもとにテストの中で作る）
+- [X] T029 [US1] `scraper/tests/test_marue_ferry.py` に足す（便検索の HTML は `search_ship.html`・`search_empty.html` をもとにテストの中で作る）
   - マルエーの行の出港日時が「－」：`_search()` が None でなく日時 None の行を返し、`search_datetime_missing` の warning が出る
   - 上の行で、今の便が同じ船・同じ航路にあり、その港が抜港で、出港日が合う → `skipped`・`departure_at`/`arrival_at` が None、`status_detail` に抜港の告知の文
   - 同じ条件で出港日が合わない（例：今の便は 10/6 着なのに、10/8 の検索で日時「－」の行）→ その行は書かない。`skipped` にならない
@@ -205,13 +205,13 @@
 
 ### Implementation
 
-- [ ] T030 [US1] `scraper/scraper/scrapers/marue_ferry.py` を直す（T029 の後。data-model §4「マルエーの便検索に日時・便が無い港」）
+- [X] T030 [US1] `scraper/scraper/scrapers/marue_ferry.py` を直す（T029 の後。data-model §4「マルエーの便検索に日時・便が無い港」）
   - `_search()`：マルエーの行で日時が読めないとき、`return None` をやめて `departure_at=arrival_at=None` の `SearchRow` を残し、warning 名を `search_datetime_missing` にする。他社の行の扱いは変えない
   - `parse_departures()`：日時 None の行は、その船の今の便（`current_voyage`）が同じ航路にあり、その港が skip の告知で、出港日がキーの日付と合うなら `skipped`（時刻なし、詳細は告知の文）。それ以外は書かない
   - 「今の便で、この港・この日の抜港か」の判定は、日時 None の行と0件のキーで同じ関数にする（例：`_skipped_on_current_voyage(ship_name, route_id, port_id, d) -> str | None`。抜港なら告知の文を返す）
   - `parse_departures()`：0件のキーで、今の便が同じ航路にあり、その港が skip の告知で、出港日 ＝ 今の便の下船日 −（終点の `day_offset` − その港の `day_offset`）がキーの日付と合うなら `skipped`（船名つき・時刻なし、`status_detail` は告知の文。FR-008）。`operated_by_company_id` は None。それ以外は今の `no_service`
   - モジュール docstring に日時なし・0件の抜港の扱いを書き足す
-- [ ] T031 [US1] `app/tests/View/PortBoardEntryTest.php`（または `app/tests/Service/PortBoardBuilderTest.php`）に、`skipped` で `departureAt` が null の行が「抜港」として出て `isDeparted()` が false になるケースを足す。落ちたら `app/src/View/PortBoardEntry.php`・`app/templates/status/_port_entry.html.twig` で時刻なしの行の扱いを直す
+- [X] T031 [US1] `app/tests/View/PortBoardEntryTest.php`（または `app/tests/Service/PortBoardBuilderTest.php`）に、`skipped` で `departureAt` が null の行が「抜港」として出て `isDeparted()` が false になるケースを足す。落ちたら `app/src/View/PortBoardEntry.php`・`app/templates/status/_port_entry.html.twig` で時刻なしの行の扱いを直す
 
 **Checkpoint**: pytest・PHPUnit が全部通る → コミット
 
@@ -219,9 +219,9 @@
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T032 [P] `specs/5-ui-readability/contracts/ui-status.md` の状態の表に、条件付・遅延と欠航のあいだで抜港の行（`≫`・抜港・オレンジの塗り・異常の要約に入る・出港済みにしない）を足し、`specs/9-marue-port-skip/contracts/ui-status.md` へのリンクを付ける
-- [ ] T033 [P] `scraper/scraper/scrapers/marue_ferry.py`・`marix_line.py`・`scraper/scraper/utils/port_notice.py` の docstring・コメントに `cancelled` で抜港を表す古い記述が残っていないか `grep -n "抜港" scraper/scraper` で確かめて直す
-- [ ] T034 全部のチェックを通す：`make test-php`・`make test-scraper`・`make phpstan`・`make cs-php`・`make lint-php`・`make lint-scraper`・`make check-schema`・`make verify-prod`
+- [X] T032 [P] `specs/5-ui-readability/contracts/ui-status.md` の状態の表に、条件付・遅延と欠航のあいだで抜港の行（`≫`・抜港・オレンジの塗り・異常の要約に入る・出港済みにしない）を足し、`specs/9-marue-port-skip/contracts/ui-status.md` へのリンクを付ける
+- [X] T033 [P] `scraper/scraper/scrapers/marue_ferry.py`・`marix_line.py`・`scraper/scraper/utils/port_notice.py` の docstring・コメントに `cancelled` で抜港を表す古い記述が残っていないか `grep -n "抜港" scraper/scraper` で確かめて直す
+- [X] T034 全部のチェックを通す：`make test-php`・`make test-scraper`・`make phpstan`・`make cs-php`・`make lint-php`・`make lint-scraper`・`make check-schema`・`make verify-prod`
 - [ ] T035 quickstart.md の「画面で見る」「通知メールで見る」の手順で確かめる（`make up` → `make migrate` → `departure_statuses` の1行を `skipped` に → `/`・`/ports`・`/company/{id}` と `make notify-dry-run`）
 - [ ] T036 PR の説明に research R5（条件付＋スケジュール変更の船で言及の無い港を `delayed` にする理由）と、過去の `cancelled` の行はさかのぼって直さないこと（data-model §6）を書く
 

@@ -11,7 +11,7 @@ class PortBoardEntryTest extends TestCase
 {
     public function testIsAlert(): void
     {
-        foreach ([OperationStatusEnum::Cancelled, OperationStatusEnum::Delayed, OperationStatusEnum::Suspended] as $status) {
+        foreach ([OperationStatusEnum::Cancelled, OperationStatusEnum::Delayed, OperationStatusEnum::Skipped, OperationStatusEnum::Suspended] as $status) {
             $this->assertTrue($this->statusEntry($status)->isAlert(), $status->value);
         }
         foreach ([OperationStatusEnum::Operating, OperationStatusEnum::Unknown, OperationStatusEnum::NoService] as $status) {
@@ -33,11 +33,20 @@ class PortBoardEntryTest extends TestCase
         $scheduled = new PortBoardEntry(DepartureDisplayStateEnum::Scheduled, departureAt: $departure);
         $this->assertTrue($scheduled->isDeparted(new \DateTimeImmutable('2026-10-01 06:00')));
 
-        foreach ([OperationStatusEnum::Delayed, OperationStatusEnum::Cancelled, OperationStatusEnum::Suspended] as $status) {
+        foreach ([OperationStatusEnum::Delayed, OperationStatusEnum::Skipped, OperationStatusEnum::Cancelled, OperationStatusEnum::Suspended] as $status) {
             $this->assertFalse($this->statusEntry($status, $departure)->isDeparted(new \DateTimeImmutable('2026-10-01 06:00')), $status->value);
         }
 
         $this->assertFalse($this->statusEntry(OperationStatusEnum::Operating)->isDeparted(new \DateTimeImmutable('2026-10-01 06:00')));
+    }
+
+    /** 時刻の無い抜港の行も抜港として出て、出港済みにならない（FR-009） */
+    public function testSkippedWithoutDepartureTimeIsAlertAndNotDeparted(): void
+    {
+        $entry = $this->statusEntry(OperationStatusEnum::Skipped);
+
+        $this->assertTrue($entry->isAlert());
+        $this->assertFalse($entry->isDeparted(new \DateTimeImmutable('2026-10-01 23:00')));
     }
 
     public function testCheckedAtDiffersFrom(): void

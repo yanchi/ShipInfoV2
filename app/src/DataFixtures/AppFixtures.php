@@ -164,6 +164,11 @@ class AppFixtures extends Fixture
             $manager->persist($this->makeDeparture($route, $ports[$port], $tomorrow, '', OperationStatusEnum::NoService, operatedBy: $marix));
         }
 
+        // 明日の下り与論発は抜港（画面確認用）
+        if (isset($ports['与論'])) {
+            $manager->persist($this->makeDeparture($marueDown, $ports['与論'], $tomorrow, 'フェリー波之上', OperationStatusEnum::Skipped, null, null, '10月6日(火)与論港 抜港'));
+        }
+
         // 3日先の名瀬発はマルエーの運航予定
         $manager->persist($this->makeDeparture($marueDown, $ports['名瀬'], $day3, 'フェリーあけぼの', null, $day3->setTime(5, 50), $day3->setTime(19, 0)));
     }

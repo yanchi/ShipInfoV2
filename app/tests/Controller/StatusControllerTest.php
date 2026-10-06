@@ -236,6 +236,23 @@ class StatusControllerTest extends WebTestCase
         $this->assertCount(0, $this->findPortRow($crawler, 1, '名瀬')->filter('.status-warning'));
     }
 
+    /** 抜港は港別ページに ≫ 抜港 で出て、注意書きも付く。異常の要約にも入る（US1・FR-002） */
+    public function testPortsShowsSkippedBadgeAndWarning(): void
+    {
+        $this->createPortBoardData(OperationStatusEnum::Skipped);
+        $anchor = sprintf('r-%s-down-%d', (new \DateTimeImmutable('tomorrow'))->format('Y-m-d'), $this->portId('名瀬'));
+
+        $crawler = $this->client->request('GET', '/ports');
+
+        $this->assertResponseIsSuccessful();
+        $row = $this->findPortRow($crawler, 1, '名瀬');
+        $this->assertStringContainsString('≫ 抜港', $row->text());
+        $this->assertCount(1, $row->filter('.port-entry.port-entry--alert.port-entry--skipped'));
+        $this->assertCount(1, $row->filter('.status-warning'));
+        $this->assertCount(1, $crawler->filter(".alert-summary a[href=\"#{$anchor}\"]"));
+        $this->assertStringContainsString('≫ 抜港', $crawler->filter(".alert-summary a[href=\"#{$anchor}\"]")->text());
+    }
+
     public function testStatusWarningOnIndexCardAndCompanySummary(): void
     {
         $companyId = $this->createCompanyWithRoute('注意書きテスト会社', OperationStatusEnum::Cancelled);
@@ -613,7 +630,7 @@ class StatusControllerTest extends WebTestCase
 
         $legend = $crawler->filter('details.status-legend');
         $this->assertCount(1, $legend);
-        foreach (['✓ 通常運航', '○ 運航予定', '▲ 条件付・遅延', '✗ 欠航', '■ 運休', '— 便なし', '？ 情報なし', '？ 不明'] as $label) {
+        foreach (['✓ 通常運航', '○ 運航予定', '▲ 条件付・遅延', '≫ 抜港', '✗ 欠航', '■ 運休', '— 便なし', '？ 情報なし', '？ 不明'] as $label) {
             $this->assertStringContainsString($label, $legend->text());
         }
     }

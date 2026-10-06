@@ -31,7 +31,7 @@ enum OperationStatusEnum: string
     {
         return match ($this) {
             self::Delayed, self::Skipped, self::Cancelled, self::Suspended, self::Unknown => true,
-            self::Operating, self::NoService                                     => false,
+            self::Operating, self::NoService                                              => false,
         };
     }
 

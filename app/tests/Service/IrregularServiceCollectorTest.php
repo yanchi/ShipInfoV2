@@ -118,6 +118,19 @@ class IrregularServiceCollectorTest extends TestCase
         $this->assertNull($items[0]->detail());
     }
 
+    /** 航路単位が通常運航で港の行だけ抜港 → 通知の対象に入り、港の状態は Skipped（US2 シナリオ1） */
+    public function testNormalRouteWithSkippedPort(): void
+    {
+        $items = $this->collector->build(
+            [$this->operation($this->route, '2026-10-07', OperationStatusEnum::Operating)],
+            [$this->departure($this->route, '2026-10-07', '与論', OperationStatusEnum::Skipped, null, 'フェリー波之上', '10月7日(水)与論港 抜港')],
+        );
+
+        $this->assertCount(1, $items);
+        $this->assertSame('通常運航（途中の港に変更あり）', $items[0]->statusText());
+        $this->assertSame(OperationStatusEnum::Skipped, $items[0]->ports[0]->status);
+    }
+
     public function testPortOnlyWhenRouteRowMissingOrNoService(): void
     {
         $port = $this->departure($this->route, '2026-10-07', '名瀬', OperationStatusEnum::Cancelled);

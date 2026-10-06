@@ -33,9 +33,14 @@ MarueFerry (マルエーフェリー) scraper.
       船ステータス（＋港別情報）を入れる。それより後の便は status=None（運航予定）
     港別情報（FR-006、utils/port_notice.py）:
     - 船ステータスが欠航・運休・便なし → 全港そのまま
-    - 抜粋と船別詳細ページの本文から、言及された港を 抜港 → cancelled、港変更・条件付 → delayed にする
-    - 船が条件付（タグが「条件付」）で港別情報がある → 言及の無い港は operating。
-      港別情報が無い → 全港 delayed（port_notice_unmatched）。遅延・スケジュール変更の船は言及の無い港もそのまま
+    - 抜粋と船別詳細ページの本文から、言及された港を 抜港（寄港いたしません等）→ skipped、港変更・条件付 → delayed にする
+    - 船ブロックのタグは全部読む（一番重いものが船のステータス。条件付・スケジュール変更かどうかは別に持つ）
+    - 船が条件付だけ（スケジュール変更・遅延のタグが無い）で港別情報がある → 言及の無い港は operating。
+      港別情報が無い → 全港 delayed（port_notice_unmatched）。
+      スケジュール変更・遅延のタグもある船は言及の無い港も船のステータスのまま（時刻が変わっているため）
+    - 抜港の港の検索結果に日時が無い（「－」）・0件でも、今の便がその港を抜港とする日なら
+      skipped（時刻なし）の行を作る。「便なし」や行の欠落にしない
+    - skipped は港の行だけ。航路単位（operation_statuses）には書かない
     すべて freeze_after_departure=True（出港済みの行は確定）、replace_scope=(route, port, date)
 
 raw_html_hash: 鹿児島航路ページの HTML ＋ 今日の始発港2つの検索結果を正規化した文字列
@@ -99,8 +104,10 @@ class ShipInfo:
     status: OperationStatusEnum | None
     excerpt: str | None
     detail_url: str | None
-    # タグが「条件付」か。遅延・スケジュール変更も status は delayed になるので区別する（FR-006）
+    # どれかのタグが「条件付」か。遅延・スケジュール変更も status は delayed になるので区別する（FR-006）
     conditional: bool = False
+    # どれかのタグが「遅延」「スケジュール変更」か（言及の無い港も時刻が変わっている）
+    schedule_changed: bool = False
 
 
 class MarueFerry(BaseScraper):
@@ -268,13 +275,14 @@ class MarueFerry(BaseScraper):
             departure_at = _parse_search_datetime(dep_text)
             arrival_at = _parse_search_datetime(arr_text)
             if not is_other and (departure_at is None or arrival_at is None):
+                # 日時が読めない行も残す。抜港の港なら parse_departures() が skipped の行にする
                 self._log.warning(
-                    "search_datetime_parse_failed",
+                    "search_datetime_missing",
                     dep=dep_text,
                     arr=arr_text,
                     date=str(d),
                 )
-                return None
+                departure_at = arrival_at = None
             rows.append(
                 SearchRow(ship_name, company_name, is_other, departure_at, arrival_at)
             )
@@ -375,6 +383,7 @@ class MarueFerry(BaseScraper):
         if not searches:
             return []
         ships = getattr(self, "_ships", {})
+        self._ships_by_name = ships
         marix_id = self._marix_company_id()
         now = datetime.now()
         self._resolver = PortResolver.from_session(self.session)
@@ -399,6 +408,7 @@ class MarueFerry(BaseScraper):
             cur = current_voyage.get(ship_name)
             if cur is None or arrival_at < cur[1]:
                 current_voyage[ship_name] = (route_id, arrival_at)
+        self._current_voyage = current_voyage
 
         records: list[dict] = []
         for (route_id, port_id, d), rows in searches.items():
@@ -414,6 +424,10 @@ class MarueFerry(BaseScraper):
             }
             marue_rows = [r for r in rows if not r.is_other_company]
             if not marue_rows:
+                skipped = self._skipped_on_any_current_voyage(route_id, port_id, d)
+                if skipped is not None:
+                    records.append(self._skipped_record(base, *skipped))
+                    continue
                 other = next((r for r in rows if r.is_other_company), None)
                 records.append(
                     {
@@ -440,6 +454,23 @@ class MarueFerry(BaseScraper):
                     )
                     continue
                 seen_ships.add(row.ship_name)
+                if row.arrival_at is None:
+                    detail = self._skipped_on_current_voyage(
+                        row.ship_name, route_id, port_id, d
+                    )
+                    if detail is None:
+                        self._log.warning(
+                            "search_row_without_datetime_skipped",
+                            ship=row.ship_name,
+                            route_id=route_id,
+                            port_id=port_id,
+                            date=str(d),
+                        )
+                    else:
+                        records.append(
+                            self._skipped_record(base, row.ship_name, detail)
+                        )
+                    continue
                 if current_voyage.get(row.ship_name) == (route_id, row.arrival_at):
                     status, detail = self._current_voyage_status(
                         row.ship_name, ships, route_id, port_id
@@ -460,6 +491,66 @@ class MarueFerry(BaseScraper):
 
         self._log.info("parsed_departures", records=len(records))
         return records
+
+    @staticmethod
+    def _skipped_record(base: dict, ship_name: str, detail: str) -> dict:
+        """時刻なしの抜港の行。"""
+        return {
+            **base,
+            "ship_name": ship_name,
+            "status": OperationStatusEnum.skipped,
+            "status_detail": detail,
+            "scheduled_departure_at": None,
+            "scheduled_arrival_at": None,
+            "operated_by_company_id": None,
+        }
+
+    def _skipped_on_any_current_voyage(
+        self, route_id: int, port_id: int, d: date
+    ) -> tuple[str, str] | None:
+        """今の便のどれかが、この航路のこの港をこの日に抜港とするなら (船名, 告知の文)。"""
+        for ship_name in sorted(self._current_voyage):
+            detail = self._skipped_on_current_voyage(ship_name, route_id, port_id, d)
+            if detail is not None:
+                return ship_name, detail
+        return None
+
+    def _skipped_on_current_voyage(
+        self, ship_name: str, route_id: int, port_id: int, d: date
+    ) -> str | None:
+        """その船の今の便が同じ航路にあり、その港が抜港で、出港日が d なら告知の文（無ければ None）。
+
+        出港日 ＝ 今の便の下船日 −（終点の day_offset − その港の day_offset）
+        """
+        cur = self._current_voyage.get(ship_name)
+        if cur is None or cur[0] != route_id:
+            return None
+        ship = self._ships_by_name.get(ship_name)
+        if ship is None or ship.status in (
+            None,
+            OperationStatusEnum.cancelled,
+            OperationStatusEnum.suspended,
+            OperationStatusEnum.no_service,
+        ):
+            return None
+        notice = next(
+            (
+                n
+                for n in self._ship_notices(ship)
+                if n.port_id == port_id and n.kind == "skip"
+            ),
+            None,
+        )
+        if notice is None:
+            return None
+        stops = {s.port_id: s for s in self._stops.get(route_id, [])}
+        if port_id not in stops:
+            return None
+        end_offset = max(stops.values(), key=lambda s: s.stop_order).day_offset
+        departure_date = cur[1].date() - timedelta(
+            days=end_offset - stops[port_id].day_offset
+        )
+        return notice.sentence if departure_date == d else None
 
     def _recorded_voyages(
         self, now: datetime, searched: list[tuple[str, int, datetime]]
@@ -531,7 +622,7 @@ class MarueFerry(BaseScraper):
         notice = next((n for n in notices if n.port_id == port_id), None)
         if notice is not None:
             status = (
-                OperationStatusEnum.cancelled
+                OperationStatusEnum.skipped
                 if notice.kind == "skip"
                 else OperationStatusEnum.delayed
             )
@@ -539,7 +630,7 @@ class MarueFerry(BaseScraper):
             if notice.change_to and notice.change_to not in detail:
                 detail += f"（変更先：{notice.change_to}）"
             return status, detail
-        if ship.conditional and notices:
+        if ship.conditional and not ship.schedule_changed and notices:
             # 条件付の理由は言及された港にあるとみなす（遅延・スケジュール変更の船は全港そのまま）
             return OperationStatusEnum.operating, None
         return ship.status, self._ship_detail_text(ship)
@@ -571,18 +662,23 @@ class MarueFerry(BaseScraper):
             if block is None:
                 continue
             name = ferry_name_div.get_text(strip=True)
-            status = None
-            status_text = ""
-            tag_span = block.select_one("div.tag-list span")
-            if tag_span is None:
+            # タグは全部読む（並び順で結果が変わらないように。一番重いものが船のステータス）
+            statuses: list[OperationStatusEnum] = []
+            tag_texts: list[str] = []
+            tag_spans = block.select("div.tag-list span")
+            if not tag_spans:
                 self._log.warning("tag_span_not_found", ship=name)
-            else:
-                status_text = tag_span.get_text(strip=True)
-                status = self._parse_status_text(status_text)
-                if status is None:
-                    self._log.warning(
-                        "unknown_status_text", ship=name, text=status_text[:60]
-                    )
+            for tag_span in tag_spans:
+                text = tag_span.get_text(strip=True)
+                tag_status = self._parse_status_text(text)
+                if tag_status is None:
+                    self._log.warning("unknown_status_text", ship=name, text=text[:60])
+                    continue
+                statuses.append(tag_status)
+                tag_texts.append(text)
+            status = (
+                max(statuses, key=lambda s: _SEVERITY.get(s, 0)) if statuses else None
+            )
             excerpt_div = block.find("div", class_="situation-excerpt")
             excerpt = excerpt_div.get_text(strip=True) if excerpt_div else None
             ships[name] = ShipInfo(
@@ -590,7 +686,10 @@ class MarueFerry(BaseScraper):
                 status,
                 excerpt or None,
                 block.get("href"),
-                conditional="条件付" in status_text,
+                conditional=any("条件付" in t for t in tag_texts),
+                schedule_changed=any(
+                    "遅延" in t or "スケジュール変更" in t for t in tag_texts
+                ),
             )
         return ships
 
