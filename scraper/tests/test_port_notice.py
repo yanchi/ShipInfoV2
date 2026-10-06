@@ -237,3 +237,8 @@ def test_skip_wins_over_conditional_and_same_port_is_one_notice(resolver):
     notices = extract_port_notices(text, resolver)
     assert len(notices) == 1
     assert notices[0].kind == "skip"
+
+
+def test_skip_inside_parentheses_is_not_picked_up(resolver):
+    """括弧の中は読まない（取りこぼし優先。拾えなくても船のステータスで出る）。"""
+    assert extract_port_notices("条件付運航（与論港は抜港）", resolver) == []

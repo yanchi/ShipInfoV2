@@ -383,7 +383,6 @@ class MarueFerry(BaseScraper):
         if not searches:
             return []
         ships = getattr(self, "_ships", {})
-        self._ships_by_name = ships
         marix_id = self._marix_company_id()
         now = datetime.now()
         self._resolver = PortResolver.from_session(self.session)
@@ -525,7 +524,7 @@ class MarueFerry(BaseScraper):
         cur = self._current_voyage.get(ship_name)
         if cur is None or cur[0] != route_id:
             return None
-        ship = self._ships_by_name.get(ship_name)
+        ship = getattr(self, "_ships", {}).get(ship_name)
         if ship is None or ship.status in (
             None,
             OperationStatusEnum.cancelled,
