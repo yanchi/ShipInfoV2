@@ -31,8 +31,8 @@
 
 ## Phase 1: Setup
 
-- [X] T001 `9-marue-port-skip` ブランチで `make up` → `make test-php`・`make test-scraper` が全部通ることを確認してから始める
-- [X] T002 [P] `specs/9-marue-port-skip/samples/kagoshima_2026-10-06.html` を `scraper/tests/fixtures/marue/kagoshima_20261006.html` に、`specs/9-marue-port-skip/samples/naminoue_detail_2026-10-06.html` を `scraper/tests/fixtures/marue/ship_detail_naminoue_20261006.html` にコピーする（research R10。中身は変えない。`samples/` は証跡として残す）
+- [ ] T001 `9-marue-port-skip` ブランチで `make up` → `make test-php`・`make test-scraper` が全部通ることを確認してから始める
+- [ ] T002 [P] `specs/9-marue-port-skip/samples/kagoshima_2026-10-06.html` を `scraper/tests/fixtures/marue/kagoshima_20261006.html` に、`specs/9-marue-port-skip/samples/naminoue_detail_2026-10-06.html` を `scraper/tests/fixtures/marue/ship_detail_naminoue_20261006.html` にコピーする（research R10。中身は変えない。`samples/` は証跡として残す）
 
 **Checkpoint**: 既存テストが全部通る。fixture が2つ増えている → コミット
 
@@ -44,10 +44,10 @@
 
 **⚠️ CRITICAL**: この Phase が終わるまで US の実装を始めないこと
 
-- [X] T003 [P] `app/tests/Enum/OperationStatusEnumTest.php` に `Skipped` のケースを足す：`label()` が `抜港`、`isIrregular()` が true、`irregularCases()` に入る。既存の6つの値の `label()`・`isIrregular()` が変わっていないこと（FR-012）
-- [X] T004 `app/src/Enum/OperationStatusEnum.php` に `case Skipped = 'skipped';` を足す（`Delayed` と `Cancelled` のあいだ。data-model §1 の並び）。`label()` に `self::Skipped => '抜港'`、`isIrregular()` の true 側に `self::Skipped` を足す（T003 の後。research R1・R9）
-- [X] T005 [P] `scraper/scraper/db/models.py` の `OperationStatusEnum` に `skipped = "skipped"` を足す（`delayed` の下）。クラスの docstring かコメントに「港の行（`departure_statuses`）だけで使う。`operation_statuses` の ENUM には無い」と書く（FR-011）
-- [X] T006 `make check-schema` が通ることを確かめる（`departure_statuses.status` は String(32) なのでスキーマは変わらない。T005 の後）
+- [ ] T003 [P] `app/tests/Enum/OperationStatusEnumTest.php` に `Skipped` のケースを足す：`label()` が `抜港`、`isIrregular()` が true、`irregularCases()` に入る。既存の6つの値の `label()`・`isIrregular()` が変わっていないこと（FR-012）
+- [ ] T004 `app/src/Enum/OperationStatusEnum.php` に `case Skipped = 'skipped';` を足す（`Delayed` と `Cancelled` のあいだ。data-model §1 の並び）。`label()` に `self::Skipped => '抜港'`、`isIrregular()` の true 側に `self::Skipped` を足す（T003 の後。research R1・R9）
+- [ ] T005 [P] `scraper/scraper/db/models.py` の `OperationStatusEnum` に `skipped = "skipped"` を足す（`delayed` の下）。クラスの docstring かコメントに「港の行（`departure_statuses`）だけで使う。`operation_statuses` の ENUM には無い」と書く（FR-011）
+- [ ] T006 `make check-schema` が通ることを確かめる（`departure_statuses.status` は String(32) なのでスキーマは変わらない。T005 の後）
 
 **Checkpoint**: `make test-php`・`make phpstan`・`make test-scraper`・`make check-schema` が通る → コミット
 

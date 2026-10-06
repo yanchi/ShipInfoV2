@@ -28,9 +28,11 @@ class Base(DeclarativeBase):
 
 
 class OperationStatusEnum(str, enum.Enum):
+    # skipped は港の行（departure_statuses）だけで使う。operation_statuses の ENUM には無い
     operating = "operating"
     cancelled = "cancelled"
     delayed = "delayed"
+    skipped = "skipped"
     suspended = "suspended"
     unknown = "unknown"
     no_service = "no_service"

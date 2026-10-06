@@ -15,6 +15,7 @@ class OperationStatusEnumTest extends TestCase
     {
         yield 'operating' => [OperationStatusEnum::Operating, '通常運航', false];
         yield 'delayed' => [OperationStatusEnum::Delayed, '条件付・遅延', true];
+        yield 'skipped' => [OperationStatusEnum::Skipped, '抜港', true];
         yield 'cancelled' => [OperationStatusEnum::Cancelled, '欠航', true];
         yield 'suspended' => [OperationStatusEnum::Suspended, '運休', true];
         yield 'unknown' => [OperationStatusEnum::Unknown, '不明', true];
@@ -36,6 +37,6 @@ class OperationStatusEnumTest extends TestCase
         ));
 
         $this->assertSame($expected, OperationStatusEnum::irregularCases());
-        $this->assertCount(4, OperationStatusEnum::irregularCases());
+        $this->assertCount(5, OperationStatusEnum::irregularCases());
     }
 }
