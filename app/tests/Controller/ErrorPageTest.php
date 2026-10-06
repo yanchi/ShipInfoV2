@@ -32,9 +32,10 @@ class ErrorPageTest extends WebTestCase
         $title = $crawler->filter('title')->text();
         $this->assertSame('ページが見つかりません | 鹿児島〜沖縄フェリー運航状況', $title);
         $this->assertSame($title, $crawler->filter('meta[property="og:title"]')->attr('content'));
-        foreach (['meta[name="description"]', 'link[rel="canonical"]', 'meta[property="og:description"]', 'meta[property="og:url"]', 'meta[property="og:type"]', 'meta[property="og:site_name"]', 'meta[name="twitter:card"]'] as $selector) {
+        foreach (['meta[name="description"]', 'link[rel="canonical"]', 'meta[property="og:description"]', 'meta[property="og:url"]', 'meta[property="og:type"]', 'meta[property="og:site_name"]', 'meta[name="twitter:card"]', 'meta[property="og:image"]', 'meta[property="og:image:type"]', 'meta[property="og:image:width"]', 'meta[property="og:image:height"]', 'meta[property="og:image:alt"]'] as $selector) {
             $this->assertCount(1, $crawler->filter($selector), $selector);
         }
+        $this->assertSame('summary_large_image', $crawler->filter('meta[name="twitter:card"]')->attr('content'));
         $html = (string) $client->getResponse()->getContent();
         $this->assertStringNotContainsString('ShipInfo', $html);
         $this->assertStringNotContainsString('googletagmanager.com', $html);

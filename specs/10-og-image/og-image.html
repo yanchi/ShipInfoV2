@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<!-- OG 画像（app/public/og-image.png）の元。作り直す手順は quickstart.md -->
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<style>
+    html, body { margin: 0; padding: 0; }
+    body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: #0073e6;
+        color: #fff;
+        font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+        position: relative;
+    }
+    .content {
+        position: absolute;
+        inset: 63px 120px 120px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 32px;
+    }
+    .ship {
+        width: 190px;
+        height: 190px;
+        border-radius: 36px;
+        background: #fff;
+        padding: 10px;
+        box-sizing: border-box;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    }
+    .ship svg { width: 100%; height: 100%; display: block; }
+    h1 {
+        margin: 0;
+        font-size: 64px;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        line-height: 1.1;
+        white-space: nowrap;
+    }
+    p {
+        margin: 0;
+        font-size: 32px;
+        font-weight: 600;
+        opacity: 0.92;
+        letter-spacing: 0.04em;
+    }
+    .waves {
+        position: absolute;
+        left: 0;
+        bottom: 34px;
+        width: 1200px;
+        height: 60px;
+    }
+</style>
+</head>
+<body>
+    <div class="content">
+        <div class="ship">
+            <!-- app/public/favicon.svg と同じ絵 -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+              <rect width="32" height="32" rx="6" fill="#0a6abf"/>
+              <rect x="17" y="9" width="4" height="7" rx="1" fill="#ffffff"/>
+              <rect x="16" y="8" width="6" height="2" rx="1" fill="#e0e0e0"/>
+              <rect x="7" y="14" width="18" height="5" rx="1" fill="#ffffff"/>
+              <rect x="9"  y="16" width="2" height="2" rx="0.5" fill="#0a6abf"/>
+              <rect x="13" y="16" width="2" height="2" rx="0.5" fill="#0a6abf"/>
+              <rect x="19" y="16" width="2" height="2" rx="0.5" fill="#0a6abf"/>
+              <path d="M5 19 H27 L24 25 H8 Z" fill="#e8f4ff"/>
+              <path d="M5 19 H27 L24 25 H8 Z" fill="none" stroke="#c0d8f0" stroke-width="0.5"/>
+              <path d="M2 26 Q6 24 10 26 Q14 28 18 26 Q22 24 26 26 Q29 27.5 30 26" fill="none" stroke="#7ec8f0" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+        </div>
+        <h1>鹿児島〜沖縄フェリー運航情報</h1>
+        <p>マルエーフェリー・マリックスライン　運航状況を毎時更新</p>
+    </div>
+    <svg class="waves" viewBox="0 0 1200 60" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0 30 Q75 0 150 30 T300 30 T450 30 T600 30 T750 30 T900 30 T1050 30 T1200 30" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="6" stroke-linecap="round"/>
+    </svg>
+</body>
+</html>

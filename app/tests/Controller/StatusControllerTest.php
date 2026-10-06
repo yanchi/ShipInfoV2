@@ -318,9 +318,25 @@ class StatusControllerTest extends WebTestCase
             $this->assertSame($canonical, $crawler->filter('meta[property="og:url"]')->attr('content'), $url);
             $this->assertSame('website', $crawler->filter('meta[property="og:type"]')->attr('content'), $url);
             $this->assertSame('鹿児島〜沖縄フェリー運航情報サービス', $crawler->filter('meta[property="og:site_name"]')->attr('content'), $url);
-            $this->assertSame('summary', $crawler->filter('meta[name="twitter:card"]')->attr('content'), $url);
-            $this->assertCount(0, $crawler->filter('meta[property="og:image"]'), $url);
+            $this->assertSame('summary_large_image', $crawler->filter('meta[name="twitter:card"]')->attr('content'), $url);
+            // og:image は og:url・canonical と同じくリクエストのスキーム＋ホスト（specs/10-og-image/contracts/head-meta.md）
+            $this->assertSame('http://localhost/og-image.png', $crawler->filter('meta[property="og:image"]')->attr('content'), $url);
+            $this->assertSame('image/png', $crawler->filter('meta[property="og:image:type"]')->attr('content'), $url);
+            $this->assertSame('1200', $crawler->filter('meta[property="og:image:width"]')->attr('content'), $url);
+            $this->assertSame('630', $crawler->filter('meta[property="og:image:height"]')->attr('content'), $url);
+            $this->assertSame('鹿児島〜沖縄フェリー運航情報 - 青地にフェリーの絵とサイト名', $crawler->filter('meta[property="og:image:alt"]')->attr('content'), $url);
         }
+    }
+
+    /** OG 画像は 1200×630 の PNG で 300KB 以下（specs/10-og-image SC-002） */
+    public function testOgImageFile(): void
+    {
+        $path = static::getContainer()->getParameter('kernel.project_dir') . '/public/og-image.png';
+
+        $size = getimagesize($path);
+        $this->assertNotFalse($size);
+        $this->assertSame([1200, 630, IMAGETYPE_PNG], [$size[0], $size[1], $size[2]]);
+        $this->assertLessThanOrEqual(300 * 1024, filesize($path));
     }
 
     public function testTopTitleAndDescription(): void
@@ -329,7 +345,7 @@ class StatusControllerTest extends WebTestCase
 
         $this->assertSame('鹿児島〜沖縄・奄美大島フェリー運航情報', $crawler->filter('title')->text());
         $this->assertSame(
-            'Aライン・マリックスラインの鹿児島〜那覇・奄美大島間フェリーの最新運航状況。欠航・遅延情報を毎時更新。旅行前に出発港・到着港の運航状況をご確認ください。',
+            'マルエーフェリー・マリックスラインの鹿児島〜那覇・奄美大島間フェリーの最新運航状況。欠航・遅延情報を毎時更新。旅行前に出発港・到着港の運航状況をご確認ください。',
             $crawler->filter('meta[name="description"]')->attr('content'),
         );
     }
