@@ -76,7 +76,11 @@
 
 ### Tests for User Story 1（マルエー）
 
-- [ ] T016 [US1] `scraper/tests/test_marue_ferry.py` に、保存版 `kagoshima_20261006.html`・`ship_detail_naminoue_20261006.html` を読ませるテストを足す（既存の `kagoshima.html`・`ship_detail_naminoue.html` のテストと同じ組み立て方。便検索は既存の `search_*.html` を流用するかテストの中で 10/5 下り・フェリー波之上の行を作る）
+- [ ] T016 [US1] `scraper/tests/test_marue_ferry.py` に、保存版 `kagoshima_20261006.html`・`ship_detail_naminoue_20261006.html` を読ませるテストを足す。準備は helper（例：`mock_20261006()`）にまとめ、T024・T027・T029 でも使う
+  - 時刻：`fixed_now(datetime(2026, 10, 6, 9, 28))`（保存した時刻。今の便＝10/6 18:20 那覇着の下り便が「まだ着いていない一番早い便」になる）
+  - 鹿児島航路ページ：`kagoshima_20261006.html` を `KAGOSHIMA_URL` で返す
+  - 船別詳細ページ：波之上は保存版の URL `https://www.aline-ferry.com/status/route-kagoshima/ferry-naminoue/22921/` で `ship_detail_naminoue_20261006.html` を返す（`mock_kagoshima()` がモックする `14640` ではない）。あけぼの（`21525`）は `ship_detail_normal.html`
+  - 便検索（「行あり」の経路。0件・日時「－」の経路は Phase 8 の T029 で確かめる）：`mock_search()` と `search_html()` で、下りの各港（鹿児島 10/5、名瀬・亀徳・和泊・与論・本部 10/6）→ `NAHA` のキーに `marue("フェリー波之上", "<出港日時>", "2026年10月6日 18:20")` を返す。出港時刻は保存版の詳細ページの時刻に合わせ、和泊・与論は通常ダイヤの時刻でいい（抜港の判定には使わない）。鹿児島・名瀬・本部の行は T027 で `delayed` を確かめるため
   - 10/6 の和泊発・与論発 → `skipped`、`status_detail` に抜港の告知の文（「10月6日(火)和泊港 抜港」など）が入る（FR-008）
   - 亀徳発 → `delayed`
   - その便の行に `cancelled` が0件（SC-001 の保存版の側）
@@ -193,16 +197,19 @@
 
 - [ ] T029 [US1] `scraper/tests/test_marue_ferry.py` に足す（便検索の HTML は `search_ship.html`・`search_empty.html` をもとにテストの中で作る）
   - マルエーの行の出港日時が「－」：`_search()` が None でなく日時 None の行を返し、`search_datetime_missing` の warning が出る
-  - 上の行で、今の便が同じ航路にありその港が抜港 → `skipped`・`departure_at`/`arrival_at` が None。抜港でない港 → その行は書かない（warning）
-  - 0件の検索結果で、今の便が同じ航路にありその港が抜港で出港日が合う（下り：与論の `day_offset` 1、那覇 1 → 下船日と同じ日）→ 船名つき・時刻なしの `skipped`。出港日が合わない日・抜港でない港 → 今どおり `no_service`
+  - 上の行で、今の便が同じ船・同じ航路にあり、その港が抜港で、出港日が合う → `skipped`・`departure_at`/`arrival_at` が None、`status_detail` に抜港の告知の文
+  - 同じ条件で出港日が合わない（例：今の便は 10/6 着なのに、10/8 の検索で日時「－」の行）→ その行は書かない。`skipped` にならない
+  - 抜港でない港の日時 None の行 → その行は書かない（warning）
+  - 0件の検索結果で、今の便が同じ航路にありその港が抜港で出港日が合う（下り：与論の `day_offset` 1、那覇 1 → 下船日と同じ日）→ 船名つき・時刻なしの `skipped`、`status_detail` に抜港の告知の文。出港日が合わない日・抜港でない港 → 今どおり `no_service`
   - 今の便が決まらない（船ブロックに無い）→ 今どおり（`skipped` を作らない）
 
 ### Implementation
 
 - [ ] T030 [US1] `scraper/scraper/scrapers/marue_ferry.py` を直す（T029 の後。data-model §4「マルエーの便検索に日時・便が無い港」）
   - `_search()`：マルエーの行で日時が読めないとき、`return None` をやめて `departure_at=arrival_at=None` の `SearchRow` を残し、warning 名を `search_datetime_missing` にする。他社の行の扱いは変えない
-  - `parse_departures()`：日時 None の行は、その船の今の便（`current_voyage`）が同じ航路にあり、その港が skip の告知なら `skipped`（時刻なし、詳細は告知の文）。それ以外は書かない
-  - `parse_departures()`：0件のキーで、今の便が同じ航路にあり、その港が skip の告知で、出港日 ＝ 今の便の下船日 −（終点の `day_offset` − その港の `day_offset`）がキーの日付と合うなら `skipped`（船名つき・時刻なし）。それ以外は今の `no_service`
+  - `parse_departures()`：日時 None の行は、その船の今の便（`current_voyage`）が同じ航路にあり、その港が skip の告知で、出港日がキーの日付と合うなら `skipped`（時刻なし、詳細は告知の文）。それ以外は書かない
+  - 「今の便で、この港・この日の抜港か」の判定は、日時 None の行と0件のキーで同じ関数にする（例：`_skipped_on_current_voyage(ship_name, route_id, port_id, d) -> str | None`。抜港なら告知の文を返す）
+  - `parse_departures()`：0件のキーで、今の便が同じ航路にあり、その港が skip の告知で、出港日 ＝ 今の便の下船日 −（終点の `day_offset` − その港の `day_offset`）がキーの日付と合うなら `skipped`（船名つき・時刻なし、`status_detail` は告知の文。FR-008）。`operated_by_company_id` は None。それ以外は今の `no_service`
   - モジュール docstring に日時なし・0件の抜港の扱いを書き足す
 - [ ] T031 [US1] `app/tests/View/PortBoardEntryTest.php`（または `app/tests/Service/PortBoardBuilderTest.php`）に、`skipped` で `departureAt` が null の行が「抜港」として出て `isDeparted()` が false になるケースを足す。落ちたら `app/src/View/PortBoardEntry.php`・`app/templates/status/_port_entry.html.twig` で時刻なしの行の扱いを直す
 

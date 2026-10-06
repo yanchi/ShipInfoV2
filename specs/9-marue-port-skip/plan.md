@@ -144,7 +144,7 @@ extract_port_notices(text, resolver):
 - `_current_voyage_status()`：data-model 4 の 1〜6。skip → `OperationStatusEnum.skipped`
 - `_search()`：マルエーの行で日時が読めなければ、行を残して `departure_at=arrival_at=None`（warning）
 - `parse_departures()`：
-  - 日時 None の行：今の便が同じ航路で、その港が抜港 → `skipped`（時刻なし）。それ以外は書かない
+  - 日時 None の行：今の便が同じ船・同じ航路で、その港が抜港で、出港日が合う → `skipped`（時刻なし）。それ以外は書かない
   - 0件のキー：今の便が同じ航路にあり、その港が抜港で、出港日（下船日 − day_offset の差）が合う → `skipped`。それ以外は今の `no_service`
 
 ### marix_line.py
