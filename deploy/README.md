@@ -82,6 +82,53 @@ V2 に置き換えるときは:
 
 旧版と V2 は DB が別（旧版は `shipinfo-db-1`、V2 は `shipinfo-v2-mysql-1`）。過去の運航情報を持ち越すなら、切り替えの前に移す方法を決めること。
 
+## 運航の変更の通知メール
+
+app コンテナの supercronic が、日本時間の 1・6・15 時に `app:notify-irregular-statuses` を www-data で動かす（`docker/production/app/crontab`）。今日〜3日先に通常運航以外の便があれば、運営者に `【ShipInfo V2】非通常運航ステータスを検出 (N件)` を 1 通送る。同じ回は `notification_runs` の一意キーで 1 通まで（specs/8-schedule-change-mail）。
+
+### 設定（`.env.production`）
+
+```
+# ユーザー名・パスワードに記号があれば URL エンコードする（@ → %40、: → %3A、/ → %2F など）
+MAILER_DSN=smtp://USER:PASSWORD@SMTP_HOST:587
+NOTIFY_FROM=...
+NOTIFY_TO=a@example.com,b@example.com
+```
+
+どれかが空なら、送らずに `not_configured` の警告を出すだけ（サイト・スクレイパーには影響しない）。入れたら `docker compose -f compose.prod.yml --env-file .env.production up -d app` で app を作り直す。
+
+`not_configured` も「処理済みの回」として記録され、同じ回は送り直さない。設定は確認時刻より前に入れること。
+
+### SMTP の確認と TLS の証明書
+
+設定を入れたら、自分宛てに 1 通送って確かめる。`mailer:test` は `notification_runs` を使わないので、その日の回を消費しない。
+
+```bash
+cd /opt/shipinfo-v2
+docker compose -f compose.prod.yml exec app php bin/console mailer:test 自分のアドレス --from="<NOTIFY_FROM と同じ>" --subject="【ShipInfo V2】SMTP 確認"
+```
+
+TLS の証明書は検証する（Symfony の既定）。V1 は検証をオフにしていたので、同じサーバーでも落ちることがある。`certificate verify failed` などで落ちたら、まず DSN のホスト名を証明書の名前に合わせる。どうしても通らないときだけ DSN に `?verify_peer=0` を足し、その理由をここに書くこと。
+
+### 確認の仕方
+
+```bash
+docker compose -f compose.prod.yml logs app | grep -E '確認時刻|件を送りました|送信に失敗|未設定'
+docker compose -f compose.prod.yml exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u"$MYSQL_USER" "$MYSQL_DATABASE" -e "SELECT * FROM notification_runs ORDER BY id DESC LIMIT 5"'
+```
+
+`result` が `pending` のまま残っている回は、送信の途中でプロセスが落ちた回（再送はしない）。行は 90 日で消える。
+
+**本番で手で動かすときは必ず `--dry-run` を付ける。** 付けないと今日のその回を確保するので、確認時刻より前に動かすと、cron の本来の回が「処理済み」になって送られない。
+
+```bash
+docker compose -f compose.prod.yml exec app su -s /bin/sh www-data -c 'php bin/console app:notify-irregular-statuses --slot=6 --dry-run'
+```
+
+### supercronic の更新
+
+Dependabot の対象外。[リリースのページ](https://github.com/aptible/supercronic/releases)で新しい版と `supercronic-linux-amd64` の SHA-1 を確かめ、`docker/production/app/Dockerfile` の `SUPERCRONIC_VERSION`・`SUPERCRONIC_SHA1SUM` を直す。SHA-1 はダウンロードしたバイナリで `shasum -a 1` を取り、リリースノートの値と一致することも確かめる。
+
 ## ロールバック
 
 ```bash

@@ -180,15 +180,16 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
 
 **Independent Test**: `make verify-prod` で supercronic が RUNNING、コンテナの TZ が Asia/Tokyo、crontab の構文が通る。デプロイ後の最初の確認時刻のあと、`notification_runs` にその回の行がある
 
-- [ ] T037 [P] [US1] `docker/production/app/crontab` を新しく作る（contracts/console-command.md「起動（本番）」のコメントと行をそのまま。末尾は改行で終える）
-- [ ] T038 [US1] `docker/production/app/Dockerfile` の runtime ステージを直す（research R2）
+- [X] T037 [P] [US1] `docker/production/app/crontab` を新しく作る（contracts/console-command.md「起動（本番）」のコメントと行をそのまま。末尾は改行で終える）
+- [X] T038 [US1] `docker/production/app/Dockerfile` の runtime ステージを直す（research R2）
   - `apk add` に `tzdata` を足し、`ENV` に `TZ=Asia/Tokyo` を足す
   - supercronic を公式のリリース（github.com/aptible/supercronic/releases）から入れる。実装のときに最新のリリースのページを開き、`ARG SUPERCRONIC_VERSION`（例 `v0.2.33` の形）と、その版の `supercronic-linux-amd64` の `ARG SUPERCRONIC_SHA1SUM` を書き写す（推測で書かない）。CI のイメージのビルドは platforms の指定が無く amd64 だけなので、amd64 のバイナリだけを入れる（arm64 は対応しない）
   - `curl -fsSLO` → `echo "${SUPERCRONIC_SHA1SUM}  supercronic-linux-amd64" | sha1sum -c -` → `/usr/local/bin/supercronic` に置いて `chmod +x`。curl が無ければ `--virtual` でビルドのときだけ入れて消す
   - `COPY docker/production/app/crontab /etc/crontab`
-- [ ] T039 [US1] `docker/production/app/supervisord.conf` に `[program:supercronic]` を足す（T038 の後）：`command=supercronic /etc/crontab`・`user=www-data`・`autostart=true`・`autorestart=true`・`priority=30`、標準出力・標準エラーは既存のプログラムと同じく `/dev/stdout`・`/dev/stderr`（`maxbytes=0`）。冒頭のコメントに「supercronic で通知のコマンドを動かす」を足す
-- [ ] T040 [US1] `compose.prod.yml` の app の `environment` に `MAILER_DSN: ${MAILER_DSN:-null://null}`・`NOTIFY_FROM: ${NOTIFY_FROM:-}`・`NOTIFY_TO: ${NOTIFY_TO:-}` を足す（必須にしない。FR-008）。`deploy/.env.production.example` に 3 つを空で足し、URL エンコードの注意をコメントで書く（quickstart.md「本番に出すとき」1）。**PR2 をマージする前に**、quickstart.md「本番に出すとき」2 のとおり VPS の app コンテナから本番の SMTP で自分宛てに 1 通送り、証明書の検証で落ちないことを確かめる（V1 は検証オフだったので。落ちたら T042 の証明書の節に沿って直してからマージする）
-- [ ] T041 [US1] `scripts/verify-prod.sh` に確認を足す（既存の `section`・`ok` の書き方に合わせる）
+- [X] T039 [US1] `docker/production/app/supervisord.conf` に `[program:supercronic]` を足す（T038 の後）：`command=supercronic /etc/crontab`・`user=www-data`・`autostart=true`・`autorestart=true`・`priority=30`、標準出力・標準エラーは既存のプログラムと同じく `/dev/stdout`・`/dev/stderr`（`maxbytes=0`）。冒頭のコメントに「supercronic で通知のコマンドを動かす」を足す
+- [X] T040 [US1] `compose.prod.yml` の app の `environment` に `MAILER_DSN: ${MAILER_DSN:-null://null}`・`NOTIFY_FROM: ${NOTIFY_FROM:-}`・`NOTIFY_TO: ${NOTIFY_TO:-}` を足す（必須にしない。FR-008）。`deploy/.env.production.example` に 3 つを空で足し、URL エンコードの注意をコメントで書く（quickstart.md「本番に出すとき」1）。**PR2 をマージする前に**、quickstart.md「本番に出すとき」2 のとおり VPS の app コンテナから本番の SMTP で自分宛てに 1 通送り、証明書の検証で落ちないことを確かめる（V1 は検証オフだったので。落ちたら T042 の証明書の節に沿って直してからマージする）
+  - **実施メモ**: PR1 の `compose.prod.yml` は設定を app に渡さないため、SMTP の確認は PR2 のデプロイ後に `mailer:test` で行う（quickstart.md「本番に出すとき」2 を更新）。T045 と一緒に確かめる
+- [X] T041 [US1] `scripts/verify-prod.sh` に確認を足す（既存の `section`・`ok` の書き方に合わせる）
   - `supervisorctl status supercronic` が `RUNNING`
   - app コンテナの `date +%Z` が `JST`（TZ）
   - `supercronic -test /etc/crontab` が成功する
@@ -200,9 +201,9 @@ PR1 だけを本番に出しても cron が無いので何も送らない（安�
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T042 [P] `deploy/README.md` に通知の節を足す：`.env.production` への 3 つの入れ方（DSN のユーザー名・パスワードの URL エンコード）、TLS の証明書は検証すること（通らないときはまずホスト名を合わせる。`verify_peer=0` を使うなら理由を書く。research R7）、確認の仕方（quickstart.md「本番に出すとき」4 のコマンド。`result = 'pending'` が残っている回は送信の途中で落ちた回）、本番で手で動かすときは必ず `--dry-run` を付けること（付けないと確認時刻より前ならその回を先に取ってしまう。research R4）、supercronic の更新手順（Dependabot の対象外なので、リリースのページでバージョンと SHA-1 を確かめて Dockerfile の `ARG` を直す。research R2）
-- [ ] T043 [P] `CLAUDE.md` の「よく使うコマンド」に `make notify-dry-run`・`make notify SLOT=6` を、「重要な設計決定」に「運航に変更がある便の通知は app コンテナの supercronic が 1・6・15 時に `app:notify-irregular-statuses` を動かす。同じ回は `notification_runs` の一意キーで 1 通まで」を 1 行で足す
-- [ ] T044 `make test-php`・`make phpstan`・`make cs-php`・`make lint-php`・`make audit`・`make verify-prod` を全部通す → コミット → PR2 を作る
+- [X] T042 [P] `deploy/README.md` に通知の節を足す：`.env.production` への 3 つの入れ方（DSN のユーザー名・パスワードの URL エンコード）、TLS の証明書は検証すること（通らないときはまずホスト名を合わせる。`verify_peer=0` を使うなら理由を書く。research R7）、確認の仕方（quickstart.md「本番に出すとき」4 のコマンド。`result = 'pending'` が残っている回は送信の途中で落ちた回）、本番で手で動かすときは必ず `--dry-run` を付けること（付けないと確認時刻より前ならその回を先に取ってしまう。research R4）、supercronic の更新手順（Dependabot の対象外なので、リリースのページでバージョンと SHA-1 を確かめて Dockerfile の `ARG` を直す。research R2）
+- [X] T043 [P] `CLAUDE.md` の「よく使うコマンド」に `make notify-dry-run`・`make notify SLOT=6` を、「重要な設計決定」に「運航に変更がある便の通知は app コンテナの supercronic が 1・6・15 時に `app:notify-irregular-statuses` を動かす。同じ回は `notification_runs` の一意キーで 1 通まで」を 1 行で足す
+- [X] T044 `make test-php`・`make phpstan`・`make cs-php`・`make lint-php`・`make audit`・`make verify-prod` を全部通す → コミット → PR2 を作る
 - [ ] T045 デプロイ後、quickstart.md「本番に出すとき」4 のコマンドで最初の確認時刻の結果を確かめ、並行運用の 1 週間、V1 と V2 の同じ回のメールを比べる（SC-004。V1 は 0 時、V2 は 1 時）
 
 ---

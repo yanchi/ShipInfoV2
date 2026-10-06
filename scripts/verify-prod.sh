@@ -301,6 +301,21 @@ contains '404 にも付く' \
     "$(curl -s -o /dev/null -D - -H "Host: ${HOST}" "http://127.0.0.1:${VHOST_PORT}/nope")" 'X-Robots-Tag: noindex, nofollow'
 
 # ---------------------------------------------------------------------------
+# 7. 通知の cron（supercronic）
+# ---------------------------------------------------------------------------
+
+section '7. 通知の cron'
+
+ok 'supercronic が動いている' \
+   "$(compose exec -T app supervisorctl status supercronic 2>/dev/null | awk '{print $2}')" 'RUNNING'
+ok 'コンテナが日本時間 (TZ)' "$(compose exec -T app date +%Z 2>/dev/null | tr -d '[:space:]')" 'JST'
+ok 'crontab の構文が正しい' \
+   "$(compose exec -T app supercronic -test /etc/crontab >/dev/null 2>&1 && echo 正しい || echo 誤り)" '正しい'
+ok 'メールの設定が無ければ null://null' "$(compose exec -T app printenv MAILER_DSN 2>/dev/null | tr -d '[:space:]')" 'null://null'
+ok '通知のコマンドが動く (--dry-run)' \
+   "$(compose exec -T app su -s /bin/sh www-data -c 'php bin/console app:notify-irregular-statuses --slot=6 --dry-run --no-interaction' >/dev/null 2>&1 && echo 成功 || echo 失敗)" '成功'
+
+# ---------------------------------------------------------------------------
 
 section '結果'
 printf '  成功 %d / 失敗 %d\n' "$PASSED" "$FAILED"
