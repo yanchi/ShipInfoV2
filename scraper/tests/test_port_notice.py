@@ -242,3 +242,19 @@ def test_skip_wins_over_conditional_and_same_port_is_one_notice(resolver):
 def test_skip_inside_parentheses_is_not_picked_up(resolver):
     """括弧の中は読まない（取りこぼし優先。拾えなくても船のステータスで出る）。"""
     assert extract_port_notices("条件付運航（与論港は抜港）", resolver) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "・条件付寄港地 : 徳之島(亀徳港)、沖永良部島(和泊港)、与論島(与論港)",
+        "・条件付寄港地 : 徳之島（亀徳港）、沖永良部島（和泊港）、与論島（与論港）",
+        "・条件付寄港地 : 徳之島(亀徳港)・沖永良部島(和泊港)・与論島(与論港)",
+    ],
+)
+def test_conditional_list_with_island_then_port_in_parentheses(resolver, text):
+    """「島名(港名)」の書き方でも括弧の中の港を拾う（括弧の外の島名は読まない）。"""
+    notices = _names(extract_port_notices(text, resolver), resolver)
+    assert set(notices) == {"亀徳", "和泊", "与論"}
+    assert all(n.kind == "conditional" for n in notices.values())
+    assert all(n.sentence == text for n in notices.values())  # 括弧を残した元の文
