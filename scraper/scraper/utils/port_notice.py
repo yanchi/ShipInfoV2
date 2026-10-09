@@ -5,7 +5,9 @@
 
 - 対象は鹿児島航路ページの抜粋と、船別詳細ページの h4 の後〜定型の注意書き（「台風の影響や」の段落）の手前
 - 文（「。」と改行）ごとに見る。港名・キーワードは、括弧書き（「和泊港(沖永良部島)」の島名など）を取り除いた文で探す
-  （括弧の中の島名が港の別名に当たったり、列挙が切れたりするため）。根拠として残す文（sentence）は元の文のまま。仮定・案内の文（「場合」「ことがあります」「可能性」「問い合わせ」）は除外
+  （括弧の中の島名が港の別名に当たったり、列挙が切れたりするため）。ただし括弧の中が港名だけなら
+  （「徳之島(亀徳港)」のように島名の後ろに港名を書く場合）、直前の島名ごと括弧の中の港名に置き換える。
+  根拠として残す文（sentence）は元の文のまま。仮定・案内の文（「場合」「ことがあります」「可能性」「問い合わせ」）は除外
 - 抜港・「寄港いたしません」・寄港の取りやめ／見合わせ／中止 → skip、港変更・寄港地変更・「A港からB港へ／に」→ change（B が変更先）、条件付 → conditional
 - 対象の港は読点で区切った節ごとに決める
   - キーワードのある節：キーワードの直前の港と、それに「・」「と」でつながる港
@@ -39,7 +41,10 @@ _SKIP_PATTERN = re.compile(
     r"|寄港(?:いたし|致し|し)ません"
     r"|寄港(?:を|は)?(?:取りやめ|取り止め|とりやめ|見合わせ|中止)"
 )
-_PARENTHESES = re.compile(r"\([^()]*\)|（[^（）]*）")
+# 括弧と、その直前の島名（「徳之島(亀徳港)」の「徳之島」。島名が無ければ空）
+_PARENTHESES_WITH_ISLAND = re.compile(
+    r"((?:[一-龥々ァ-ヶー]*島)?)(?:\(([^()]*)\)|（([^（）]*)）)"
+)
 _PRIORITY = {"skip": 3, "change": 2, "conditional": 1}
 # 港名の直後にこれが付いていたら、便・航路の説明（「鹿児島新港発の便」「鹿児島航路」）
 _VOYAGE_SUFFIXES = ("発", "着", "向け", "行き", "行", "航路")
@@ -126,7 +131,7 @@ def _keyword_pos(text: str, kind: str) -> int | None:
 
 
 def _sentence_notices(original: str, resolver: PortResolver) -> list[PortNotice]:
-    sentence = _PARENTHESES.sub("", original)
+    sentence = _strip_parentheses(original, resolver)
     if not _kinds(sentence):
         return []
 
@@ -178,6 +183,18 @@ def _sentence_notices(original: str, resolver: PortResolver) -> list[PortNotice]
                 )
             )
     return notices
+
+
+def _strip_parentheses(sentence: str, resolver: PortResolver) -> str:
+    """括弧書きを取り除く。括弧の中が港名だけなら、直前の島名ごと港名に置き換える。"""
+
+    def replace(m: re.Match[str]) -> str:
+        inner = m.group(2) if m.group(2) is not None else m.group(3)
+        if resolver.find_occurrences(inner) and _is_port_list(inner, resolver):
+            return inner
+        return m.group(1)
+
+    return _PARENTHESES_WITH_ISLAND.sub(replace, sentence)
 
 
 def _port_hits(clause: str, resolver: PortResolver) -> list[tuple[int, int, Port]]:
