@@ -1640,4 +1640,30 @@ def test_voyage_not_in_excerpt_keeps_ship_status(db_session, marue_with_ports):
         find(departures, up, ports["名瀬"], date(2026, 10, 20))["status"]
         == OperationStatusEnum.cancelled
     )
-    assert any(log["event"] == "voyage_not_in_excerpt" for log in logs)
+    # 港の行ごとに呼ばれても警告は1回
+    assert len([log for log in logs if log["event"] == "voyage_not_in_excerpt"]) == 1
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "■10月20日(火)那覇発上り便…条件付き運航（与論港は欠航の可能性あり）",
+        "■10月20日(火)那覇発上り便…条件付き運航※天候によっては欠航となる場合があります。",
+    ],
+)
+def test_voyage_status_ignores_notes_after_status(db_session, marue_with_ports, line):
+    """便の行の補足に「欠航」があっても、状態の語（条件付き運航）だけで判定する。"""
+    company, _ = marue_with_ports
+    scraper = MarueFerry(db_session, company.id)
+    html = read_fixture("marue/kagoshima_20261020.html").replace(
+        "■10月20日(火)那覇発上り便…条件付き運航・寄港地変更", line
+    )
+    assert html != read_fixture("marue/kagoshima_20261020.html")
+
+    with fixed_now(NOW_1020):
+        voyages = scraper._parse_ships(html)["フェリーあけぼの"].voyages
+
+    assert voyages[0].departure_date == date(2026, 10, 20)
+    assert voyages[0].status == OperationStatusEnum.delayed
+    assert voyages[0].conditional is True
+    assert [v.status for v in voyages[1:]] == [OperationStatusEnum.cancelled] * 2

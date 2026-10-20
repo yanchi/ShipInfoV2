@@ -172,6 +172,7 @@ class MarueFerry(BaseScraper):
         resp.raise_for_status()
         resp.encoding = resp.apparent_encoding
         self._ships = self._parse_ships(resp.text)
+        self._voyage_cache: dict[tuple[str, int, date], ShipInfo] = {}
 
         # 船別詳細ページ（港別情報の抽出用。失敗しても続ける）
         self._ship_details: dict[str, str | None] = {}
@@ -687,9 +688,22 @@ class MarueFerry(BaseScraper):
 
         タグは全便ぶんなので、別の便の「欠航」が付いていることがある。行が無ければ船のまま（安全側）。
         行が1つだけならタグはその便のものなので、タグのほうを使う（抜粋の文より確か）。
+        行の日付は始発港（鹿児島・那覇）の出港日とみなす。途中の港から出る便の行（「■10月22日(木)名瀬発
+        下り便…」）は下りだと1日ずれて合わないが、そのときも船のまま（安全側）。
+        港の行ごとに何度も呼ばれるので、結果は (船名, route_id, 出港日) でキャッシュする（警告も1回）。
         """
         if len(ship.voyages) < 2:
             return ship
+        if not hasattr(self, "_voyage_cache"):
+            self._voyage_cache = {}
+        key = (ship.name, route_id, origin_date)
+        if key not in self._voyage_cache:
+            self._voyage_cache[key] = self._match_voyage(ship, route_id, origin_date)
+        return self._voyage_cache[key]
+
+    def _match_voyage(
+        self, ship: ShipInfo, route_id: int, origin_date: date
+    ) -> ShipInfo:
         direction = self._route_directions().get(route_id)
         voyage = next(
             (
@@ -764,14 +778,17 @@ class MarueFerry(BaseScraper):
         self, texts: list[str]
     ) -> tuple[OperationStatusEnum | None, bool, bool]:
         """タグ（または便の行の「・」区切り）→ (一番重いステータス, 条件付か, 遅延・スケジュール変更か)。"""
-        known = [t for t in texts if self._parse_status_text(t) is not None]
-        statuses = [self._parse_status_text(t) for t in known]
-        status = max(statuses, key=lambda s: _SEVERITY.get(s, 0)) if statuses else None
-        conditional = any(
-            "条件付" in t or "港変更" in t or "寄港地変更" in t or "抜港" in t
-            for t in known
+        parsed = [(t, self._parse_status_text(t)) for t in texts]
+        known = [(t, st) for t, st in parsed if st is not None]
+        status = (
+            max((st for _, st in known), key=lambda s: _SEVERITY.get(s, 0))
+            if known
+            else None
         )
-        schedule_changed = any("遅延" in t or "スケジュール変更" in t for t in known)
+        conditional = any(
+            "条件付" in t or "港変更" in t or "抜港" in t for t, _ in known
+        )
+        schedule_changed = any("遅延" in t or "スケジュール変更" in t for t, _ in known)
         return status, conditional, schedule_changed
 
     def _parse_voyages(self, excerpt: str) -> tuple[VoyageStatus, ...]:
@@ -789,8 +806,10 @@ class MarueFerry(BaseScraper):
             if not candidates:
                 continue
             departure_date = min(candidates, key=lambda d: abs((d - today).days))
+            # 状態の語だけを見る。補足（「（与論港は欠航の可能性あり）」「※…欠航となる場合が…」）は捨てる
+            words = _VOYAGE_STATUS_END.split(m.group("status"), maxsplit=1)[0]
             status, conditional, schedule_changed = self._classify(
-                re.split(r"[・、]", m.group("status"))
+                re.split(r"[・、]", words)
             )
             if status is None:
                 self._log.warning("unknown_voyage_status", text=m.group(0)[:80])
@@ -860,12 +879,8 @@ class MarueFerry(BaseScraper):
         """鹿児島ページの div.tag-list 内の span テキストからステータスを判定。"""
         if "欠航" in text:
             return OperationStatusEnum.cancelled
-        if (
-            "条件付" in text
-            or "港変更" in text
-            or "寄港地変更" in text
-            or "抜港" in text
-        ):
+        # 「寄港地変更」も「港変更」で拾う
+        if "条件付" in text or "港変更" in text or "抜港" in text:
             return OperationStatusEnum.delayed
         if "遅延" in text or "スケジュール変更" in text:
             return OperationStatusEnum.delayed
@@ -884,6 +899,8 @@ _VOYAGE_LINE = re.compile(
     r"(?P<status>.+?)(?=■|\d{1,2}(?:月|/)\d{1,2}日?\s*[(（]|$)",
     re.S,
 )
+# 便の行の状態の語の終わり（この手前までが「条件付き運航・寄港地変更」）
+_VOYAGE_STATUS_END = re.compile(r"[（(※。\s]")
 
 
 def _parse_search_datetime(text: str) -> datetime | None:
