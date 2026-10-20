@@ -87,6 +87,9 @@ _SEVERITY = {
     OperationStatusEnum.operating: 1,
 }
 
+# 条件付（delayed）として読むタグ・便の行の語。「寄港地変更」は「港変更」を含まない（寄・港・地・変・更）
+_CONDITIONAL_WORDS = ("条件付", "港変更", "寄港地変更", "抜港")
+
 
 @dataclass(frozen=True)
 class SearchRow:
@@ -785,9 +788,7 @@ class MarueFerry(BaseScraper):
             if known
             else None
         )
-        conditional = any(
-            "条件付" in t or "港変更" in t or "抜港" in t for t, _ in known
-        )
+        conditional = any(w in t for t, _ in known for w in _CONDITIONAL_WORDS)
         schedule_changed = any("遅延" in t or "スケジュール変更" in t for t, _ in known)
         return status, conditional, schedule_changed
 
@@ -879,8 +880,7 @@ class MarueFerry(BaseScraper):
         """鹿児島ページの div.tag-list 内の span テキストからステータスを判定。"""
         if "欠航" in text:
             return OperationStatusEnum.cancelled
-        # 「寄港地変更」も「港変更」で拾う
-        if "条件付" in text or "港変更" in text or "抜港" in text:
+        if any(w in text for w in _CONDITIONAL_WORDS):
             return OperationStatusEnum.delayed
         if "遅延" in text or "スケジュール変更" in text:
             return OperationStatusEnum.delayed

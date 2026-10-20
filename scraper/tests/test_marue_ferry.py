@@ -1312,6 +1312,27 @@ def test_unknown_tag_is_ignored_with_warning(db_session, marue_with_ports):
     assert any(log["event"] == "unknown_status_text" for log in logs)
 
 
+def test_port_change_tag_is_conditional(db_session, marue_with_ports):
+    """「寄港地変更」タグだけでも条件付（delayed）として読み、unknown_status_text にしない。"""
+    company, _ = marue_with_ports
+    scraper = MarueFerry(db_session, company.id)
+    original = read_fixture("marue/kagoshima_20261006.html")
+    html = re.sub(
+        r'<span class="tag-sche">スケジュール変更</span>\s*<span class="tag-conditionally">条件付運航</span>',
+        '<span class="tag-port">寄港地変更</span>',
+        original,
+    )
+    assert html != original
+
+    with structlog.testing.capture_logs() as logs:
+        ship = scraper._parse_ships(html)["フェリー波之上"]
+
+    assert ship.status == OperationStatusEnum.delayed
+    assert ship.conditional is True
+    assert ship.schedule_changed is False
+    assert not [log for log in logs if log["event"] == "unknown_status_text"]
+
+
 @resp_mock.activate
 def test_cancelled_ship_makes_every_port_cancelled_not_skipped(
     db_session, marue_with_ports
@@ -1566,9 +1587,11 @@ def test_voyages_are_read_from_excerpt(db_session, marue_with_ports):
     company, _ = marue_with_ports
     scraper = MarueFerry(db_session, company.id)
 
-    with fixed_now(NOW_1020):
+    with fixed_now(NOW_1020), structlog.testing.capture_logs() as logs:
         ships = scraper._parse_ships(read_fixture("marue/kagoshima_20261020.html"))
 
+    # 本番そのままの <span class="tag-port">寄港地変更</span> も読める
+    assert not [log for log in logs if log["event"] == "unknown_status_text"]
     akebono = ships["フェリーあけぼの"]
     assert akebono.status == OperationStatusEnum.cancelled
     assert [(v.departure_date, v.direction, v.status) for v in akebono.voyages] == [
