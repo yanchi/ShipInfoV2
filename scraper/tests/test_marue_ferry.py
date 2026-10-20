@@ -1503,3 +1503,167 @@ def test_no_current_voyage_does_not_create_skipped(db_session, marue_with_ports)
     _, _, departures, _ = run_1006(db_session, company.id)
 
     assert not [r for r in departures if r["status"] == OperationStatusEnum.skipped]
+
+
+# ---------------------------------------------------------------------------
+# 便ごとの状態（保存版 2026-10-20：あけぼのは 20日上り＝条件付・寄港地変更、21日下り・23日上り＝欠航）
+# ---------------------------------------------------------------------------
+
+NOW_1020 = datetime(2026, 10, 20, 11, 39)
+D1020 = "2026年10月20日"
+D1021 = "2026年10月21日"
+AKEBONO_21394 = (
+    "https://www.aline-ferry.com/status/route-kagoshima/ferry-akebono/21394/"
+)
+NAMINOUE_21162 = (
+    "https://www.aline-ferry.com/status/route-kagoshima/ferry-naminoue/21162/"
+)
+AKEBONO_UP_ARR = "2026年10月21日 08:30"
+# あけぼの：10/20 那覇発の上り。10/21 鹿児島発の下りは欠航で検索に出ない
+UP_1020 = {
+    NAHA: "2026年10月20日 07:00",
+    MOTOBU: "2026年10月20日 09:20",
+    YORON: "2026年10月20日 12:10",
+    WADOMARI: "2026年10月20日 14:40",
+    KAMETOKU: "2026年10月20日 17:00",
+    NAZE: "2026年10月20日 21:20",
+}
+
+
+def run_1020(db_session, company_id, kagoshima: str | None = None):
+    mock_search(
+        {
+            (code, KAGOSHIMA, D1020): search_html(
+                [marue("フェリーあけぼの", dep, AKEBONO_UP_ARR)]
+            )
+            for code, dep in UP_1020.items()
+        }
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        KAGOSHIMA_URL,
+        body=kagoshima or read_fixture("marue/kagoshima_20261020.html"),
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        AKEBONO_21394,
+        body=read_fixture("marue/ship_detail_akebono_20261020.html"),
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        NAMINOUE_21162,
+        body=read_fixture("marue/ship_detail_normal.html"),
+    )
+    scraper = MarueFerry(db_session, company_id)
+    with structlog.testing.capture_logs() as logs, fixed_now(NOW_1020):
+        records = scraper.parse(scraper.fetch())
+        departures = scraper.parse_departures()
+    return scraper, records, departures, logs
+
+
+def test_voyages_are_read_from_excerpt(db_session, marue_with_ports):
+    """抜粋の「■10月20日(火)那覇発上り便…」を便ごとに読む（年は今日に近いほう）。"""
+    company, _ = marue_with_ports
+    scraper = MarueFerry(db_session, company.id)
+
+    with fixed_now(NOW_1020):
+        ships = scraper._parse_ships(read_fixture("marue/kagoshima_20261020.html"))
+
+    akebono = ships["フェリーあけぼの"]
+    assert akebono.status == OperationStatusEnum.cancelled
+    assert [(v.departure_date, v.direction, v.status) for v in akebono.voyages] == [
+        (date(2026, 10, 20), "上り", OperationStatusEnum.delayed),
+        (date(2026, 10, 21), "下り", OperationStatusEnum.cancelled),
+        (date(2026, 10, 23), "上り", OperationStatusEnum.cancelled),
+    ]
+    assert akebono.voyages[0].conditional is True
+    assert akebono.voyages[0].schedule_changed is False
+    assert [
+        (v.departure_date, v.direction) for v in ships["フェリー波之上"].voyages
+    ] == [(date(2026, 10, 19), "下り")]
+
+
+def test_voyages_read_slash_date_format(db_session, marue_with_ports):
+    """「10/5(月)鹿児島新港18:00発／下り便…スケジュール変更・条件付運航」も読む。"""
+    company, _ = marue_with_ports
+    scraper = MarueFerry(db_session, company.id)
+
+    with fixed_now(NOW_1006):
+        ship = scraper._parse_ships(read_fixture("marue/kagoshima_20261006.html"))[
+            "フェリー波之上"
+        ]
+
+    assert len(ship.voyages) == 1
+    voyage = ship.voyages[0]
+    assert (voyage.departure_date, voyage.direction) == (date(2026, 10, 5), "下り")
+    assert voyage.status == OperationStatusEnum.delayed
+    assert voyage.conditional is True and voyage.schedule_changed is True
+
+
+@resp_mock.activate
+def test_other_voyage_cancellation_does_not_cancel_current_voyage(
+    db_session, marue_with_ports
+):
+    """別の便の「欠航」タグが今の便に付かない：20日上りは与論・亀徳だけ delayed、他は operating。"""
+    company, ports = marue_with_ports
+    _, up = routes_of(db_session, company)
+
+    _, records, departures, _ = run_1020(db_session, company.id)
+
+    rows = {
+        name: find(departures, up, ports[name], date(2026, 10, 20)) for name in UP_PORTS
+    }
+    assert rows["与論"]["status"] == OperationStatusEnum.delayed
+    assert "与論港" in rows["与論"]["status_detail"]
+    assert rows["亀徳"]["status"] == OperationStatusEnum.delayed
+    assert "平土野港" in rows["亀徳"]["status_detail"]
+    for name in ["本部", "和泊", "名瀬"]:
+        assert rows[name]["status"] == OperationStatusEnum.operating
+    assert not [r for r in departures if r["status"] == OperationStatusEnum.cancelled]
+
+    route = next(r for r in records if r["route_id"] == up.id)
+    assert route["status"] == OperationStatusEnum.delayed
+
+
+@resp_mock.activate
+def test_voyage_not_in_excerpt_keeps_ship_status(db_session, marue_with_ports):
+    """抜粋に今の便の行が無い → 船のステータスのまま（安全側）+ voyage_not_in_excerpt。"""
+    company, ports = marue_with_ports
+    _, up = routes_of(db_session, company)
+    html = read_fixture("marue/kagoshima_20261020.html").replace(
+        "■10月20日(火)那覇発上り便", "■10月22日(木)那覇発上り便"
+    )
+
+    _, _, departures, logs = run_1020(db_session, company.id, html)
+
+    assert (
+        find(departures, up, ports["名瀬"], date(2026, 10, 20))["status"]
+        == OperationStatusEnum.cancelled
+    )
+    # 港の行ごとに呼ばれても警告は1回
+    assert len([log for log in logs if log["event"] == "voyage_not_in_excerpt"]) == 1
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "■10月20日(火)那覇発上り便…条件付き運航（与論港は欠航の可能性あり）",
+        "■10月20日(火)那覇発上り便…条件付き運航※天候によっては欠航となる場合があります。",
+    ],
+)
+def test_voyage_status_ignores_notes_after_status(db_session, marue_with_ports, line):
+    """便の行の補足に「欠航」があっても、状態の語（条件付き運航）だけで判定する。"""
+    company, _ = marue_with_ports
+    scraper = MarueFerry(db_session, company.id)
+    html = read_fixture("marue/kagoshima_20261020.html").replace(
+        "■10月20日(火)那覇発上り便…条件付き運航・寄港地変更", line
+    )
+    assert html != read_fixture("marue/kagoshima_20261020.html")
+
+    with fixed_now(NOW_1020):
+        voyages = scraper._parse_ships(html)["フェリーあけぼの"].voyages
+
+    assert voyages[0].departure_date == date(2026, 10, 20)
+    assert voyages[0].status == OperationStatusEnum.delayed
+    assert voyages[0].conditional is True
+    assert [v.status for v in voyages[1:]] == [OperationStatusEnum.cancelled] * 2
