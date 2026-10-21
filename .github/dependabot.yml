@@ -34,3 +34,14 @@ updates:
     schedule:
       interval: monthly
       timezone: Asia/Tokyo
+
+  # 本番イメージの PHP（パッチ版まで固定している）。セキュリティ修正の版を取りこぼさないように毎週見る
+  - package-ecosystem: docker
+    directory: /docker/production/app
+    schedule:
+      interval: weekly
+      timezone: Asia/Tokyo
+    ignore:
+      # 8.3 系のまま上げる（マイナー以上は計画して上げる）
+      - dependency-name: "php"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
