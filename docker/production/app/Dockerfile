@@ -7,8 +7,12 @@
 # VPS ではホストの nginx が 80/443 と TLS を持っているので、このコンテナは
 # 127.0.0.1 の空きポートで待ち受け、ホストの nginx からリバースプロキシされる。
 
+# PHP はパッチ版まで固定する。8.3-fpm-alpine のような浮動タグは修正版への付け替えが遅れることがある
+# （CVE-2026-109618・109619 の修正版 8.3.36 が出たあとも 8.3.35 を指していた）。
+# 上げるときは vendor と runtime を同じ版にそろえる。Dependabot（docker）が PR を作る
+
 # ---------- 1. PHP の依存を解決 ----------
-FROM php:8.3-cli-alpine AS vendor
+FROM php:8.3.36-cli-alpine AS vendor
 
 RUN apk add --no-cache git unzip
 
@@ -29,7 +33,7 @@ COPY app/ .
 RUN composer dump-autoload --optimize --no-dev --classmap-authoritative
 
 # ---------- 2. 実行イメージ ----------
-FROM php:8.3-fpm-alpine AS runtime
+FROM php:8.3.36-fpm-alpine AS runtime
 
 RUN apk add --no-cache nginx supervisor icu-libs tzdata \
     && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS icu-dev \
