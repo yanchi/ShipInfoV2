@@ -1178,10 +1178,14 @@ class MarueFerry(BaseScraper):
         return tuple(voyages)
 
     def _is_from_midway(self, place: str, direction: str) -> bool:
-        """日付と方向の間の文字列の、最後の「発」より前の港が、その方向の航路の途中の港か。"""
-        port = self._get_resolver().resolve(place.rpartition("発")[0])
-        if port is None:
+        """日付と方向の間の文字列の出発港が、その方向の航路の途中の港か。"""
+        # 「発」があれば最後の「発」より前、無ければ方向の手前の全部。最後に出てくる港が出発港
+        # （「名瀬経由 那覇港発」のように先に別の港名があっても、発の港を取る）
+        head = place.rpartition("発")[0] if "発" in place else place
+        occurrences = self._get_resolver().find_occurrences(head)
+        if not occurrences:
             return False
+        port = occurrences[-1][2]
         route_id = next(
             (
                 rid

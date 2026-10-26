@@ -15,7 +15,7 @@ DB のスキーマは変えない。`departure_statuses`・`operation_statuses` 
 | status | OperationStatusEnum | — | 「臨時便運航」は operating（R4） |
 | conditional | bool | — | |
 | schedule_changed | bool | — | |
-| from_midway | bool | **追加** | 最後の「発」より前を `PortResolver.resolve()` で引いた港が、行の方向の航路の途中の港（`route_stops` の始発・終点以外）か。True の行だけ範囲で照合する（R7） |
+| from_midway | bool | **追加** | 最後の「発」より前（「発」が無ければ方向の手前の全部）に最後に出てくる港（`PortResolver.find_occurrences()`）が、行の方向の航路の途中の港（`route_stops` の始発・終点以外）か。True の行だけ範囲で照合する（R7） |
 
 ### 便と行の照合（R1・R7）
 

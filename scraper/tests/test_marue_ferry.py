@@ -1832,6 +1832,10 @@ def test_voyage_lines_know_whether_they_start_midway(db_session, marue_with_port
 
     assert midway("■10月22日（木）名瀬発下り便") is True
     assert midway("■10月22日（木）名瀬発那覇行き下り便") is True
+    assert midway("■10月22日（木）名瀬 下り便") is True  # 「発」なし
+    assert (
+        midway("■10月27日（火）名瀬経由 那覇港発上り便") is False
+    )  # 経由の港でなく発の港
     assert midway("■10月27日（火）上り便") is False  # 港名なし
     assert midway("■10月27日（火）鹿児島新港18:00発／下り便") is False  # 始発港
 
