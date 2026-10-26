@@ -30,7 +30,7 @@ CSS class → status mapping (div.status_single_cover・詳細ページの div.s
     route alert         → delayed（航行経路変更。運航はする）
     cancel alert        → cancelled（欠航）
     alert だけ          → cancelled（2026-03 時点の一覧の欠航）
-    temporary           → extra（臨時便。港の行だけ。航路単位には書かない）
+    temporary           → 便の種類（臨時便）。港の行だけ extra。ほかの状態のクラスが付けばその状態
     no_status           → skipped（詳細ページの港のみ。「―」寄港しません＝抜港。便が欠航・運休ならそちら。
                           2025-10〜2026-10 の1年分では、航行経路変更の便にだけ出ていた）
     ※ skipped は港の行（departure_statuses）だけ。航路単位（operation_statuses）には書かない
@@ -69,8 +69,8 @@ Date: div.info2 の最初の "YYYY年M月D日" を valid_date として使用
 
 臨時便（13-marix-extra-voyages）。確認した例: 2026-09-06 service6727（鹿児島発・航行経路変更）、
 2026-09-07 service6731（那覇発・欠航した定期便の代わり）、2026-09-27 service6819（名瀬発）:
-    便の種類（R1）: 一覧の便のクラスに temporary、または詳細ページの見出しに【臨時便…】・港のクラスに
-        temporary があれば臨時便。詳細ページが取れなかった便は「分からない」（unknown）。
+    便の種類（R1）: 一覧の便のクラスに temporary、または詳細ページの見出しに【臨時便…】・寄る港の全部のクラスに
+        temporary があれば臨時便。temporary は状態ではなく便の種類（temporary cancel alert は cancelled）。詳細ページが取れなかった便は「分からない」（unknown）。
         fetch() を通っていない呼び方（既存のテスト）は定期便
     港の行（R3）: 臨時便が寄る港（temporary）だけ extra の行にする。寄らない港（no_status）は行も時刻も
         作らない（寄らない港には定期便の時刻や別の日付が残っている）
@@ -106,10 +106,9 @@ _STATUS_BY_CLASS = {
     "conditional": OperationStatusEnum.delayed,  # 条件付運航
     "route": OperationStatusEnum.delayed,  # 航行経路変更（運航はする。寄らない港は no_status）
     "cancel": OperationStatusEnum.cancelled,
-    # 臨時便（港の行だけ。航路単位には書かない。research R1・R8）
-    "temporary": OperationStatusEnum.extra,
 }
-# 臨時便の見分け方（research R1）。見出しは「【臨時便】」「【臨時便運航】」「【臨時便・航行経路変更】」
+# 臨時便の見分け方（research R1）。temporary は状態ではなく便の種類なので _STATUS_BY_CLASS には入れない
+# （入れると `temporary cancel alert` が2つの状態に一致して unknown になる。PR #90 レビュー）。見出しは「【臨時便】」「【臨時便運航】」「【臨時便・航行経路変更】」
 _EXTRA_CLASS = "temporary"
 _EXTRA_HEADING = "【臨時便"
 # 同じキーの定期便がこのステータスなら臨時便の行を優先する（research R4）
@@ -464,12 +463,22 @@ class MarixLine(BaseScraper):
                 extra_url=extra["source_url"],
             )
 
+        # 一覧から消えた未出港の臨時便の URL。同じキーの定期便が無くても行が残らないよう、
+        # _upsert_departures で extra の行を消す（取りやめ。PR #90 レビュー）
+        self._vanished_extra_urls: set[str] = set()
         # この回の臨時便の行が無いキー：前の回の臨時便の行を、定期便の欠航で上書きしない（research R5）
         if kept:
             firsts = self._extra_first_departures(
                 sorted({k[0] for k in kept}), set(kept.values())
             )
             now = datetime.now()
+            self._vanished_extra_urls = {
+                url
+                for url in set(kept.values())
+                if url not in list_urls
+                and firsts.get(url) is not None
+                and firsts[url] > now
+            }
             for rec in records:
                 key = self._departure_key(rec)
                 if (
@@ -495,17 +504,28 @@ class MarixLine(BaseScraper):
     def _upsert_departures(self, records: list[dict]) -> tuple[int, int]:
         """Base の処理の後、この回に詳細ページを読めた臨時便の、書かなくなった行を消す（research R7）。
 
-        臨時便の行には replace_source を付けないので、Base では消えない。
+        臨時便の行には replace_source を付けないので、Base では消えない。出港前に一覧から消えた
+        臨時便（取りやめ）の行も、ここで消す。
         寄らなくなった港の行・出港日がずれた古い日付の行・種類が分からなかった回の予備ルートの行
         （船名なし）が、臨時便の詳細ページの URL で見つかる。読めなかった回は消さない。
         """
         created, updated = super()._upsert_departures(records)
         read_urls = getattr(self, "_read_extra_urls", None) or set()
         dropped = getattr(self, "_dropped_regular", None) or []
-        if not read_urls and not dropped:
+        vanished = getattr(self, "_vanished_extra_urls", None) or set()
+        if not read_urls and not dropped and not vanished:
             return created, updated
         self.session.flush()  # 本番は autoflush=False。書いた行を読んでから消す
         self._delete_rows_of_dropped_regular(records, dropped)
+        # 出港前に一覧から消えた臨時便の行。定期便の欠航で上書きされた行は source_url が変わっている
+        for url in vanished:
+            for row in self.session.execute(
+                select(DepartureStatus).where(
+                    DepartureStatus.source_url == url,
+                    DepartureStatus.status == OperationStatusEnum.extra.value,
+                )
+            ).scalars():
+                self.session.delete(row)
         for url in read_urls:
             written = {
                 (r["route_id"], r["port_id"], r["departure_date"], r["ship_name"] or "")
@@ -597,7 +617,7 @@ class MarixLine(BaseScraper):
                     else OperationStatusEnum.skipped
                 )
             else:
-                status = self._parse_status_from_classes(classes)
+                status = self._port_status(classes)
             if status is None:
                 self._log.warning(
                     "detail_status_unknown",
@@ -792,10 +812,14 @@ class MarixLine(BaseScraper):
             h1 = soup.select_one("h1.heading1")
             if h1 is not None and _EXTRA_HEADING in h1.get_text():
                 return "extra"
-            if any(
-                _EXTRA_CLASS in single.get("class", [])
+            # 港の temporary は、寄らない港（no_status）を除く全部の港に付くときだけ。
+            # 定期便が1港に臨時寄港しただけで、便ごと臨時便にしない（PR #90 レビュー）
+            stops = [
+                single.get("class", [])
                 for single in soup.select("div.service > div.single")
-            ):
+                if _SKIPPED_PORT_CLASS not in single.get("class", [])
+            ]
+            if stops and all(_EXTRA_CLASS in classes for classes in stops):
                 return "extra"
             return "regular"
         pages = getattr(self, "_detail_pages", None)
@@ -821,6 +845,15 @@ class MarixLine(BaseScraper):
         down = next((r for r in routes if r.origin_port == "鹿児島"), None)
         up = next((r for r in routes if r.origin_port == "那覇"), None)
         return down, up
+
+    def _port_status(self, classes: list[str]) -> OperationStatusEnum | None:
+        """詳細ページの港のステータス。temporary は、ほかの状態のクラスが無いときだけ extra（臨時便）。"""
+        if _EXTRA_CLASS not in classes:
+            return self._parse_status_from_classes(classes)
+        matched = {s for c, s in _STATUS_BY_CLASS.items() if c in classes}
+        if not matched:
+            return OperationStatusEnum.extra
+        return matched.pop() if len(matched) == 1 else None
 
     def _parse_status_from_classes(
         self, classes: list[str]

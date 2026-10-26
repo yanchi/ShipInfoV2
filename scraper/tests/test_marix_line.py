@@ -2279,3 +2279,105 @@ def test_run_writes_route_level_and_extra_rows_for_0907(db_session, marix_line_c
         ("名瀬", "extra", EXTRA_UP_0907),
         ("那覇", "extra", EXTRA_UP_0907),
     ]
+
+
+# ---------------------------------------------------------------------------
+# PR #90 レビュー：temporary は状態ではなく便の種類
+# ---------------------------------------------------------------------------
+
+
+@resp_mock.activate
+def test_extra_port_with_state_class_keeps_the_state(db_session, marix_line_company):
+    """臨時便の港が `temporary cancel alert` なら、unknown ではなく cancelled（臨時便そのものの欠航）。"""
+    page = _set_port_class(
+        read_fixture("marix/extra_down_20260906.html"),
+        "鹿児島",
+        ["single", "firstport", "temporary", "cancel", "alert"],
+    )
+    records, ports, logs, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([_EXTRA_DOWN_0906], []),
+        {EXTRA_DOWN_0906: page},
+        date(2026, 9, 6),
+    )
+    down, _ = _routes(db_session, marix_line_company)
+
+    (row,) = _rows_for(records, ports, down, "鹿児島", CROSS)
+    assert row["status"] == OperationStatusEnum.cancelled
+    assert "detail_status_unknown" not in {log["event"] for log in logs}
+
+
+@resp_mock.activate
+def test_voyage_kind_regular_when_only_one_port_is_temporary(
+    db_session, marix_line_company
+):
+    """定期便が1港だけ臨時寄港（temporary）しても、見出しが臨時便でなければ定期便。"""
+    page = _set_port_class(
+        read_fixture("marix/down_route_change_20260906.html"),
+        "本部",
+        ["single", "temporary", "alert"],
+    )
+    assert (
+        _kind_of(
+            db_session,
+            marix_line_company,
+            "route alert",
+            DOWN_0906,
+            page,
+            _INFO2_DOWN_0906,
+        )
+        == "regular"
+    )
+
+
+@resp_mock.activate
+def test_unread_extra_rows_removed_when_extra_vanishes_before_departure(
+    db_session, marix_line_company
+):
+    """臨時便だけの日：出港前に一覧から消えたら、同じキーの定期便が無くても「臨時便」の行を消す。"""
+    db_session.autoflush = False
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], [_EXTRA_UP_0907]),
+        {EXTRA_UP_0907: "extra_up_20260907.html"},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 0),
+    )
+    assert _up_cross(db_session)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], []),
+        {},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 30),
+    )
+    assert _up_cross(db_session) == []
+
+
+@resp_mock.activate
+def test_unread_extra_rows_kept_when_extra_vanishes_after_departure(
+    db_session, marix_line_company
+):
+    """出港後に一覧から消えた臨時便の行は、便ごと残す。"""
+    db_session.autoflush = False
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], [_EXTRA_UP_0907]),
+        {EXTRA_UP_0907: "extra_up_20260907.html"},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 0),
+    )
+    first = _up_cross(db_session)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], []),
+        {},
+        _DAY_0907,
+        datetime(2026, 9, 7, 8, 0),
+    )
+    assert _up_cross(db_session) == first
