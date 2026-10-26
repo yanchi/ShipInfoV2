@@ -2047,3 +2047,48 @@ def test_far_search_is_forced_only_for_keys_from_voyage_lines(
         (code, KAGOSHIMA, "2026年10月28日")
         for code in (NAHA, MOTOBU, YORON, WADOMARI, KAMETOKU, NAZE)
     }
+
+
+# ---------------------------------------------------------------------------
+# 「臨時便運航」の読み取り（US2）
+# ---------------------------------------------------------------------------
+
+
+def test_extra_voyage_status_is_read_without_warnings(db_session, marue_with_ports):
+    """SC-002：「臨時便運航」を operating として読み、警告を出さない。船のステータスは一番重い「欠航」。"""
+    company, _ = marue_with_ports
+    scraper = MarueFerry(db_session, company.id)
+
+    with fixed_now(NOW_1026), structlog.testing.capture_logs() as logs:
+        ship = scraper._parse_ships(read_fixture("marue/kagoshima_20261026.html"))[
+            "フェリー波之上"
+        ]
+
+    assert not [
+        log
+        for log in logs
+        if log["event"] in ("unknown_status_text", "unknown_voyage_status")
+    ]
+    assert ship.status == OperationStatusEnum.cancelled
+    assert [(v.departure_date, v.direction, v.status) for v in ship.voyages] == [
+        (date(2026, 10, 27), "上り", OperationStatusEnum.cancelled),
+        (date(2026, 10, 26), "下り", OperationStatusEnum.operating),
+        (date(2026, 10, 28), "上り", OperationStatusEnum.operating),
+    ]
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("臨時便運航", OperationStatusEnum.operating),
+        ("臨時便運休", OperationStatusEnum.suspended),
+        ("臨時便条件付運航", OperationStatusEnum.delayed),
+        ("臨時便欠航", OperationStatusEnum.cancelled),
+    ],
+)
+def test_extra_voyage_text_does_not_hide_heavier_words(
+    db_session, marue_with_ports, text, expected
+):
+    """「臨時」は最後の手がかり。運休・条件付・欠航の語があればそちらを先に当てる。"""
+    company, _ = marue_with_ports
+    assert MarueFerry(db_session, company.id)._parse_status_text(text) == expected

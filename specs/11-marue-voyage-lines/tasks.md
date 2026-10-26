@@ -84,8 +84,8 @@
 
 **Independent Test**: `kagoshima_20261026.html` を `_parse_ships()` に読ませて、警告0件・波之上の便の行3つ・船のステータスは `cancelled`。
 
-- [ ] T011 [P] [US2] `scraper/tests/test_marue_ferry.py` に SC-002 のテスト：上の Independent Test。行は `(10/27, 上り, cancelled)`・`(10/26, 下り, operating)`・`(10/28, 上り, operating)` の順。`unknown_status_text`・`unknown_voyage_status` のログが0件。あわせて `_parse_status_text()` のテスト：「臨時便運休」→ `suspended`、「臨時便条件付運航」→ `delayed`、「臨時便運航」→ `operating`（PR #85 レビュー）
-- [ ] T012 [US2] `scraper/scraper/scrapers/marue_ferry.py` の `_parse_status_text()` の**一番最後**（「通常」の判定の後、`return None` の前）に `"臨時" in text` → `OperationStatusEnum.operating` を足す。運休・条件付の語より先に当てない（research R4）
+- [X] T011 [P] [US2] `scraper/tests/test_marue_ferry.py` に SC-002 のテスト：上の Independent Test。行は `(10/27, 上り, cancelled)`・`(10/26, 下り, operating)`・`(10/28, 上り, operating)` の順。`unknown_status_text`・`unknown_voyage_status` のログが0件。あわせて `_parse_status_text()` のテスト：「臨時便運休」→ `suspended`、「臨時便条件付運航」→ `delayed`、「臨時便運航」→ `operating`（PR #85 レビュー）
+- [X] T012 [US2] `scraper/scraper/scrapers/marue_ferry.py` の `_parse_status_text()` の**一番最後**（「通常」の判定の後、`return None` の前）に `"臨時" in text` → `OperationStatusEnum.operating` を足す。運休・条件付の語より先に当てない（research R4）
 
 **Checkpoint**: T011・T007(d) が通る。既存テストが全部通る → コミット
 
