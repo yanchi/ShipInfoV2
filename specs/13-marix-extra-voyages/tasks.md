@@ -134,13 +134,13 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 
 ### 同じ回の優先（research R4）
 
-- [ ] T014 [US1] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）。今日 2026-09-07、`@pytest.mark.parametrize("extra_first", [True, False])` で一覧の並び順を入れ替える:
+- [X] T014 [US1] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）。今日 2026-09-07、`@pytest.mark.parametrize("extra_first", [True, False])` で一覧の並び順を入れ替える:
   - (a) `parse_departures()` の結果で、上り・クロス・9/7 の那覇（07:00）・名瀬（21:20）がそれぞれ1行で `extra`、`source_url = EXTRA_UP_0907`
   - (b) 同じく本部・与論・和泊・亀徳のクロスが1行ずつで `cancelled`、`source_url = UP_0907`
   - (c) 同じキーの行が2本無い（`(route_id, port_id, departure_date, ship_name)` が重複しない）。`departure_duplicate_key` の警告が出ない
   - (d) `db_session.autoflush = False` にして `_run_departures()` で DB に書いた後も (a)(b) のとおり（1キー1行）
   - (e) 定期便が走るとき（FR-006）：`up_cancel_20260907.html` の港のクラスを全部 `normal` に、h1 の【欠航】を【通常運航】にした定期便と、9/7 の臨時便を読む → 那覇・クロスの行は定期便（`operating`、`source_url = UP_0907`）。`status_detail` の終わりに「（臨時便 07:00発あり）」、`extra_voyage_conflict` の警告が1件
-- [ ] T015 [US1] `marix_line.py` に `_resolve_extra_conflicts(self, records, kept, list_urls, read_extra_urls) -> list[dict]` を作り、`parse_departures()` の最後（`parsed_departures` のログの前）で呼ぶ（research R4。`kept`・`list_urls` は T017 で使う。ここでは空で渡してよい）:
+- [X] T015 [US1] `marix_line.py` に `_resolve_extra_conflicts(self, records, kept, list_urls, read_extra_urls) -> list[dict]` を作り、`parse_departures()` の最後（`parsed_departures` のログの前）で呼ぶ（research R4。`kept`・`list_urls` は T017 で使う。ここでは空で渡してよい）:
   - 同じキーの行を、臨時便（`extra_voyage`）と定期便に分ける
   - 定期便の状態が `cancelled`・`suspended`・`skipped`・`unknown` → 臨時便の行を残す
   - それ以外 → 定期便の行を残し、`status_detail` の終わりに `（臨時便 HH:MM発あり）`（臨時便の出港時刻）を足して `extra_voyage_conflict`（キー・両方の URL）を出す
@@ -151,14 +151,14 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 
 ### 前の回の行（research R5）
 
-- [ ] T016 [US1] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）。全部 `db_session.autoflush = False`、1回目は今日 2026-09-07・今 2026-09-07 06:00 で、9/7 の一覧（定期便＋臨時便）を `_run_departures()`:
+- [X] T016 [US1] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）。全部 `db_session.autoflush = False`、1回目は今日 2026-09-07・今 2026-09-07 06:00 で、9/7 の一覧（定期便＋臨時便）を `_run_departures()`:
   - (a) US1-4：2回目は今 06:30、臨時便を一覧に残したまま詳細ページを 500 → 那覇・名瀬のクロスは `extra` のまま
   - (b) US1-5：2回目は今 08:00（那覇 07:00 は出港済み、名瀬 21:20 はまだ）、臨時便を一覧から外す → 那覇・名瀬のクロスは両方 `extra` のまま（出港済みは便ごと。analyze M1）
   - (c) US1-6：2回目は今 06:30（未出港）、臨時便を一覧から外す → 那覇・名瀬のクロスは `cancelled`（`source_url = UP_0907`）
   - (d) 2回目は今 06:30、臨時便の詳細ページの那覇・名瀬の日付を「09月08日」に書き換える → 9/7 の那覇・名瀬のクロスは `cancelled`（`source_url = UP_0907`）に戻り、9/8 に `extra` の行がある（R5・R7。flush が無いと 9/7 の行が消えるので、T007 の確認にもなる）
   - (e) 2回目は今 06:30、定期便を全部 `normal` に書き換え、臨時便を一覧から外す → 那覇のクロスは `operating`（定期便が走るときはいつでも定期便）
   - (f) 日をまたぐ臨時便（PR #89 レビュー）：1回目の臨時便の詳細ページの那覇を「09月06日」23:00 発に書き換える（名瀬は 9/7 21:20 のまま）。2回目は今日 2026-09-07・今 08:00、臨時便を一覧から外す（一覧の便の始発日は 9/7 だけ）→ 名瀬のクロスは `extra` のまま（始発港の 9/6 23:00 で出港済み）。範囲の中だけで取ると名瀬 21:20 で「未出港」になり `cancelled` に戻るので、これで落ちることを確かめる
-- [ ] T017 [US1] `marix_line.py` を直す（research R5）:
+- [X] T017 [US1] `marix_line.py` を直す（research R5）:
   - `_extra_rows_kept(self, route_ids: list[int], since: date) -> dict[tuple, str]`：`status = 'extra'` で `departure_date >= since` の行の、キー → `source_url`。`parse_departures()` の頭で1回だけ呼ぶ。`since` は一覧の便の始発日（`_parse_date()`）のいちばん前、一覧に便が無ければ今日
   - `_extra_first_departures(self, route_ids: list[int], urls: set[str]) -> dict[str, datetime | None]`：`status = 'extra'` で `source_url IN urls` の行を `GROUP BY source_url` して `MIN(scheduled_departure_at)`。出港日の範囲で絞らない（日をまたぐ便の始発港の行を拾うため。research R5）。`urls` は `_extra_rows_kept()` の値。空なら DB を読まない
   - `list_urls`：今回の一覧の便の URL 全部
@@ -167,7 +167,7 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 
 ### 予備ルート（research R6・FR-015）
 
-- [ ] T018 [US1] `scraper/tests/test_marix_line.py` にテストを足す。今日 2026-09-06、9/6 の一覧（定期便＋臨時便）で定期便（プラス）の詳細ページを 500 → `parse_departures()` の結果に、鹿児島 9/6 のプラスの予備ルートの行（船名なし・`delayed`）と、クロスの `extra` の行が両方ある（SC-008 の前半）。もう1つ、9/7 の一覧で定期便の詳細ページを 500 → 1回目、詳細ページあり → 2回目（`autoflush = False`・`_run_departures()`）で、那覇・名瀬はクロスの `extra` の1行だけ（SC-008 の後半。2回目の那覇・名瀬の定期便の行は臨時便に負けて落ちるので、船名なしの行は T015 の「落とした行の `replace_source`」で消える）。前半は今の作りで通るはず。落ちたら実装を止めて理由を確かめる
+- [X] T018 [US1] `scraper/tests/test_marix_line.py` にテストを足す。今日 2026-09-06、9/6 の一覧（定期便＋臨時便）で定期便（プラス）の詳細ページを 500 → `parse_departures()` の結果に、鹿児島 9/6 のプラスの予備ルートの行（船名なし・`delayed`）と、クロスの `extra` の行が両方ある（SC-008 の前半）。もう1つ、9/7 の一覧で定期便の詳細ページを 500 → 1回目、詳細ページあり → 2回目（`autoflush = False`・`_run_departures()`）で、那覇・名瀬はクロスの `extra` の1行だけ（SC-008 の後半。2回目の那覇・名瀬の定期便の行は臨時便に負けて落ちるので、船名なしの行は T015 の「落とした行の `replace_source`」で消える）。前半は今の作りで通るはず。落ちたら実装を止めて理由を確かめる
 
 **Checkpoint**: T014・T016・T018 が通る・既存テストが全部通る → コミット
 

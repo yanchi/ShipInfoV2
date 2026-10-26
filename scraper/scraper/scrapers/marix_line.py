@@ -71,7 +71,7 @@ from datetime import date, datetime, timedelta
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, Tag
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from scraper.db.models import DepartureStatus, OperationStatusEnum, Route, RouteStop
 from scraper.scrapers.base import BaseScraper
@@ -92,6 +92,13 @@ _STATUS_BY_CLASS = {
 # 臨時便の見分け方（research R1）。見出しは「【臨時便】」「【臨時便運航】」「【臨時便・航行経路変更】」
 _EXTRA_CLASS = "temporary"
 _EXTRA_HEADING = "【臨時便"
+# 同じキーの定期便がこのステータスなら臨時便の行を優先する（research R4）
+_REPLACEABLE_BY_EXTRA = (
+    OperationStatusEnum.cancelled,
+    OperationStatusEnum.suspended,
+    OperationStatusEnum.skipped,
+    OperationStatusEnum.unknown,
+)
 # ステータスを表さないクラス（alert は条件付・経路変更・欠航のどれにも付く）
 _LAYOUT_CLASSES = {
     "status_single_cover",
@@ -224,8 +231,26 @@ class MarixLine(BaseScraper):
 
         soup = BeautifulSoup(list_html, "lxml")
         records: list[dict] = []
+        # 前の回に臨時便が書いた行（research R5）。範囲は一覧の便の始発日のいちばん前以降
+        list_urls: set[str] = set()
+        start_dates: list[date] = []
+        for cover in soup.select("div.status_single_cover"):
+            link = cover.select_one("a.status_single[href]")
+            info2 = cover.find("div", class_="info2")
+            if link is not None:
+                list_urls.add(urljoin(SOURCE_URL, link["href"]))
+            if info2 is not None:
+                start = self._parse_date(info2.get_text(separator=" ", strip=True))
+                if start is not None:
+                    start_dates.append(start)
+        kept = self._extra_rows_kept(
+            [r.id for r in (down_route, up_route) if r],
+            min(start_dates, default=date.today()),
+        )
         # この回に詳細ページを読めた臨時便の URL（後始末 _upsert_departures で使う。research R7）
         self._read_extra_urls: set[str] = set()
+        # 同じキーの臨時便に負けて書かなかった定期便の行（replace_source の後始末に使う。research R7）
+        self._dropped_regular: list[dict] = []
         for block in soup.select("div.status_single_cover"):
             # 便のクラスを読めなくても、詳細ページの港ごとのクラスで判定する（parse で warning 済み）
             status = (
@@ -288,8 +313,137 @@ class MarixLine(BaseScraper):
                 )
             )
 
+        records = self._resolve_extra_conflicts(
+            records, kept, list_urls, self._read_extra_urls
+        )
         self._log.info("parsed_departures", records=len(records))
         return records
+
+    def _extra_rows_kept(self, route_ids: list[int], since: date) -> dict[tuple, str]:
+        """前の回に臨時便が書いた行（状態 extra）：キー → source_url。"""
+        if not route_ids:
+            return {}
+        rows = self.session.execute(
+            select(
+                DepartureStatus.route_id,
+                DepartureStatus.port_id,
+                DepartureStatus.departure_date,
+                DepartureStatus.ship_name,
+                DepartureStatus.source_url,
+            ).where(
+                DepartureStatus.route_id.in_(route_ids),
+                DepartureStatus.status == OperationStatusEnum.extra.value,
+                DepartureStatus.departure_date >= since,
+            )
+        ).all()
+        return {(r[0], r[1], r[2], r[3] or ""): r[4] for r in rows}
+
+    def _extra_first_departures(
+        self, route_ids: list[int], urls: set[str]
+    ) -> dict[str, datetime | None]:
+        """臨時便の URL ごとの、いちばん早い出港予定（始発港の出港）。
+
+        出港日の範囲で絞らない。日をまたぐ便の始発港の行は、途中の港の行より前の出港日になる。
+        """
+        if not route_ids or not urls:
+            return {}
+        rows = self.session.execute(
+            select(
+                DepartureStatus.source_url,
+                func.min(DepartureStatus.scheduled_departure_at),
+            )
+            .where(
+                DepartureStatus.route_id.in_(route_ids),
+                DepartureStatus.status == OperationStatusEnum.extra.value,
+                DepartureStatus.source_url.in_(urls),
+            )
+            .group_by(DepartureStatus.source_url)
+        ).all()
+        return {url: first for url, first in rows}
+
+    @staticmethod
+    def _departure_key(rec: dict) -> tuple:
+        return (
+            rec["route_id"],
+            rec["port_id"],
+            rec["departure_date"],
+            rec.get("ship_name") or "",
+        )
+
+    def _resolve_extra_conflicts(
+        self,
+        records: list[dict],
+        kept: dict[tuple, str],
+        list_urls: set[str],
+        read_extra_urls: set[str],
+    ) -> list[dict]:
+        """同じキー（航路・港・出港日・船名）の臨時便と定期便を1本に絞る（research R4）。
+
+        定期便が欠航・運休・抜港・不明なら臨時便の行、それ以外は定期便の行（詳細に
+        「（臨時便 HH:MM発あり）」を足す）。一覧の並び順に関係なく同じ結果になる。
+        臨時便同士・定期便同士の重複は触らない（Base が先の行を使う）。返す行は元の順を保つ。
+        """
+        extras: dict[tuple, dict] = {}
+        regulars: dict[tuple, dict] = {}
+        for rec in records:
+            target = extras if rec.get("extra_voyage") else regulars
+            target.setdefault(self._departure_key(rec), rec)
+
+        drop: set[int] = set()  # 落とす行の id()
+        for key, extra in extras.items():
+            regular = regulars.get(key)
+            if regular is None:
+                continue
+            if regular["status"] in _REPLACEABLE_BY_EXTRA:
+                drop.update(
+                    id(r)
+                    for r in records
+                    if not r.get("extra_voyage") and self._departure_key(r) == key
+                )
+                continue
+            # 定期便が走る。臨時便の行を落として、定期便の詳細で気づけるようにする
+            at = extra.get("scheduled_departure_at")
+            note = f"（臨時便 {at:%H:%M}発あり）" if at else "（臨時便あり）"
+            regular["status_detail"] = f"{regular.get('status_detail') or ''}{note}"
+            drop.update(
+                id(r)
+                for r in records
+                if r.get("extra_voyage") and self._departure_key(r) == key
+            )
+            self._log.warning(
+                "extra_voyage_conflict",
+                key=[str(k) for k in key],
+                regular_url=regular["source_url"],
+                extra_url=extra["source_url"],
+            )
+
+        # この回の臨時便の行が無いキー：前の回の臨時便の行を、定期便の欠航で上書きしない（research R5）
+        if kept:
+            firsts = self._extra_first_departures(
+                sorted({k[0] for k in kept}), set(kept.values())
+            )
+            now = datetime.now()
+            for rec in records:
+                key = self._departure_key(rec)
+                if (
+                    rec.get("extra_voyage")
+                    or key in extras
+                    or key not in kept
+                    or rec["status"] not in _REPLACEABLE_BY_EXTRA
+                ):
+                    continue
+                url = kept[key]
+                first = firsts.get(url)
+                # ① 臨時便は一覧にあるのに詳細ページを読めていない ② 臨時便は出港済み（便ごと）
+                if (url in list_urls and url not in read_extra_urls) or (
+                    first is not None and first <= now
+                ):
+                    drop.add(id(rec))
+
+        self._dropped_regular = [
+            r for r in records if id(r) in drop and not r.get("extra_voyage")
+        ]
+        return [r for r in records if id(r) not in drop]
 
     def _upsert_departures(self, records: list[dict]) -> tuple[int, int]:
         """Base の処理の後、この回に詳細ページを読めた臨時便の、書かなくなった行を消す（research R7）。
@@ -299,10 +453,12 @@ class MarixLine(BaseScraper):
         （船名なし）が、臨時便の詳細ページの URL で見つかる。読めなかった回は消さない。
         """
         created, updated = super()._upsert_departures(records)
-        read_urls = getattr(self, "_read_extra_urls", None)
-        if not read_urls:
+        read_urls = getattr(self, "_read_extra_urls", None) or set()
+        dropped = getattr(self, "_dropped_regular", None) or []
+        if not read_urls and not dropped:
             return created, updated
         self.session.flush()  # 本番は autoflush=False。書いた行を読んでから消す
+        self._delete_rows_of_dropped_regular(records, dropped)
         for url in read_urls:
             written = {
                 (r["route_id"], r["port_id"], r["departure_date"], r["ship_name"] or "")
@@ -321,6 +477,36 @@ class MarixLine(BaseScraper):
                 ) not in written:
                     self.session.delete(row)
         return created, updated
+
+    def _delete_rows_of_dropped_regular(
+        self, records: list[dict], dropped: list[dict]
+    ) -> None:
+        """臨時便に負けた定期便の行の replace_source を、Base の代わりに処理する（research R7）。
+
+        落とした行は Base に届かないので、前の回の予備ルートの行（船名なし・定期便の URL）が
+        臨時便の勝った港に残る。同じ replace_source の定期便の行（落とした行も含む）に無い行を消す。
+        """
+        written: dict[tuple, set[tuple]] = {}
+        for rec in [*records, *dropped]:
+            source = rec.get("replace_source")
+            if source is not None:
+                written.setdefault(tuple(source), set()).add(
+                    (rec["departure_date"], rec.get("ship_name") or "")
+                )
+        for source in {
+            tuple(r["replace_source"]) for r in dropped if r.get("replace_source")
+        }:
+            route_id, port_id, source_url = source
+            rows = self.session.execute(
+                select(DepartureStatus).where(
+                    DepartureStatus.route_id == route_id,
+                    DepartureStatus.port_id == port_id,
+                    DepartureStatus.source_url == source_url,
+                )
+            ).scalars()
+            for row in rows:
+                if (row.departure_date, row.ship_name) not in written[source]:
+                    self.session.delete(row)
 
     def _departures_from_detail(
         self,
