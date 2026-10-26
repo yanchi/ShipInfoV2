@@ -118,7 +118,10 @@ class PortBoardBuilder
         if ($statuses !== []) {
             $checkedAt = max(array_map(static fn (DepartureStatus $s) => $s->getCheckedAt(), $statuses));
 
-            return [new PortBoardEntry(state: DepartureDisplayStateEnum::NoService, checkedAt: $checkedAt)];
+            // 臨時便は便検索の行とぶつかると行を作らない。その行が no_service でここで落ちても、船名は残す（抜港の判定用）
+            $shipNames = array_values(array_filter(array_map(static fn (DepartureStatus $s) => $s->getShipName(), $statuses), static fn (string $n) => $n !== ''));
+
+            return [new PortBoardEntry(state: DepartureDisplayStateEnum::NoService, checkedAt: $checkedAt, noServiceShipName: $shipNames[0] ?? null)];
         }
 
         // ルール5: 行が無い

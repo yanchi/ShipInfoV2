@@ -14,4 +14,9 @@ final readonly class PortBoardExtraDeparture
         public bool $skipsPorts = false,
     ) {
     }
+
+    public function withSkipsPorts(bool $skipsPorts): self
+    {
+        return new self($this->portName, $this->departureAt, $skipsPorts);
+    }
 }

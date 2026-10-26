@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\FerryCompany;
 use App\Entity\OperationStatus;
+use App\Entity\RouteStop;
 use App\Enum\DepartureDisplayStateEnum;
 use App\Enum\OperationStatusEnum;
 use App\Enum\RouteDirectionEnum;
@@ -135,32 +136,46 @@ class StatusController extends AbstractController
                 if ($direction === null) {
                     continue;
                 }
-                $hasExtra = $today->firstExtraDepartureOf($companyId, $direction) !== null;
-                if ($r['status']?->getStatus() === OperationStatusEnum::NoService) {
-                    if (!$today->hasRegularDeparturesOf($companyId, $direction) && $hasExtra) {
+                $hasExtra    = $today->firstExtraDepartureOf($companyId, $direction) !== null;
+                $routeStatus = $r['status']?->getStatus();
+
+                // ふだんのバッジ：航路単位が便なしのときは、途中の港の便から決める。ここに無ければ航路単位の状態
+                $display = null;
+                if ($routeStatus === OperationStatusEnum::NoService) {
+                    if ($hasExtra && !$today->hasRegularDeparturesOf($companyId, $direction)) {
                         $result[$routeId] = ['kind' => 'badge', 'state' => null, 'status' => OperationStatusEnum::Extra];
 
                         continue;
                     }
                     $display = $this->midwayDisplay($today->midwayDeparturesOf($companyId, $direction));
-                    if ($display !== null) {
-                        $result[$routeId] = $display;
-                    }
                 }
-                if (!$hasExtra) {
-                    continue;
+
+                // 臨時便がある日の通常運航・運航予定は「スケジュール変更」にする
+                if ($hasExtra && $this->isCalmBadge($display, $routeStatus)) {
+                    $display = ['kind' => 'changed', 'state' => null, 'status' => null];
                 }
-                $badge = $result[$routeId] ?? null;
-                $calm  = $badge === null
-                    ? $r['status']?->getStatus() === OperationStatusEnum::Operating
-                    : $badge['kind'] === 'badge' && ($badge['status'] === OperationStatusEnum::Operating || $badge['state'] === DepartureDisplayStateEnum::Scheduled);
-                if ($calm) {
-                    $result[$routeId] = ['kind' => 'changed', 'state' => null, 'status' => null];
+                if ($display !== null) {
+                    $result[$routeId] = $display;
                 }
             }
         }
 
         return $result;
+    }
+
+    /**
+     * ふだんのバッジが通常運航・運航予定か（臨時便がある日にスケジュール変更へ変える対象）。
+     *
+     * @param array{kind: 'changed'|'badge', state: ?DepartureDisplayStateEnum, status: ?OperationStatusEnum}|null $display 途中の港から決めたバッジ。null なら航路単位の状態
+     */
+    private function isCalmBadge(?array $display, ?OperationStatusEnum $routeStatus): bool
+    {
+        if ($display === null) {
+            return $routeStatus === OperationStatusEnum::Operating;
+        }
+
+        return $display['kind'] === 'badge'
+            && ($display['status'] === OperationStatusEnum::Operating || $display['state'] === DepartureDisplayStateEnum::Scheduled);
     }
 
     /**
@@ -181,11 +196,17 @@ class StatusController extends AbstractController
         foreach ($companies as $companyData) {
             foreach ($companyData['routes'] as $routeId => $r) {
                 $direction = $r['route']->getDirection();
-                $companyId = $companyData['company']->getId();
-                $extra     = $direction === null ? null : $today->firstExtraDepartureOf($companyId, $direction);
-                if ($direction !== null && $extra !== null) {
-                    $result[$routeId] = new PortBoardExtraDeparture($extra->portName, $extra->departureAt, $board->extraSkipsPortsOf($companyId, $direction));
+                if ($direction === null) {
+                    continue;
                 }
+                $companyId = $companyData['company']->getId();
+                $extra     = $today->firstExtraDepartureOf($companyId, $direction);
+                if ($extra === null) {
+                    continue;
+                }
+                $portIds = array_values(array_map(static fn (RouteStop $stop) => (int) $stop->getPort()->getId(), $r['route']->getStops()->toArray()));
+
+                $result[$routeId] = $extra->withSkipsPorts($board->extraSkipsPortsOf($companyId, $direction, $portIds));
             }
         }
 

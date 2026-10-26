@@ -92,35 +92,42 @@ final readonly class PortBoard
      * その会社の、その方向の、今日を出る臨時便の運航のどれかに抜港があるか（15-extra-voyage-badge FR-004）。
      *
      * 臨時便は寄らない港の行を作らない（12 の FR-006・13 の FR-003）ので、運航の最初と最後の港のあいだで、
-     * 同じ船の寄る行（isCalling）が無い港を抜港とみなす。
-     * - 同じ運航の臨時便は、船名と到着予定（終点への到着）が同じ。船名か到着予定が無いものは、まとめず1つで1回の運航にする
+     * 同じ船の寄る行（isCalling）が無い港を抜港とみなす。判断できないときは「抜港あり」と言わない側に倒す。
+     * - 見るのは今日と明日の行だけ（今日を出る運航は、そこにしか行が無い）
+     * - 同じ運航の臨時便は、船名と到着予定（終点への到着）が同じ。船名か到着予定が無い臨時便は運航にまとめられないので見ない
      * - 前日に始発港を出た運航は、ボードに前日の行が無いので、今日の最初の港から見る
      * - 同じ船が同じ日に別の運航でそのあいだの港に寄ると、寄港に数える（抜港を見落とす。1日に2回出た例は無いので割り切り）
+     * - 便検索の no_service の行に隠れた寄港は、船名つきの「便なし」を寄港に数える（noServiceShipName）
      * - 港の並び（行の添字）は、日付が違っても同じとして扱う
+     *
+     * @param list<int>|null $portIds その会社の航路が寄る港の ID。ボードの行は方向ごとに最初の航路の寄港順で作るので、
+     *                                会社の航路に無い港のあいだは数えない。null なら全部の行を見る
      */
-    public function extraSkipsPortsOf(int $companyId, RouteDirectionEnum $direction): bool
+    public function extraSkipsPortsOf(int $companyId, RouteDirectionEnum $direction, ?array $portIds = null): bool
     {
+        $days = \array_slice($this->days, 0, 2);
+
         /** @var array<string, array{ship: string, startsToday: bool, minPosition: int, maxPosition: int, minDay: int, maxDay: int}> $voyages */
         $voyages = [];
-        foreach ($this->days as $dayIndex => $day) {
+        foreach ($days as $dayIndex => $day) {
             foreach ($day->directions as $d) {
                 if ($d->direction !== $direction) {
                     continue;
                 }
                 foreach ($d->rows as $position => $row) {
                     foreach ($row->entries as $entry) {
+                        $ship = (string) $entry->shipName;
                         if (
                             $entry->companyId !== $companyId
                             || $entry->state !== DepartureDisplayStateEnum::Status
                             || $entry->status !== OperationStatusEnum::Extra
                             || $entry->departureAt === null
+                            || $entry->arrivalAt === null
+                            || $ship === ''
                         ) {
                             continue;
                         }
-                        $ship = (string) $entry->shipName;
-                        $key  = $ship === '' || $entry->arrivalAt === null
-                            ? "single:{$dayIndex}:{$position}:" . \count($voyages)
-                            : $ship . '|' . $entry->arrivalAt->format('Y-m-d H:i');
+                        $key    = $ship . '|' . $entry->arrivalAt->format('Y-m-d H:i');
                         $voyage = $voyages[$key] ?? ['ship' => $ship, 'startsToday' => false, 'minPosition' => $position, 'maxPosition' => $position, 'minDay' => $dayIndex, 'maxDay' => $dayIndex];
 
                         $voyages[$key] = [
@@ -137,11 +144,14 @@ final readonly class PortBoard
         }
 
         foreach ($voyages as $voyage) {
-            if (!$voyage['startsToday'] || $voyage['ship'] === '') {
+            if (!$voyage['startsToday']) {
                 continue;
             }
             for ($position = $voyage['minPosition'] + 1; $position < $voyage['maxPosition']; ++$position) {
-                if (!$this->callsAt($companyId, $direction, $voyage['ship'], $position, $voyage['minDay'], $voyage['maxDay'])) {
+                if ($portIds !== null && !$this->isPortIn($days, $direction, $position, $portIds)) {
+                    continue;
+                }
+                if (!$this->callsAt($days, $companyId, $direction, $voyage['ship'], $position, $voyage['minDay'], $voyage['maxDay'])) {
                     return true;
                 }
             }
@@ -150,16 +160,38 @@ final readonly class PortBoard
         return false;
     }
 
-    /** 日付の範囲（ボードの日の添字）で、その港の行に同じ会社・同じ船の寄る便があるか */
-    private function callsAt(int $companyId, RouteDirectionEnum $direction, string $ship, int $position, int $fromDay, int $toDay): bool
+    /**
+     * @param list<PortBoardDay> $days
+     * @param list<int>          $portIds
+     */
+    private function isPortIn(array $days, RouteDirectionEnum $direction, int $position, array $portIds): bool
+    {
+        foreach ($days[0]->directions ?? [] as $d) {
+            if ($d->direction === $direction && isset($d->rows[$position])) {
+                return \in_array($d->rows[$position]->port->getId(), $portIds, true);
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 日付の範囲（$days の添字）で、その港の行に同じ船の寄る便があるか。
+     *
+     * @param list<PortBoardDay> $days
+     */
+    private function callsAt(array $days, int $companyId, RouteDirectionEnum $direction, string $ship, int $position, int $fromDay, int $toDay): bool
     {
         for ($dayIndex = $fromDay; $dayIndex <= $toDay; ++$dayIndex) {
-            foreach ($this->days[$dayIndex]->directions as $d) {
+            foreach ($days[$dayIndex]->directions as $d) {
                 if ($d->direction !== $direction || !isset($d->rows[$position])) {
                     continue;
                 }
                 foreach ($d->rows[$position]->entries as $entry) {
-                    if ($entry->companyId === $companyId && $entry->shipName === $ship && $entry->isCalling()) {
+                    if (
+                        ($entry->companyId === $companyId && $entry->shipName === $ship && $entry->isCalling())
+                        || ($entry->state === DepartureDisplayStateEnum::NoService && $entry->noServiceShipName === $ship)
+                    ) {
                         return true;
                     }
                 }

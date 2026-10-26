@@ -278,6 +278,38 @@ class PortBoardTest extends TestCase
         $this->assertFalse($board->extraSkipsPortsOf(1, RouteDirectionEnum::Down));
     }
 
+    /** ボードの行は最初の航路の寄港順で作る。その会社の航路に無い港は、あいだにあっても抜港に数えない */
+    public function testExtraIgnoresPortsOutsideCompanyRoute(): void
+    {
+        $board = $this->extraBoard([[
+            1 => [$this->extra('波之上', '03:50', '13:50')],
+            5 => [$this->extra('波之上', '12:00', '13:50')],
+        ]]);
+
+        $this->assertTrue($board->extraSkipsPortsOf(1, RouteDirectionEnum::Down, [1, 2, 3, 4, 5, 6]));
+        // 亀徳・和泊・与論（ID 3・4・5）がその会社の航路に無い
+        $this->assertFalse($board->extraSkipsPortsOf(1, RouteDirectionEnum::Down, [1, 2, 6]));
+        // 寄港する港が分からないとき（航路に停泊地が無い）は言わない
+        $this->assertFalse($board->extraSkipsPortsOf(1, RouteDirectionEnum::Down, []));
+    }
+
+    /** 便検索の no_service の行に隠れた寄港（船名つきの便なし）は抜港に数えない。船名が違えば数えない */
+    public function testExtraCountsNoServiceRowOfSameShipAsHidden(): void
+    {
+        $noService = fn (?string $ship) => new PortBoardEntry(DepartureDisplayStateEnum::NoService, noServiceShipName: $ship);
+        $make      = fn (?string $ship) => $this->extraBoard([[
+            1 => [$this->extra('波之上', '03:50', '13:50')],
+            2 => [$noService($ship)],
+            3 => [$noService($ship)],
+            4 => [$noService($ship)],
+            5 => [$this->extra('波之上', '12:00', '13:50')],
+        ]]);
+
+        $this->assertFalse($make('波之上')->extraSkipsPortsOf(1, RouteDirectionEnum::Down));
+        $this->assertTrue($make(null)->extraSkipsPortsOf(1, RouteDirectionEnum::Down));
+        $this->assertTrue($make('クロス')->extraSkipsPortsOf(1, RouteDirectionEnum::Down));
+    }
+
     /** 運航が2つあって、どちらかに抜港があれば true */
     public function testExtraSkipsPortsWhenOneOfTwoVoyagesSkips(): void
     {
