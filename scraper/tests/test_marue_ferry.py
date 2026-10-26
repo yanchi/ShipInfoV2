@@ -2143,7 +2143,16 @@ def down_1029_rows(
 
 
 def record_down_1029(
-    db_session, down, ports, name, d, status, detail=None, *, checked=None
+    db_session,
+    down,
+    ports,
+    name,
+    d,
+    status,
+    detail=None,
+    *,
+    checked=None,
+    timeless=False,
 ):
     """前回の実行で記録した、波之上の 10/29 鹿児島発下りの行。"""
     dep = {
@@ -2163,7 +2172,7 @@ def record_down_1029(
             ship_name=NAMINOUE,
             status=status,
             status_detail=detail,
-            scheduled_departure_at=dep,
+            scheduled_departure_at=None if timeless else dep,
             scheduled_arrival_at=datetime(2026, 10, 30, 19, 0),
             content_hash="x" * 64,
             scraped_at=when,
@@ -2538,3 +2547,29 @@ def test_vanished_voyage_line_is_searched_and_reset_to_scheduled(
     assert far == {(NAHA, KAGOSHIMA, "2026年10月28日")}
     row = find(departures, up, ports["那覇"], date(2026, 10, 28))
     assert row["status"] is None and row["status_detail"] is None
+
+
+@resp_mock.activate
+def test_departed_voyage_keeps_recorded_skipped_port(db_session, marue_with_ports):
+    """PR #86 高：航行中に抜港の港が、検索結果が0件になっても「便なし」に変わらない（記録の skipped を保つ）。"""
+    company, ports = marue_with_ports
+    down, _ = routes_of(db_session, company)
+    record_down_1029(db_session, down, ports, "鹿児島", date(2026, 10, 29), "operating")
+    record_down_1029(
+        db_session,
+        down,
+        ports,
+        "与論",
+        date(2026, 10, 30),
+        "skipped",
+        "与論港には寄港いたしません。",
+        timeless=True,
+    )
+    searches = down_1029_rows(ports_1030=(NAZE, KAMETOKU, WADOMARI, MOTOBU))
+
+    _, _, departures, _ = run_1026(db_session, company.id, searches, now=NOW_1029_EVE)
+
+    row = find(departures, down, ports["与論"], date(2026, 10, 30))
+    assert row["status"] == OperationStatusEnum.skipped
+    assert row["status_detail"] == "与論港には寄港いたしません。"
+    assert row["ship_name"] == NAMINOUE

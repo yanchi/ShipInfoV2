@@ -651,10 +651,15 @@ class MarueFerry(BaseScraper):
         ship = getattr(self, "_ships", {}).get(ship_name)
         if ship is not None:
             ship = self._for_current_voyage(ship)
+        if ship is not None and ship.use_recorded:
+            # 港別情報は見ない。航行中の抜港は、前回その港に付けた skipped をそのまま保つ
+            status, detail = self._recorded_voyage(
+                ship_name, route_id, cur[1]
+            ).ports.get((port_id, d), (None, None))
+            return detail if status == OperationStatusEnum.skipped and detail else None
         if (
             ship is None
             or ship.assumed_operating
-            or ship.use_recorded
             or ship.status
             in (
                 None,
