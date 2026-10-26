@@ -98,6 +98,9 @@ _SEVERITY = {
     OperationStatusEnum.operating: 1,
 }
 
+# 同じ船・同じ航路で下船日時の差がこれ未満なら同じ便とみなす（1往復に2日以上かかるので、同じ航路を1日に2回走ることはない）
+_SAME_VOYAGE = timedelta(hours=24)
+
 # 条件付（delayed）として読むタグ・便の行の語。「寄港地変更」は「港変更」を含まない（寄・港・地・変・更）
 _CONDITIONAL_WORDS = ("条件付", "港変更", "寄港地変更", "抜港")
 
@@ -718,13 +721,7 @@ class MarueFerry(BaseScraper):
         )
         if notice is None:
             return None
-        stops = {s.port_id: s for s in self._stops.get(route_id, [])}
-        if port_id not in stops:
-            return None
-        end_offset = max(stops.values(), key=lambda s: s.stop_order).day_offset
-        departure_date = cur[1].date() - timedelta(
-            days=end_offset - stops[port_id].day_offset
-        )
+        departure_date = self._departure_date(route_id, cur[1], port_id)
         return notice.sentence if departure_date == d else None
 
     def _recorded_voyages(
@@ -759,14 +756,13 @@ class MarueFerry(BaseScraper):
             .order_by(func.max(DepartureStatus.checked_at).desc())
         ).all()
 
-        same_voyage = timedelta(hours=24)
         accepted = list(searched)
         result: list[tuple[str, int, datetime]] = []
         for r in rows:
             if any(
                 ship == r.ship_name
                 and route_id == r.route_id
-                and abs(arrival - r.scheduled_arrival_at) < same_voyage
+                and abs(arrival - r.scheduled_arrival_at) < _SAME_VOYAGE
                 for ship, route_id, arrival in accepted
             ):
                 continue
@@ -783,14 +779,12 @@ class MarueFerry(BaseScraper):
         港別情報は使わない（FR-004。どの便の話か書いていないことが多い）。
         """
         ship = ships.get(ship_name)
-        stops = self._stops.get(route_id, [])
-        if ship is None or not ship.voyages or not stops or row.arrival_at is None:
+        if ship is None or not ship.voyages or row.arrival_at is None:
             return None, None
-        arrival_date = row.arrival_at.date()
-        origin_date = arrival_date - timedelta(
-            days=stops[-1].day_offset - stops[0].day_offset
-        )
-        line = self._voyage_line(ship, route_id, origin_date, arrival_date)
+        origin_date = self._departure_date(route_id, row.arrival_at)
+        if origin_date is None:
+            return None, None
+        line = self._voyage_line(ship, route_id, origin_date, row.arrival_at.date())
         if line is None:
             return None, None
         if len(ship.voyages) >= 2:
@@ -877,13 +871,29 @@ class MarueFerry(BaseScraper):
         if cur is None:
             return ship
         route_id, arrival_at = cur
-        stops = getattr(self, "_stops", {}).get(route_id, [])
-        if not stops:
+        origin_date = self._departure_date(route_id, arrival_at)
+        if origin_date is None:
             return ship
-        origin_date = arrival_at.date() - timedelta(
-            days=stops[-1].day_offset - stops[0].day_offset
-        )
         return self._for_voyage(ship, route_id, origin_date, arrival_at)
+
+    def _departure_date(
+        self, route_id: int, arrival_at: datetime, port_id: int | None = None
+    ) -> date | None:
+        """下船日時の便が、port_id の港（省略すれば始発港）を出る日。
+
+        出港日 ＝ 下船日 −（終点の day_offset − その港の day_offset）。航路や港が分からなければ None。
+        """
+        stops = self._get_stops().get(route_id, [])
+        start = (
+            stops[0]
+            if port_id is None and stops
+            else next((s for s in stops if s.port_id == port_id), None)
+        )
+        if start is None:
+            return None
+        return arrival_at.date() - timedelta(
+            days=stops[-1].day_offset - start.day_offset
+        )
 
     def _for_voyage(
         self,
@@ -1043,7 +1053,6 @@ class MarueFerry(BaseScraper):
             self._recorded_cache = {}
         key = (ship_name, route_id, arrival_at)
         if key not in self._recorded_cache:
-            same_voyage = timedelta(hours=24)
             rows = self.session.execute(
                 select(
                     DepartureStatus.port_id,
@@ -1054,8 +1063,8 @@ class MarueFerry(BaseScraper):
                 ).where(
                     DepartureStatus.ship_name == ship_name,
                     DepartureStatus.route_id == route_id,
-                    DepartureStatus.scheduled_arrival_at > arrival_at - same_voyage,
-                    DepartureStatus.scheduled_arrival_at < arrival_at + same_voyage,
+                    DepartureStatus.scheduled_arrival_at > arrival_at - _SAME_VOYAGE,
+                    DepartureStatus.scheduled_arrival_at < arrival_at + _SAME_VOYAGE,
                 )
             ).all()
             ports = {
