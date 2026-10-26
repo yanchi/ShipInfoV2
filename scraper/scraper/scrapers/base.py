@@ -74,7 +74,11 @@ class BaseScraper(ABC):
             - freeze_after_departure: bool（出港済みの行を更新・作成しない）
             - replace_scope: (route_id, port_id, departure_date)（このキーで今回に無い船の行を消す）
             - replace_source: (route_id, port_id, source_url)（同じ便の行のうち、今回書かなかった日付・船の行を消す。
-              出港済みの行を残すのは freeze_after_departure の便だけ）
+              出港済みの行を残すのは freeze_after_departure の便だけ。port_id が None なら航路の全港）
+
+        書かずに出どころだけ登録するレコード（source_only）:
+            - {"replace_source": (...), "source_only": True}
+              この回に1行も書かない便（取りやめた便・同じキーの別の便に負けた便）の古い行を、ルール6で消すため
         """
         return []
 
@@ -213,7 +217,9 @@ class BaseScraper(ABC):
            (departure_date, ship_name) の行を消す。遅延で出港日がずれたときに、前の日付の行を
            残さないため。古い行は同じ便の新しい情報で置き換わったものなので、出港予定を
            過ぎていても消す（元の出港時刻の後に遅延が発表されることがある）。
-           ただし freeze_after_departure の便は、ルール4に合わせて出港済みの行を残す
+           ただし freeze_after_departure の便は、ルール4に合わせて出港済みの行を残す。
+           port_id が None の replace_source は、航路の全港の行が対象（書いたかは港も含めて見る）。
+           source_only のレコードは書かず、replace_source だけ登録する
 
         ルール5・6で消す前に flush する（本番の SessionLocal は autoflush=False。同じ回に上書きした
         行を、古い source_url で消さないため）。
@@ -226,14 +232,18 @@ class BaseScraper(ABC):
         processed: set[tuple] = set()
 
         for rec in records:
+            source = rec.get("replace_source")
+            if rec.get("source_only"):
+                if source is not None:
+                    sources.setdefault(tuple(source), set())
+                continue
             ship_name = rec.get("ship_name") or ""
             key = (rec["route_id"], rec["port_id"], rec["departure_date"], ship_name)
             scope = rec.get("replace_scope")
             if scope is not None:
                 scopes.setdefault((*scope, rec.get("source_url")), set()).add(ship_name)
-            source = rec.get("replace_source")
             if source is not None:
-                sources.setdefault(tuple(source), set()).add((key[2], ship_name))
+                sources.setdefault(tuple(source), set()).add(key)
                 if rec.get("freeze_after_departure"):
                     frozen_sources.add(tuple(source))
             if key in processed:
@@ -321,9 +331,10 @@ class BaseScraper(ABC):
             route_id, port_id, source_url = source
             query = select(DepartureStatus).where(
                 DepartureStatus.route_id == route_id,
-                DepartureStatus.port_id == port_id,
                 DepartureStatus.source_url == source_url,
             )
+            if port_id is not None:
+                query = query.where(DepartureStatus.port_id == port_id)
             if source in frozen_sources:
                 query = query.where(
                     or_(
@@ -333,7 +344,8 @@ class BaseScraper(ABC):
                 )
             stale = self.session.execute(query).scalars()
             for row in stale:
-                if (row.departure_date, row.ship_name) not in written:
+                key = (row.route_id, row.port_id, row.departure_date, row.ship_name)
+                if key not in written:
                     self.session.delete(row)
 
         return created, updated

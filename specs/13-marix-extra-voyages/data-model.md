@@ -44,11 +44,13 @@ DB のスキーマ（列・キー）は変えない。マイグレーション�
 
 ### 臨時便の行の後始末（R7）
 
-この回に詳細ページを読めた臨時便の URL ごとに、`source_url` がその URL で、この回にその臨時便が書かなかったキーの行を消す。消える行：
+臨時便の行の `replace_source` を `(route_id, None, source_url)`（港を決めない）にして、Base のルール6で、その航路で `source_url` がその URL の行のうち、この回にその臨時便が書かなかったキーの行を消す（#91）。消える行：
 
 - 出港日がずれた古い日付の行
 - 寄らなくなった港の行（前は寄る予定、今回は `no_status`）
 - 種類が `unknown` だった回に、その URL で作った予備ルートの行（船名なし）
+
+R4・R5 で落とした行（定期便・臨時便）と、出港前に一覧から消えた臨時便（取りやめ。その URL の行を全部消す）は、書かずに出どころだけ登録する行 `{"replace_source": ..., "source_only": True}` を `parse_departures()` の最後に足して、ルール6に渡す。
 
 ## operation_statuses
 
@@ -58,29 +60,21 @@ DB のスキーマ（列・キー）は変えない。マイグレーション�
 
 | 名前 | 中身 |
 |---|---|
-| `_STATUS_BY_CLASS["temporary"]` | `OperationStatusEnum.extra` |
-| `_voyage_kind(block, detail_html) -> "extra" \| "regular" \| "unknown"` | R1 の表 |
+| `_EXTRA_CLASS = "temporary"` | 便の種類（状態ではない。`_STATUS_BY_CLASS` には入れない） |
+| `_voyage_kind(block, url) -> "extra" \| "regular" \| "unknown"` | R1 の表。詳細ページの分は `fetch()` で `_detail_kind(soup)` が決めて `self._voyage_kinds[url]` に持つ（#92） |
 | `_parse_direction(info2_text, block) -> str \| None` | R2 の順（始発港 → 一覧の欄 → 行き先） |
-| `_departures_from_detail(...)` | 引数は今のまま。`voyage_status == extra` なら `no_status` の港は作らない（R3） |
+| `_departures_from_detail(soup, ...)` | 詳細ページは `fetch()` でパースした soup（`self._detail_pages[url]`）を受け取る。`voyage_status == extra` なら `no_status` の港は作らない（R3） |
 | `_extra_rows_kept(route_ids, since) -> dict[key, str]` | DB の `extra` の行。キー → `source_url`。`parse_departures()` の頭で1回（R5） |
 | `_extra_first_departures(route_ids, urls) -> dict[str, datetime \| None]` | `source_url` ごとの `extra` の行の `MIN(scheduled_departure_at)`。出港日の範囲なし（始発港が前の日でも拾う）。`parse_departures()` の頭で1回（R5） |
-| `_resolve_extra_conflicts(records, kept, list_urls, read_extra_urls) -> list[dict]` | R4・R5。`list_urls` は今回の一覧の便の URL、`read_extra_urls` はこの回に詳細ページを読めた臨時便の URL |
-| `_upsert_departures(records)`（Base を上書き） | Base の処理の後、flush して R7 の後始末 |
+| `_resolve_extra_conflicts(records, kept, list_urls, read_extra_urls) -> list[dict]` | R4・R5。`list_urls` は今回の一覧の便の URL、`read_extra_urls` はこの回に詳細ページを読めた臨時便の URL。落とした行・取りやめの `source_only` の行を最後に足す（R7） |
 
 parse_departures の行（dict）に足すキー：
 
 | キー | 型 | 説明 |
 |---|---|---|
-| `extra_voyage` | bool | 臨時便の詳細ページから作った行。Base は使わない（`_resolve_extra_conflicts`・`_upsert_departures` だけが見る） |
+| `extra_voyage` | bool | 臨時便の詳細ページから作った行。Base は使わない（`_resolve_extra_conflicts` だけが見る） |
 
-臨時便の行には `replace_source` を付けない（R7 の後始末で足りる）。
-
-`MarixLine` のインスタンスに、`parse_departures()` から `_upsert_departures()` へ渡す値：
-
-| 名前 | 中身 |
-|---|---|
-| `self._read_extra_urls: set[str]` | この回に詳細ページを読めた臨時便の URL（R7 の後始末の対象） |
-| `self._dropped_regular: list[dict]` | R4・R5 で落とした定期便の行。その `replace_source` を R7 で代わりに処理する |
+臨時便の行の `replace_source` は `(route_id, None, source_url)`（R7）。
 
 ## 状態の流れ（9/7 上り・那覇・クロス）
 

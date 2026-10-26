@@ -1151,8 +1151,7 @@ def _kind_of(db_session, company, cls, url, page, info2, *, fetch=True):
     else:
         html = _list_html([(cls, url, info2)], [])
     block = BeautifulSoup(html, "lxml").select_one("div.status_single_cover")
-    detail = scraper._detail_pages.get(url) if fetch else None
-    return scraper._voyage_kind(block, detail)
+    return scraper._voyage_kind(block, url)
 
 
 @resp_mock.activate
@@ -1284,6 +1283,8 @@ def _departures(db_session, company, list_html, pages, today, now=None):
     ):
         scraper.fetch()
         records = scraper.parse_departures()
+    # 出どころだけ登録する行（source_only）は書く行ではないので除く
+    records = [r for r in records if not r.get("source_only")]
     return records, ports, logs, scraper
 
 
@@ -1318,7 +1319,8 @@ def test_extra_voyage_writes_extra_row_at_stop(db_session, marix_line_company):
     assert row["scheduled_arrival_at"] == datetime(2026, 9, 7, 5, 0)
     assert row["source_url"] == EXTRA_DOWN_0906
     assert row["extra_voyage"] is True
-    assert "replace_source" not in row or row["replace_source"] is None
+    # 臨時便は港を決めない（寄らなくなった港の行もルール6で消す）
+    assert row["replace_source"] == (down.id, None, EXTRA_DOWN_0906)
     # 臨時便の詳細ページの見出しの文が詳細に入る
     assert (
         "臨時便で時間を変更し、航行経路を「鹿児島 → 那覇」に変更して運航します"

@@ -629,3 +629,52 @@ def test_replace_source_does_not_delete_row_overwritten_in_same_run(db_session, 
     assert rows[date.today()].source_url == new_url
     assert rows[date.today()].status == "extra"
     assert rows[tomorrow].source_url == old_url
+
+
+def test_replace_source_without_port_deletes_rows_at_ports_not_written(
+    db_session, setup
+):
+    """port_id が None の replace_source は、航路の全港が対象。書かなかった港の行だけ消える。"""
+    scraper, _, route, port = setup
+    other = Port(name="与論", aliases=["与論港", "与論"])
+    db_session.add(other)
+    db_session.commit()
+    url = "https://example.com/service/service6727/"
+    scraper._upsert_departures(
+        [_rec(route, port, source_url=url), _rec(route, other, source_url=url)]
+    )
+    db_session.commit()
+
+    # 臨時便が与論に寄らなくなった
+    scraper._upsert_departures(
+        [_rec(route, port, source_url=url, replace_source=(route.id, None, url))]
+    )
+    db_session.commit()
+
+    assert [(r.port_id, r.source_url) for r in _rows(db_session)] == [(port.id, url)]
+
+
+def test_source_only_record_is_not_written_and_deletes_its_rows(db_session, setup):
+    """source_only のレコードは書かない。replace_source の行は全部消える（取りやめた便）。"""
+    scraper, _, route, port = setup
+    url = "https://example.com/service/service6731/"
+    other_url = "https://example.com/service/upstream20260907/"
+    scraper._upsert_departures(
+        [
+            _rec(route, port, source_url=url),
+            _rec(
+                route,
+                port,
+                departure_date=date.today() + timedelta(days=1),
+                source_url=other_url,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    scraper._upsert_departures(
+        [{"replace_source": (route.id, None, url), "source_only": True}]
+    )
+    db_session.commit()
+
+    assert [r.source_url for r in _rows(db_session)] == [other_url]
