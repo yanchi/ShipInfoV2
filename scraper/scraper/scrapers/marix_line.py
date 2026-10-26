@@ -472,12 +472,21 @@ class MarixLine(BaseScraper):
                 sorted({k[0] for k in kept}), set(kept.values())
             )
             now = datetime.now()
+            # 出港予定が全部 NULL の臨時便は、いちばん早い出港日が今日以前なら出港済みかもしれないとみる
+            first_dates: dict[str, date] = {}
+            for (_, _, day, _), url in kept.items():
+                first_dates[url] = min(day, first_dates.get(url, day))
+
+            def departed(url: str) -> bool:
+                first = firsts.get(url)
+                if first is not None:
+                    return first <= now
+                return first_dates[url] <= now.date()
+
             self._vanished_extra_urls = {
                 url
                 for url in set(kept.values())
-                if url not in list_urls
-                and firsts.get(url) is not None
-                and firsts[url] > now
+                if url not in list_urls and not departed(url)
             }
             for rec in records:
                 key = self._departure_key(rec)
@@ -489,11 +498,8 @@ class MarixLine(BaseScraper):
                 ):
                     continue
                 url = kept[key]
-                first = firsts.get(url)
                 # ① 臨時便は一覧にあるのに詳細ページを読めていない ② 臨時便は出港済み（便ごと）
-                if (url in list_urls and url not in read_extra_urls) or (
-                    first is not None and first <= now
-                ):
+                if (url in list_urls and url not in read_extra_urls) or departed(url):
                     drop.add(id(rec))
 
         self._dropped_regular = [
@@ -617,7 +623,7 @@ class MarixLine(BaseScraper):
                     else OperationStatusEnum.skipped
                 )
             else:
-                status = self._port_status(classes)
+                status = self._port_status(classes, is_extra)
             if status is None:
                 self._log.warning(
                     "detail_status_unknown",
@@ -846,13 +852,25 @@ class MarixLine(BaseScraper):
         up = next((r for r in routes if r.origin_port == "那覇"), None)
         return down, up
 
-    def _port_status(self, classes: list[str]) -> OperationStatusEnum | None:
-        """詳細ページの港のステータス。temporary は、ほかの状態のクラスが無いときだけ extra（臨時便）。"""
+    def _port_status(
+        self, classes: list[str], is_extra: bool
+    ) -> OperationStatusEnum | None:
+        """詳細ページの港のステータス。
+
+        temporary は便の種類で、状態のクラスではない。ほかの状態のクラスが付けばその状態
+        （`temporary cancel alert` は cancelled）。付かなければ、臨時便なら extra、
+        定期便（1港だけ臨時寄港）なら operating。定期便の港を extra で書くと、次の回の欠航が
+        臨時便の行として守られて出なくなる（PR #90 レビュー）。
+        `temporary alert`（alert だけ）は extra：詳細ページの港で alert だけの例は確認していない。
+        一覧の alert だけは cancelled（2026-03 の一覧）だが、temporary と一緒のときは臨時便を優先する。
+        """
         if _EXTRA_CLASS not in classes:
             return self._parse_status_from_classes(classes)
         matched = {s for c, s in _STATUS_BY_CLASS.items() if c in classes}
         if not matched:
-            return OperationStatusEnum.extra
+            return (
+                OperationStatusEnum.extra if is_extra else OperationStatusEnum.operating
+            )
         return matched.pop() if len(matched) == 1 else None
 
     def _parse_status_from_classes(

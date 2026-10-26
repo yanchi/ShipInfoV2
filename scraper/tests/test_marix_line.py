@@ -2381,3 +2381,107 @@ def test_unread_extra_rows_kept_when_extra_vanishes_after_departure(
         datetime(2026, 9, 7, 8, 0),
     )
     assert _up_cross(db_session) == first
+
+
+# ---------------------------------------------------------------------------
+# PR #90 レビュー（2回目）
+# ---------------------------------------------------------------------------
+
+
+def _plus_page_with_motobu(classes: list[str]) -> str:
+    return _set_port_class(
+        read_fixture("marix/down_route_change_20260906.html"), "本部", classes
+    )
+
+
+@resp_mock.activate
+def test_regular_voyage_temporary_port_is_not_extra_and_later_cancel_shows(
+    db_session, marix_line_company
+):
+    """定期便が1港だけ臨時寄港（temporary）しても、その港は臨時便の行にならない。次の欠航も出る。"""
+    db_session.autoflush = False
+    today = date(2026, 9, 6)
+    regular_only = _list_html([_DOWN_0906], [])
+    _run_extra(
+        db_session,
+        marix_line_company,
+        regular_only,
+        {DOWN_0906: _plus_page_with_motobu(["single", "temporary", "alert"])},
+        today,
+        datetime(2026, 9, 6, 6, 0),
+    )
+    first = {r[0]: r[2] for r in _db_rows(db_session, PLUS)}
+    assert first["本部"] == "operating"  # 臨時便の行（extra）ではない
+
+    _run_extra(
+        db_session,
+        marix_line_company,
+        regular_only,
+        {DOWN_0906: _plus_page_with_motobu(["single", "cancel", "alert"])},
+        today,
+        datetime(2026, 9, 6, 6, 30),
+    )
+    second = {r[0]: r[2] for r in _db_rows(db_session, PLUS)}
+    assert second["本部"] == "cancelled"
+
+
+def _null_departure_times(db_session):
+    from sqlalchemy import update
+
+    db_session.execute(update(DepartureStatus).values(scheduled_departure_at=None))
+    db_session.commit()
+
+
+@resp_mock.activate
+def test_vanished_extra_without_times_is_removed_when_date_is_future(
+    db_session, marix_line_company
+):
+    """出港予定が全部 NULL の臨時便は、出港日が今日より後なら未出港として、一覧から消えたら消す。"""
+    db_session.autoflush = False
+    first_day = date(2026, 9, 6)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], [_EXTRA_UP_0907]),
+        {EXTRA_UP_0907: "extra_up_20260907.html"},
+        first_day,
+        datetime(2026, 9, 6, 6, 0),
+    )
+    _null_departure_times(db_session)
+    assert _up_cross(db_session)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], []),
+        {},
+        first_day,
+        datetime(2026, 9, 6, 6, 30),
+    )
+    assert _up_cross(db_session) == []
+
+
+@resp_mock.activate
+def test_vanished_extra_without_times_is_kept_when_date_is_today(
+    db_session, marix_line_company
+):
+    """時刻が NULL で出港日が今日なら、出港済みかもしれないので残す。"""
+    db_session.autoflush = False
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], [_EXTRA_UP_0907]),
+        {EXTRA_UP_0907: "extra_up_20260907.html"},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 0),
+    )
+    _null_departure_times(db_session)
+    kept = _up_cross(db_session)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], []),
+        {},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 30),
+    )
+    assert _up_cross(db_session) == kept
