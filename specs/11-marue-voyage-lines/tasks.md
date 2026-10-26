@@ -19,7 +19,7 @@
 
 **共通の注意**:
 - 変えるのは `scraper/scraper/scrapers/marue_ferry.py` とそのテストだけ。DB・PHP・`utils/` は変えない
-- `BaseScraper.fetch()` / `parse()` / `parse_departures()` のシグネチャは変えない。`raw_html_hash` に使う文字列も変えない
+- `BaseScraper.fetch()` / `parse()` / `parse_departures()` のシグネチャは変えない。`raw_html_hash` に使う文字列は、航路ごとの「今日の始発港の便が出港済みか」を末尾に足す以外は変えない（出港時刻をまたぐと航路単位の判定が変わるため。PR #86 レビュー。デプロイ直後に1回だけ hash が変わる）
 - 先の便には港別情報（`_ship_notices`・`_skipped_on_current_voyage`）を使わない（FR-004）
 - 船のステータス（タグのうち一番重いもの、`_classify()`）の決め方は変えない（FR-006）
 - テストの時刻は `fixed_now()` で固定する。2026-10-26 の保存版は `NOW_1026 = datetime(2026, 10, 26, 10, 50)` を基準にする

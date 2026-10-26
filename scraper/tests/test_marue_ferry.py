@@ -471,6 +471,26 @@ def test_raw_html_changes_when_origin_search_changes(db_session, marue_with_port
     assert html1 != html2
 
 
+@resp_mock.activate
+def test_raw_html_changes_when_today_origin_voyage_departs(
+    db_session, marue_with_ports
+):
+    """PR #86 中：HTML も検索結果も同じまま出港時刻（18:00）をまたいだら hash を変えて、航路単位も更新する。"""
+    company, _ = marue_with_ports
+    mock_search(TODAY_SEARCHES)
+    mock_kagoshima()
+    scraper = MarueFerry(db_session, company.id)
+    with fixed_now(datetime(2026, 10, 1, 12, 0)):
+        before = scraper.fetch()
+    with fixed_now(datetime(2026, 10, 1, 12, 15)):
+        same = scraper.fetch()
+    with fixed_now(datetime(2026, 10, 1, 18, 5)):
+        after = scraper.fetch()
+
+    assert before == same
+    assert before != after
+
+
 # ---------------------------------------------------------------------------
 # 港別（parse_departures）
 # ---------------------------------------------------------------------------

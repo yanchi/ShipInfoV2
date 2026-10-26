@@ -56,7 +56,8 @@ MarueFerry (マルエーフェリー) scraper.
     - skipped は港の行だけ。航路単位（operation_statuses）には書かない
     すべて freeze_after_departure=True（出港済みの行は確定）、replace_scope=(route, port, date)
 
-raw_html_hash: 鹿児島航路ページの HTML ＋ 今日の始発港2つの検索結果を正規化した文字列
+raw_html_hash: 鹿児島航路ページの HTML ＋ 今日の始発港2つの検索結果を正規化した文字列 ＋ 航路ごとの「今日の始発港の便が出港済みか」
+  （出港時刻をまたぐと、同じ HTML でも航路単位の判定が変わるため）
 valid_date: 常に date.today()
 """
 
@@ -239,6 +240,10 @@ class MarueFerry(BaseScraper):
             + "\n<!-- searches: "
             + self._normalized_origin_searches(routes)
             + " -->"
+            # 同じ検索結果のまま出港時刻をまたいだら、航路単位（出港前後で判定が変わる）も更新する
+            + "\n<!-- departed: "
+            + self._origin_departed(routes, now)
+            + " -->"
         )
 
     def _voyage_search_keys(self, routes: list[Route]) -> set[tuple[int, int, date]]:
@@ -322,6 +327,22 @@ class MarueFerry(BaseScraper):
         return last_checked < now - timedelta(
             hours=settings.marue_far_search_interval_hours
         )
+
+    def _origin_departed(self, routes: list[Route], now: datetime) -> str:
+        """航路ごとの、今日の始発港の便が出港済みか（raw_html_hash に入れる）。"""
+        result = {}
+        for route in routes:
+            stops = self._stops.get(route.id, [])
+            rows = (
+                self._searches.get((route.id, stops[0].port_id, self._valid_date))
+                if stops
+                else None
+            )
+            first = next((r for r in rows or [] if not r.is_other_company), None)
+            result[str(route.id)] = bool(
+                first and first.departure_at and first.departure_at <= now
+            )
+        return json.dumps(result, sort_keys=True)
 
     def _normalized_origin_searches(self, routes: list[Route]) -> str:
         result = {}
