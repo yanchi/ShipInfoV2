@@ -593,3 +593,39 @@ def test_departure_date_and_checked_at_are_same_day_just_after_midnight(
     row = _rows(db_session)[0]
     assert row.checked_at == fixed
     assert row.checked_at.date() == row.departure_date
+
+
+def test_replace_source_does_not_delete_row_overwritten_in_same_run(db_session, setup):
+    """同じ回に source_url を書き換えた行を、古い source_url の replace_source で消さない。
+
+    本番の SessionLocal は autoflush=False。flush しないと、消す行を探す SELECT が DB に残った
+    古い source_url を読んで、さっき上書きした行を消してしまう（13-marix-extra-voyages R10）。
+    """
+    db_session.autoflush = False
+    scraper, _, route, port = setup
+    old_url = "https://example.com/service/upstream20260907/"
+    new_url = "https://example.com/service/service6731/"
+    tomorrow = date.today() + timedelta(days=1)
+    scraper._upsert_departures([_rec(route, port, source_url=old_url)])
+    db_session.commit()
+
+    scraper._upsert_departures(
+        [
+            # 同じキー（今日・同じ船）を別の便の行で上書きする
+            _rec(route, port, status=OperationStatusEnum.extra, source_url=new_url),
+            # 古い source_url の便が、別の日付の行を書き直した
+            _rec(
+                route,
+                port,
+                departure_date=tomorrow,
+                source_url=old_url,
+                replace_source=(route.id, port.id, old_url),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    rows = {r.departure_date: r for r in _rows(db_session)}
+    assert rows[date.today()].source_url == new_url
+    assert rows[date.today()].status == "extra"
+    assert rows[tomorrow].source_url == old_url

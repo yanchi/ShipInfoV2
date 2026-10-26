@@ -214,6 +214,9 @@ class BaseScraper(ABC):
            残さないため。古い行は同じ便の新しい情報で置き換わったものなので、出港予定を
            過ぎていても消す（元の出港時刻の後に遅延が発表されることがある）。
            ただし freeze_after_departure の便は、ルール4に合わせて出港済みの行を残す
+
+        ルール5・6で消す前に flush する（本番の SessionLocal は autoflush=False。同じ回に上書きした
+        行を、古い source_url で消さないため）。
         """
         now = datetime.now()
         created = updated = 0
@@ -294,6 +297,8 @@ class BaseScraper(ABC):
                     )
                 )
                 created += 1
+
+        self.session.flush()
 
         for (route_id, port_id, departure_date, source_url), names in scopes.items():
             self.session.execute(

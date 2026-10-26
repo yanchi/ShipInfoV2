@@ -8,6 +8,7 @@ DBは SQLite in-memory を使用（conftest.py の db_session / marix_line_compa
 
 import re
 
+import pytest
 import responses as resp_mock
 from datetime import date
 from unittest.mock import patch, MagicMock
@@ -15,7 +16,7 @@ from unittest.mock import patch, MagicMock
 from sqlalchemy import select
 
 from scraper.scrapers.marix_line import MarixLine, SOURCE_URL
-from scraper.db.models import OperationStatusEnum, Route
+from scraper.db.models import OperationStatusEnum, Port, Route, RouteStop
 
 
 def _make_date_mock(today: date):
@@ -1059,3 +1060,1428 @@ def test_shifted_voyage_keeps_other_voyage_detail_row(db_session, marix_line_com
         (date(2026, 10, 2), "クイーンコーラルクロス"),
         (date(2026, 10, 2), "クイーンコーラルプラス"),
     ]
+
+
+# ---------------------------------------------------------------------------
+# 臨時便（13-marix-extra-voyages）のテスト用の道具
+# 公式の保存版（2026-08〜09）の詳細ページを fixture にする。一覧の HTML は実物が未確認なので、
+# 今の list.html と同じ形で組み立てる（research R1）
+# ---------------------------------------------------------------------------
+
+EXTRA_DOWN_0906 = "https://marixline.com/service/service6727/"
+DOWN_0906 = "https://marixline.com/service/downstream20260906/"
+EXTRA_UP_0907 = "https://marixline.com/service/service6731/"
+UP_0907 = "https://marixline.com/service/upstream20260907/"
+EXTRA_UP_0927 = "https://marixline.com/service/service6819/"
+EXTRA_DOWN_0827 = "https://marixline.com/service/service6664/"
+
+
+def _make_datetime_mock(now: datetime):
+    """datetime.now() を now に固定しつつ datetime() コンストラクタも通すモックを作成。"""
+    mock = MagicMock(wraps=datetime)
+    mock.now.return_value = now
+    return mock
+
+
+def _list_cover(cls: str, url: str, info2: str) -> str:
+    if "temporary" in cls:
+        exp = "臨時便運航"
+    elif "cancel" in cls or cls.split() == ["alert"]:
+        exp = "欠航"
+    elif "route" in cls:
+        exp = "航行経路変更"
+    else:
+        exp = "通常運航"
+    return (
+        f'<div class="status_single_cover {cls}">'
+        f'<a class="status_single {cls}" href="{url}">'
+        f'<div class="info1"><p class="exp">{exp}</p></div>'
+        f'<div class="info2">{info2}</div>'
+        "</a></div>"
+    )
+
+
+def _list_html(down: list[tuple[str, str, str]], up: list[tuple[str, str, str]]) -> str:
+    """一覧の HTML。要素は（便のクラス、詳細ページの URL、info2 の文）。"""
+    return (
+        '<html><body><div class="service_list">'
+        '<div class="down_stream_services">'
+        + "".join(_list_cover(*v) for v in down)
+        + '</div><div class="up_stream_services">'
+        + "".join(_list_cover(*v) for v in up)
+        + "</div></div></body></html>"
+    )
+
+
+def _mock_extra_pages(list_html: str, pages: dict[str, "str | int"]) -> None:
+    """一覧と、URL → fixture 名（または HTML 本文）／ステータスコードを登録する。"""
+    resp_mock.add(resp_mock.GET, SOURCE_URL, body=list_html, status=200)
+    for url, page in pages.items():
+        if isinstance(page, int):
+            resp_mock.add(resp_mock.GET, url, body="error", status=page)
+        elif page.endswith(".html") and "\n" not in page:
+            resp_mock.add(resp_mock.GET, url, body=read_fixture(f"marix/{page}"))
+        else:
+            resp_mock.add(resp_mock.GET, url, body=page)
+
+
+# ---------------------------------------------------------------------------
+# 便の種類（research R1）
+# ---------------------------------------------------------------------------
+
+_INFO2_DOWN_0906 = "2026年9月6日 鹿児島新港発 2026年9月7日 那覇港 向け"
+_INFO2_UP_0907 = "2026年9月7日 那覇港発 2026年9月8日 鹿児島新港 向け"
+
+
+def _kind_of(db_session, company, cls, url, page, info2, *, fetch=True):
+    """一覧に便を1つ置いて fetch() し、その便の種類を返す。"""
+    from bs4 import BeautifulSoup
+
+    setup_port_master(db_session, company)
+    _mock_extra_pages(
+        _list_html([(cls, url, info2)], [])
+        if "鹿児島新港発" in info2
+        else _list_html([], [(cls, url, info2)]),
+        {url: page},
+    )
+    scraper = MarixLine(db_session, company.id)
+    if fetch:
+        scraper.fetch()
+        html = scraper._list_html
+    else:
+        html = _list_html([(cls, url, info2)], [])
+    block = BeautifulSoup(html, "lxml").select_one("div.status_single_cover")
+    detail = scraper._detail_pages.get(url) if fetch else None
+    return scraper._voyage_kind(block, detail)
+
+
+@resp_mock.activate
+def test_voyage_kind_list_temporary_class_is_extra(db_session, marix_line_company):
+    """一覧の便のクラスが temporary なら、詳細ページが取れなくても臨時便。"""
+    kind = _kind_of(
+        db_session,
+        marix_line_company,
+        "temporary alert",
+        EXTRA_DOWN_0906,
+        500,
+        _INFO2_DOWN_0906,
+    )
+    assert kind == "extra"
+
+
+@resp_mock.activate
+def test_voyage_kind_extra_by_detail_heading(db_session, marix_line_company):
+    """一覧のクラスが route alert でも、詳細ページの見出し【臨時便…】で臨時便とわかる。"""
+    kind = _kind_of(
+        db_session,
+        marix_line_company,
+        "route alert",
+        EXTRA_DOWN_0906,
+        "extra_down_20260906.html",
+        _INFO2_DOWN_0906,
+    )
+    assert kind == "extra"
+
+
+@resp_mock.activate
+def test_voyage_kind_extra_by_detail_port_class(db_session, marix_line_company):
+    """見出しの【臨時便…】が無くても、港の temporary で臨時便とわかる。"""
+    html = read_fixture("marix/extra_up_20260907.html").replace("【臨時便運航】", "")
+    assert "【臨時便" not in html and "temporary" in html
+    kind = _kind_of(
+        db_session,
+        marix_line_company,
+        "route alert",
+        EXTRA_UP_0907,
+        html,
+        _INFO2_UP_0907,
+    )
+    assert kind == "extra"
+
+
+@pytest.mark.parametrize(
+    "cls,url,page,info2",
+    [
+        ("route alert", DOWN_0906, "down_route_change_20260906.html", _INFO2_DOWN_0906),
+        ("cancel alert", UP_0907, "up_cancel_20260907.html", _INFO2_UP_0907),
+        (
+            "normal",
+            "https://marixline.com/service/downstream20260930/",
+            "downstream.html",
+            "2026年9月30日 鹿児島新港発 2026年10月1日 那覇港 向け",
+        ),
+        (
+            "conditional alert",
+            "https://marixline.com/service/upstream20260930/",
+            "upstream_conditional.html",
+            "2026年9月30日 那覇港発 2026年10月1日 鹿児島新港 向け",
+        ),
+    ],
+)
+@resp_mock.activate
+def test_voyage_kind_regular(db_session, marix_line_company, cls, url, page, info2):
+    assert _kind_of(db_session, marix_line_company, cls, url, page, info2) == "regular"
+
+
+@resp_mock.activate
+def test_voyage_kind_unknown_when_detail_missing(db_session, marix_line_company):
+    """詳細ページが取れず、一覧に temporary も無い便は「分からない」。"""
+    kind = _kind_of(
+        db_session,
+        marix_line_company,
+        "route alert",
+        EXTRA_DOWN_0906,
+        500,
+        _INFO2_DOWN_0906,
+    )
+    assert kind == "unknown"
+
+
+@resp_mock.activate
+def test_voyage_kind_regular_without_fetch(db_session, marix_line_company):
+    """fetch() を通さない呼び方（既存のテスト）では、今までどおり定期便。"""
+    kind = _kind_of(
+        db_session,
+        marix_line_company,
+        "route alert",
+        EXTRA_DOWN_0906,
+        500,
+        _INFO2_DOWN_0906,
+        fetch=False,
+    )
+    assert kind == "regular"
+
+
+# ---------------------------------------------------------------------------
+# US2: 臨時便の港が「臨時便」で出る
+# ---------------------------------------------------------------------------
+
+CROSS = "クイーンコーラルクロス"
+PLUS = "クイーンコーラルプラス"
+_EXTRA_DOWN_0906 = ("temporary alert", EXTRA_DOWN_0906, _INFO2_DOWN_0906)
+_DOWN_0906 = ("route alert", DOWN_0906, _INFO2_DOWN_0906)
+_PAGES_0906 = {
+    DOWN_0906: "down_route_change_20260906.html",
+    EXTRA_DOWN_0906: "extra_down_20260906.html",
+}
+
+
+def _departures(db_session, company, list_html, pages, today, now=None):
+    """一覧と詳細ページを登録して fetch() → parse_departures()。(行, 港, ログ, scraper) を返す。"""
+    if db_session.query(RouteStop).count():  # 同じテストで2回呼ぶときは作り直さない
+        ports = {p.name: p for p in db_session.query(Port).all()}
+    else:
+        ports = setup_port_master(db_session, company)
+    _mock_extra_pages(list_html, pages)
+    scraper = MarixLine(db_session, company.id)
+    with (
+        patch("scraper.scrapers.marix_line.date", _make_date_mock(today)),
+        patch(
+            "scraper.scrapers.marix_line.datetime",
+            _make_datetime_mock(now or datetime.combine(today, datetime.min.time())),
+        ),
+        structlog.testing.capture_logs() as logs,
+    ):
+        scraper.fetch()
+        records = scraper.parse_departures()
+    return records, ports, logs, scraper
+
+
+def _rows_for(records, ports, route, port=None, ship=None):
+    """route の行を、港名・船名で絞る。"""
+    names = {p.id: name for name, p in ports.items()}
+    return [
+        r
+        for r in records
+        if r["route_id"] == route.id
+        and (port is None or names[r["port_id"]] == port)
+        and (ship is None or r["ship_name"] == ship)
+    ]
+
+
+@resp_mock.activate
+def test_extra_voyage_writes_extra_row_at_stop(db_session, marix_line_company):
+    """臨時便が寄る鹿児島は extra。出港・到着予定は詳細ページどおり（SC-002）。"""
+    records, ports, logs, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([_DOWN_0906, _EXTRA_DOWN_0906], []),
+        _PAGES_0906,
+        date(2026, 9, 6),
+    )
+    down, _ = _routes(db_session, marix_line_company)
+
+    (row,) = _rows_for(records, ports, down, "鹿児島", CROSS)
+    assert row["status"] == OperationStatusEnum.extra
+    assert row["departure_date"] == date(2026, 9, 6)
+    assert row["scheduled_departure_at"] == datetime(2026, 9, 6, 9, 0)
+    assert row["scheduled_arrival_at"] == datetime(2026, 9, 7, 5, 0)
+    assert row["source_url"] == EXTRA_DOWN_0906
+    assert row["extra_voyage"] is True
+    assert "replace_source" not in row or row["replace_source"] is None
+    # 臨時便の詳細ページの見出しの文が詳細に入る
+    assert (
+        "臨時便で時間を変更し、航行経路を「鹿児島 → 那覇」に変更して運航します"
+        in row["status_detail"]
+    )
+    events = {log["event"] for log in logs}
+    assert "unknown_status_class" not in events
+    assert "detail_status_unknown" not in events
+
+
+@resp_mock.activate
+def test_extra_voyage_does_not_change_regular_voyage_rows(
+    db_session, marix_line_company
+):
+    """同じ日の定期便（プラス）の行は、臨時便を一覧から外して読んだときと同じ。"""
+    with_extra, ports, _, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([_DOWN_0906, _EXTRA_DOWN_0906], []),
+        _PAGES_0906,
+        date(2026, 9, 6),
+    )
+    down, _ = _routes(db_session, marix_line_company)
+    plus_with = _rows_for(with_extra, ports, down, ship=PLUS)
+
+    resp_mock.reset()
+    only_regular, _, _, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([_DOWN_0906], []),
+        {DOWN_0906: "down_route_change_20260906.html"},
+        date(2026, 9, 6),
+    )
+    plus_only = _rows_for(only_regular, ports, down, ship=PLUS)
+
+    assert plus_with == plus_only
+    by_port = {
+        name: r["status"]
+        for name in ports
+        for r in plus_with
+        if r["port_id"] == ports[name].id
+    }
+    assert by_port["名瀬"] == OperationStatusEnum.delayed
+    assert by_port["亀徳"] == OperationStatusEnum.delayed
+    assert by_port["本部"] == OperationStatusEnum.delayed
+    assert by_port["和泊"] == OperationStatusEnum.skipped
+    assert by_port["与論"] == OperationStatusEnum.skipped
+    assert all(r["extra_voyage"] is False for r in plus_with)
+
+
+@resp_mock.activate
+def test_extra_voyage_own_cancellation_is_cancelled(db_session, marix_line_company):
+    """臨時便そのものの欠航（港のクラスが cancel）は cancelled。"""
+    page = read_fixture("marix/extra_down_20260906.html").replace(
+        "single firstport temporary alert", "single firstport cancel alert"
+    )
+    assert "firstport cancel alert" in page
+    records, ports, _, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([_DOWN_0906, _EXTRA_DOWN_0906], []),
+        {**_PAGES_0906, EXTRA_DOWN_0906: page},
+        date(2026, 9, 6),
+    )
+    down, _ = _routes(db_session, marix_line_company)
+
+    (row,) = _rows_for(records, ports, down, "鹿児島", CROSS)
+    assert row["status"] == OperationStatusEnum.cancelled
+
+
+@resp_mock.activate
+def test_extra_voyage_without_detail_page_writes_no_rows(
+    db_session, marix_line_company
+):
+    """臨時便の詳細ページが取れなければ、予備ルートも使わず行を作らない（FR-010・R6）。"""
+    records, ports, logs, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([_DOWN_0906, _EXTRA_DOWN_0906], []),
+        {**_PAGES_0906, EXTRA_DOWN_0906: 500},
+        date(2026, 9, 6),
+    )
+    down, _ = _routes(db_session, marix_line_company)
+
+    assert [r for r in records if r["source_url"] == EXTRA_DOWN_0906] == []
+    assert _rows_for(records, ports, down, ship=CROSS) == []
+    missing = [log for log in logs if log["event"] == "extra_voyage_detail_missing"]
+    assert len(missing) == 1
+
+
+@resp_mock.activate
+def test_unknown_kind_voyage_uses_fallback_route_rows(db_session, marix_line_company):
+    """一覧のクラスが route alert で詳細ページが 500（種類が分からない）→ 予備ルートの行（R6）。"""
+    records, ports, _, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([("route alert", EXTRA_DOWN_0906, _INFO2_DOWN_0906)], []),
+        {EXTRA_DOWN_0906: 500},
+        date(2026, 9, 6),
+    )
+    down, _ = _routes(db_session, marix_line_company)
+
+    rows = [r for r in records if r["source_url"] == EXTRA_DOWN_0906]
+    assert {r["port_id"] for r in rows} == {
+        ports[n].id for n in ("鹿児島", "名瀬", "亀徳", "和泊", "与論", "本部")
+    }
+    assert all(r["ship_name"] == "" for r in rows)
+    assert all(r["status"] == OperationStatusEnum.delayed for r in rows)
+    assert all(r["extra_voyage"] is False for r in rows)
+
+
+# ---------------------------------------------------------------------------
+# US3: 臨時便が寄らない港に、臨時便の行を作らない
+# ---------------------------------------------------------------------------
+
+_INFO2_UP_0927 = "2026年9月27日 那覇港発 2026年9月27日 鹿児島新港 向け"
+_EXTRA_UP_0927 = ("temporary alert", EXTRA_UP_0927, _INFO2_UP_0927)
+
+
+@resp_mock.activate
+def test_extra_voyage_skips_ports_it_does_not_call_at(db_session, marix_line_company):
+    """9/6：寄らない名瀬・亀徳・和泊・与論・本部には、臨時便の行も skipped の行も作らない（SC-002）。"""
+    records, ports, _, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([_DOWN_0906, _EXTRA_DOWN_0906], []),
+        _PAGES_0906,
+        date(2026, 9, 6),
+    )
+    down, _ = _routes(db_session, marix_line_company)
+
+    cross = _rows_for(records, ports, down, ship=CROSS)
+    assert [r["port_id"] for r in cross] == [ports["鹿児島"].id]
+    # 定期便（プラス）の和泊・与論の skipped は今までどおり（定期便の no_status は変えない）
+    plus = {
+        r["port_id"]: r["status"] for r in _rows_for(records, ports, down, ship=PLUS)
+    }
+    assert plus[ports["和泊"].id] == OperationStatusEnum.skipped
+    assert plus[ports["与論"].id] == OperationStatusEnum.skipped
+
+
+@resp_mock.activate
+def test_extra_voyage_ignores_stale_dates_of_skipped_ports(
+    db_session, marix_line_company
+):
+    """9/27：寄らない港に残る 08/25 の日付から、2027-08-25 の行を作らない（SC-003 後半）。"""
+    records, ports, logs, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([], [_EXTRA_UP_0927]),
+        {EXTRA_UP_0927: "extra_up_naze_20260927.html"},
+        date(2026, 9, 27),
+    )
+    _, up = _routes(db_session, marix_line_company)
+
+    rows = _rows_for(records, ports, up)
+    assert [(r["port_id"], r["status"]) for r in rows] == [
+        (ports["名瀬"].id, OperationStatusEnum.extra)
+    ]
+    assert not [r for r in rows if r["departure_date"].month == 8]
+    assert "detail_stop_missing" not in {log["event"] for log in logs}
+
+
+# ---------------------------------------------------------------------------
+# US3: 臨時便の行の後始末（research R7）。本番と同じ autoflush=False で2回流す
+# ---------------------------------------------------------------------------
+
+
+def _run_extra(db_session, company, list_html, pages, today, now=None):
+    """一覧と詳細ページを登録して fetch() → _upsert_departures()。登録は毎回やり直す。"""
+    resp_mock.reset()
+    if not db_session.query(RouteStop).count():
+        setup_port_master(db_session, company)
+    _mock_extra_pages(list_html, pages)
+    scraper = MarixLine(db_session, company.id)
+    with (
+        patch("scraper.scrapers.marix_line.date", _make_date_mock(today)),
+        patch(
+            "scraper.scrapers.marix_line.datetime",
+            _make_datetime_mock(now or datetime.combine(today, datetime.min.time())),
+        ),
+    ):
+        scraper.fetch()
+        scraper._upsert_departures(scraper.parse_departures())
+    db_session.commit()
+
+
+def _db_rows(db_session, ship=None):
+    """DB の行を (港, 出港日, 状態, 船名, source_url) で返す。"""
+    names = {p.id: p.name for p in db_session.query(Port).all()}
+    return sorted(
+        (names[r.port_id], r.departure_date, r.status, r.ship_name, r.source_url)
+        for r in db_session.query(DepartureStatus)
+        if ship is None or r.ship_name == ship
+    )
+
+
+def _set_port_class(html: str, port: str, classes: list[str]) -> str:
+    """詳細ページの港（div.single）のクラスを書き換える。"""
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "lxml")
+    for single in soup.select("div.service > div.single"):
+        if port in single.select_one("span.port_name").get_text():
+            single["class"] = classes
+            return str(soup)
+    raise AssertionError(port)
+
+
+def _naze_extra_page() -> str:
+    """9/6 の臨時便が、名瀬にも寄る（入港 20:00・出港 20:50）詳細ページ。"""
+    return _set_port_class(
+        read_fixture("marix/extra_down_20260906.html"),
+        "名瀬",
+        ["single", "temporary", "alert"],
+    )
+
+
+_ONLY_EXTRA_0906 = _list_html([_EXTRA_DOWN_0906], [])
+
+
+@resp_mock.activate
+def test_extra_rows_removed_when_voyage_stops_calling_at_port(
+    db_session, marix_line_company
+):
+    """US3-3：名瀬に寄らなくなった（no_status）臨時便の名瀬の行が消え、鹿児島の行は残る。"""
+    db_session.autoflush = False
+    today = date(2026, 9, 6)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _ONLY_EXTRA_0906,
+        {EXTRA_DOWN_0906: _naze_extra_page()},
+        today,
+    )
+    assert [r[0] for r in _db_rows(db_session)] == ["名瀬", "鹿児島"]
+
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _ONLY_EXTRA_0906,
+        {EXTRA_DOWN_0906: "extra_down_20260906.html"},
+        today,
+    )
+    assert [(r[0], r[2]) for r in _db_rows(db_session)] == [("鹿児島", "extra")]
+
+
+@resp_mock.activate
+def test_extra_row_on_old_date_removed_when_departure_date_shifts(
+    db_session, marix_line_company
+):
+    """臨時便の出港日が 9/6 → 9/7 にずれたら、古い 9/6 の行が消えて 9/7 の行ができる。"""
+    db_session.autoflush = False
+    today = date(2026, 9, 6)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _ONLY_EXTRA_0906,
+        {EXTRA_DOWN_0906: "extra_down_20260906.html"},
+        today,
+    )
+    shifted = re.sub(
+        r"09月06日(\s*</span>\s*<span class=\"time\">\s*)09:00",
+        r"09月07日\g<1>09:00",
+        read_fixture("marix/extra_down_20260906.html"),
+    )
+    assert "09月07日" in shifted and shifted != read_fixture(
+        "marix/extra_down_20260906.html"
+    )
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _ONLY_EXTRA_0906,
+        {EXTRA_DOWN_0906: shifted},
+        today,
+    )
+    assert [(r[0], r[1]) for r in _db_rows(db_session)] == [
+        ("鹿児島", date(2026, 9, 7))
+    ]
+
+
+@resp_mock.activate
+def test_fallback_rows_of_unknown_kind_removed_when_detail_is_read(
+    db_session, marix_line_company
+):
+    """種類が分からなかった回の予備ルートの行（船名なし）が、読めた回に消える。"""
+    db_session.autoflush = False
+    today = date(2026, 9, 6)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([("route alert", EXTRA_DOWN_0906, _INFO2_DOWN_0906)], []),
+        {EXTRA_DOWN_0906: 500},
+        today,
+    )
+    first = _db_rows(db_session)
+    assert len(first) == 6 and all(r[3] == "" for r in first)
+
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _ONLY_EXTRA_0906,
+        {EXTRA_DOWN_0906: "extra_down_20260906.html"},
+        today,
+    )
+    assert [(r[0], r[2], r[3], r[4]) for r in _db_rows(db_session)] == [
+        ("鹿児島", "extra", CROSS, EXTRA_DOWN_0906)
+    ]
+
+
+@resp_mock.activate
+def test_extra_rows_kept_when_detail_is_not_read(db_session, marix_line_company):
+    """2回目に臨時便の詳細ページが取れなければ、1回目の行は全部残る。"""
+    db_session.autoflush = False
+    today = date(2026, 9, 6)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _ONLY_EXTRA_0906,
+        {EXTRA_DOWN_0906: _naze_extra_page()},
+        today,
+    )
+    first = _db_rows(db_session)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _ONLY_EXTRA_0906,
+        {EXTRA_DOWN_0906: 500},
+        today,
+    )
+    assert _db_rows(db_session) == first
+
+
+@resp_mock.activate
+def test_cleanup_does_not_touch_regular_voyage_rows(db_session, marix_line_company):
+    """定期便（プラス）の行は、臨時便の後始末で変わらない（source_url が違う）。"""
+    db_session.autoflush = False
+    today = date(2026, 9, 6)
+    both = _list_html([_DOWN_0906, _EXTRA_DOWN_0906], [])
+    _run_extra(
+        db_session,
+        marix_line_company,
+        both,
+        {**_PAGES_0906, EXTRA_DOWN_0906: _naze_extra_page()},
+        today,
+    )
+    plus_before = _db_rows(db_session, PLUS)
+    assert plus_before
+
+    _run_extra(db_session, marix_line_company, both, _PAGES_0906, today)
+    assert _db_rows(db_session, PLUS) == plus_before
+    assert [r[0] for r in _db_rows(db_session, CROSS)] == ["鹿児島"]
+
+
+# ---------------------------------------------------------------------------
+# US1: 欠航の定期便を置き換えた臨時便が出る（research R4・R5）
+# ---------------------------------------------------------------------------
+
+_INFO2_UP_0907_EXTRA = "2026年9月7日 那覇港発 2026年9月8日 鹿児島新港 向け"
+_CANCEL_UP_0907 = ("cancel alert", UP_0907, _INFO2_UP_0907)
+_EXTRA_UP_0907 = ("temporary alert", EXTRA_UP_0907, _INFO2_UP_0907_EXTRA)
+_PAGES_0907 = {
+    UP_0907: "up_cancel_20260907.html",
+    EXTRA_UP_0907: "extra_up_20260907.html",
+}
+
+
+def _list_0907(extra_first: bool, regular=_CANCEL_UP_0907, extra=_EXTRA_UP_0907):
+    return _list_html([], [extra, regular] if extra_first else [regular, extra])
+
+
+def _regular_up_normal_page() -> str:
+    """9/7 の定期便が欠航ではなく通常運航の詳細ページ。"""
+    from bs4 import BeautifulSoup
+
+    html = read_fixture("marix/up_cancel_20260907.html").replace(
+        "【欠航】", "【通常運航】"
+    )
+    soup = BeautifulSoup(html, "lxml")
+    for single in soup.select("div.service > div.single"):
+        first = "firstport" in single["class"]
+        single["class"] = (
+            ["single", "firstport", "normal"] if first else ["single", "normal"]
+        )
+    return str(soup)
+
+
+@pytest.mark.parametrize("extra_first", [True, False])
+@resp_mock.activate
+def test_extra_voyage_wins_over_cancelled_regular_voyage(
+    db_session, marix_line_company, extra_first
+):
+    """SC-001：定期便が欠航のキーは臨時便の行。一覧の並び順に関係なく同じ結果。"""
+    records, ports, logs, scraper = _departures(
+        db_session,
+        marix_line_company,
+        _list_0907(extra_first),
+        _PAGES_0907,
+        date(2026, 9, 7),
+    )
+    _, up = _routes(db_session, marix_line_company)
+
+    for port, hhmm in (("那覇", (7, 0)), ("名瀬", (21, 20))):
+        (row,) = _rows_for(records, ports, up, port, CROSS)
+        assert row["status"] == OperationStatusEnum.extra
+        assert row["source_url"] == EXTRA_UP_0907
+        assert row["scheduled_departure_at"] == datetime(2026, 9, 7, *hhmm)
+    for port in ("本部", "与論", "和泊", "亀徳"):
+        (row,) = _rows_for(records, ports, up, port, CROSS)
+        assert row["status"] == OperationStatusEnum.cancelled
+        assert row["source_url"] == UP_0907
+
+    keys = [
+        (r["route_id"], r["port_id"], r["departure_date"], r["ship_name"])
+        for r in records
+    ]
+    assert len(keys) == len(set(keys))
+    with structlog.testing.capture_logs() as upsert_logs:
+        scraper._upsert_departures(records)
+    assert "departure_duplicate_key" not in {log["event"] for log in upsert_logs}
+
+
+@pytest.mark.parametrize("extra_first", [True, False])
+@resp_mock.activate
+def test_extra_voyage_wins_in_database(db_session, marix_line_company, extra_first):
+    """本番と同じ autoflush=False で DB に書いても、1キー1行で臨時便が勝つ。"""
+    db_session.autoflush = False
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_0907(extra_first),
+        _PAGES_0907,
+        date(2026, 9, 7),
+        datetime(2026, 9, 7, 6, 0),
+    )
+    rows = {(r[0], r[2], r[4]) for r in _db_rows(db_session, CROSS)}
+    assert rows == {
+        ("那覇", "extra", EXTRA_UP_0907),
+        ("名瀬", "extra", EXTRA_UP_0907),
+        ("本部", "cancelled", UP_0907),
+        ("与論", "cancelled", UP_0907),
+        ("和泊", "cancelled", UP_0907),
+        ("亀徳", "cancelled", UP_0907),
+    }
+    assert len(_db_rows(db_session, CROSS)) == 6
+
+
+@resp_mock.activate
+def test_regular_voyage_that_runs_wins_over_extra_voyage(
+    db_session, marix_line_company
+):
+    """FR-006：定期便が走るキーは定期便の行。詳細に「（臨時便 07:00発あり）」と警告を足す。"""
+    records, ports, logs, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_0907(True),
+        {**_PAGES_0907, UP_0907: _regular_up_normal_page()},
+        date(2026, 9, 7),
+    )
+    _, up = _routes(db_session, marix_line_company)
+
+    (row,) = _rows_for(records, ports, up, "那覇", CROSS)
+    assert row["status"] == OperationStatusEnum.operating
+    assert row["source_url"] == UP_0907
+    assert row["status_detail"].endswith("（臨時便 07:00発あり）")
+    conflicts = [log for log in logs if log["event"] == "extra_voyage_conflict"]
+    assert conflicts
+    assert all(
+        {UP_0907, EXTRA_UP_0907} <= set(map(str, log.values())) for log in conflicts
+    )
+
+
+# 前の回に臨時便が書いた行（research R5）。1回目は 9/7 06:00、定期便（欠航）＋臨時便
+_DAY_0907 = date(2026, 9, 7)
+
+
+def _first_run_0907(db_session, company, pages=None):
+    db_session.autoflush = False
+    _run_extra(
+        db_session,
+        company,
+        _list_0907(True),
+        pages or _PAGES_0907,
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 0),
+    )
+
+
+def _up_cross(db_session):
+    """上りのクロスの行を (港, 状態, source_url) で返す（那覇・名瀬だけ）。"""
+    return [
+        (r[0], r[2], r[4])
+        for r in _db_rows(db_session, CROSS)
+        if r[0] in ("那覇", "名瀬")
+    ]
+
+
+@resp_mock.activate
+def test_extra_rows_kept_when_detail_page_not_read(db_session, marix_line_company):
+    """US1-4：臨時便が一覧にあり詳細ページが取れない回、定期便（欠航）が上書きしない。"""
+    _first_run_0907(db_session, marix_line_company)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_0907(True),
+        {**_PAGES_0907, EXTRA_UP_0907: 500},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 30),
+    )
+    assert _up_cross(db_session) == [
+        ("名瀬", "extra", EXTRA_UP_0907),
+        ("那覇", "extra", EXTRA_UP_0907),
+    ]
+
+
+@resp_mock.activate
+def test_extra_rows_kept_for_whole_voyage_after_departure(
+    db_session, marix_line_company
+):
+    """US1-5：始発港を出港した後に一覧から消えても、まだ寄っていない名瀬も含めて上書きしない。"""
+    _first_run_0907(db_session, marix_line_company)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], [_CANCEL_UP_0907]),
+        _PAGES_0907,
+        _DAY_0907,
+        datetime(2026, 9, 7, 8, 0),
+    )
+    assert _up_cross(db_session) == [
+        ("名瀬", "extra", EXTRA_UP_0907),
+        ("那覇", "extra", EXTRA_UP_0907),
+    ]
+
+
+@resp_mock.activate
+def test_cancelled_regular_returns_when_extra_vanishes_before_departure(
+    db_session, marix_line_company
+):
+    """US1-6：出港前に臨時便が一覧から消えたら、定期便の欠航に戻る。"""
+    _first_run_0907(db_session, marix_line_company)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], [_CANCEL_UP_0907]),
+        _PAGES_0907,
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 30),
+    )
+    assert _up_cross(db_session) == [
+        ("名瀬", "cancelled", UP_0907),
+        ("那覇", "cancelled", UP_0907),
+    ]
+
+
+@resp_mock.activate
+def test_old_date_returns_to_cancelled_when_extra_shifts_date(
+    db_session, marix_line_company
+):
+    """臨時便の日付がずれたら、古い日付の行は定期便の欠航に戻り、新しい日付に extra の行ができる。"""
+    _first_run_0907(db_session, marix_line_company)
+    shifted = re.sub(
+        r"09月07日(\s*</span>\s*<span class=\"time\">\s*)(07:00|17:00|21:20)",
+        r"09月08日\g<1>\g<2>",
+        read_fixture("marix/extra_up_20260907.html"),
+    )
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_0907(True),
+        {**_PAGES_0907, EXTRA_UP_0907: shifted},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 30),
+    )
+    rows = {(r[0], r[1], r[2], r[4]) for r in _db_rows(db_session, CROSS)}
+    assert ("那覇", date(2026, 9, 7), "cancelled", UP_0907) in rows
+    assert ("名瀬", date(2026, 9, 7), "cancelled", UP_0907) in rows
+    assert ("那覇", date(2026, 9, 8), "extra", EXTRA_UP_0907) in rows
+    assert ("名瀬", date(2026, 9, 8), "extra", EXTRA_UP_0907) in rows
+
+
+@resp_mock.activate
+def test_regular_voyage_that_runs_replaces_vanished_extra(
+    db_session, marix_line_company
+):
+    """定期便が走る回は、臨時便が一覧から消えていても定期便の行（運航）になる。"""
+    _first_run_0907(db_session, marix_line_company)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], [_CANCEL_UP_0907]),
+        {UP_0907: _regular_up_normal_page()},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 30),
+    )
+    assert ("那覇", "operating", UP_0907) in _up_cross(db_session)
+
+
+@resp_mock.activate
+def test_extra_rows_kept_when_voyage_crosses_midnight(db_session, marix_line_company):
+    """日をまたぐ臨時便：始発港（9/6 23:00）で出港済みとみて、名瀬（9/7 21:20）の行も守る。"""
+    db_session.autoflush = False
+    left_early = re.sub(
+        r"09月07日(\s*</span>\s*<span class=\"time\">\s*)07:00",
+        r"09月06日\g<1>23:00",
+        read_fixture("marix/extra_up_20260907.html"),
+    )
+    assert "09月06日" in left_early
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html(
+            [],
+            [
+                (
+                    "temporary alert",
+                    EXTRA_UP_0907,
+                    "2026年9月6日 那覇港発 2026年9月8日 鹿児島新港 向け",
+                ),
+                _CANCEL_UP_0907,
+            ],
+        ),
+        {**_PAGES_0907, EXTRA_UP_0907: left_early},
+        date(2026, 9, 6),
+        datetime(2026, 9, 6, 6, 0),
+    )
+    assert ("名瀬", "extra", EXTRA_UP_0907) in _up_cross(db_session)
+
+    # 2回目：臨時便は一覧から消え、一覧の便の始発日は 9/7 だけ
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], [_CANCEL_UP_0907]),
+        _PAGES_0907,
+        _DAY_0907,
+        datetime(2026, 9, 7, 8, 0),
+    )
+    assert ("名瀬", "extra", EXTRA_UP_0907) in _up_cross(db_session)
+
+
+@resp_mock.activate
+def test_regular_fallback_rows_are_still_written_next_to_extra_rows(
+    db_session, marix_line_company
+):
+    """SC-008 前半：定期便の詳細ページが取れない回も、予備ルートの行は今までどおり作る。"""
+    records, ports, _, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([_DOWN_0906, _EXTRA_DOWN_0906], []),
+        {**_PAGES_0906, DOWN_0906: 500},
+        date(2026, 9, 6),
+    )
+    down, _ = _routes(db_session, marix_line_company)
+
+    (fallback,) = _rows_for(records, ports, down, "鹿児島", "")
+    assert fallback["status"] == OperationStatusEnum.delayed
+    assert fallback["source_url"] == DOWN_0906
+    (extra,) = _rows_for(records, ports, down, "鹿児島", CROSS)
+    assert extra["status"] == OperationStatusEnum.extra
+
+
+@resp_mock.activate
+def test_regular_fallback_rows_removed_once_extra_wins(db_session, marix_line_company):
+    """SC-008 後半：次の回に定期便の詳細ページが取れ、臨時便が勝つと、船名なしの行は消える。"""
+    db_session.autoflush = False
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_0907(True),
+        {**_PAGES_0907, UP_0907: 500},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 0),
+    )
+    first = [r for r in _db_rows(db_session) if r[0] in ("那覇", "名瀬")]
+    assert {r[3] for r in first} == {"", CROSS}  # 予備ルートの行と臨時便の行が並ぶ
+
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_0907(True),
+        _PAGES_0907,
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 30),
+    )
+    assert [
+        (r[0], r[2], r[3]) for r in _db_rows(db_session) if r[0] in ("那覇", "名瀬")
+    ] == [("名瀬", "extra", CROSS), ("那覇", "extra", CROSS)]
+
+
+# ---------------------------------------------------------------------------
+# US4: 途中の港から出る臨時便の方向（research R2）
+# ---------------------------------------------------------------------------
+
+_INFO2_NAZE_0927 = "2026年9月27日 名瀬港発 2026年9月27日 鹿児島新港 向け"
+_DAY_0927 = date(2026, 9, 27)
+
+
+@resp_mock.activate
+def test_naze_departure_extra_voyage_direction_from_column(
+    db_session, marix_line_company
+):
+    """上りの欄の「名瀬港発 鹿児島新港向け」：上りの名瀬（9/27 05:50）が extra。鹿児島の行は無い。"""
+    records, ports, logs, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([], [("temporary alert", EXTRA_UP_0927, _INFO2_NAZE_0927)]),
+        {EXTRA_UP_0927: "extra_up_naze_20260927.html"},
+        _DAY_0927,
+    )
+    _, up = _routes(db_session, marix_line_company)
+
+    rows = _rows_for(records, ports, up)
+    assert [(r["port_id"], r["status"]) for r in rows] == [
+        (ports["名瀬"].id, OperationStatusEnum.extra)
+    ]
+    assert rows[0]["scheduled_departure_at"] == datetime(2026, 9, 27, 5, 50)
+    assert "direction_unknown" not in {log["event"] for log in logs}
+
+
+def _bare_cover_list(info2: str) -> str:
+    """欄（down/up_stream_services）の無い一覧。"""
+    return (
+        "<html><body>"
+        + _list_cover("temporary alert", EXTRA_UP_0927, info2)
+        + "</body></html>"
+    )
+
+
+@resp_mock.activate
+def test_direction_from_destination_when_no_column(db_session, marix_line_company):
+    """欄が無くても、行き先「鹿児島新港 向け」で上りとわかる。結果は欄があるときと同じ。"""
+    records, ports, _, _ = _departures(
+        db_session,
+        marix_line_company,
+        _bare_cover_list(_INFO2_NAZE_0927),
+        {EXTRA_UP_0927: "extra_up_naze_20260927.html"},
+        _DAY_0927,
+    )
+    _, up = _routes(db_session, marix_line_company)
+
+    assert [(r["port_id"], r["status"]) for r in _rows_for(records, ports, up)] == [
+        (ports["名瀬"].id, OperationStatusEnum.extra)
+    ]
+
+
+@resp_mock.activate
+def test_direction_unknown_without_column_or_destination(
+    db_session, marix_line_company
+):
+    """欄も始発港も行き先も無ければ、direction_unknown を出して読み飛ばす（今のまま）。"""
+    records, _, _, scraper = _departures(
+        db_session,
+        marix_line_company,
+        _bare_cover_list("2026年9月27日 名瀬港発"),
+        {EXTRA_UP_0927: "extra_up_naze_20260927.html"},
+        _DAY_0927,
+    )
+    assert records == []
+    with structlog.testing.capture_logs() as logs:
+        scraper.parse(scraper._list_html)
+    assert "direction_unknown" in {log["event"] for log in logs}
+
+
+# ---------------------------------------------------------------------------
+# US5: 航路単位（トップのバッジ）は定期便で決まる（research R8）
+# ---------------------------------------------------------------------------
+
+
+def _route_level(db_session, company, list_html, pages, today):
+    """一覧と詳細ページを登録して fetch() → parse()。(行, ログ, 下り, 上り) を返す。"""
+    setup_port_master(db_session, company)
+    _mock_extra_pages(list_html, pages)
+    scraper = MarixLine(db_session, company.id)
+    with (
+        patch("scraper.scrapers.marix_line.date", _make_date_mock(today)),
+        structlog.testing.capture_logs() as logs,
+    ):
+        records = scraper.parse(scraper.fetch())
+    down, up = _routes(db_session, company)
+    return records, logs, down, up
+
+
+def _status_of(records, route, day):
+    """その航路・日付の行のステータス（1行だけのはず）。無ければ None。"""
+    found = [
+        r["status"]
+        for r in records
+        if r["route_id"] == route.id and r["valid_date"] == day
+    ]
+    assert len(found) <= 1
+    return found[0] if found else None
+
+
+@pytest.mark.parametrize("extra_first", [True, False])
+@resp_mock.activate
+def test_route_level_down_0906_ignores_extra_voyage(
+    db_session, marix_line_company, extra_first
+):
+    """9/6 下り：定期便（航行経路変更）が delayed。臨時便が先でも「不明」にならない（SC-004）。"""
+    voyages = (
+        [_EXTRA_DOWN_0906, _DOWN_0906]
+        if extra_first
+        else [_DOWN_0906, _EXTRA_DOWN_0906]
+    )
+    records, logs, down, _ = _route_level(
+        db_session,
+        marix_line_company,
+        _list_html(voyages, []),
+        _PAGES_0906,
+        date(2026, 9, 6),
+    )
+
+    assert _status_of(records, down, date(2026, 9, 6)) == OperationStatusEnum.delayed
+    assert OperationStatusEnum.unknown not in {r["status"] for r in records}
+    assert "unknown_status_class" not in {log["event"] for log in logs}
+
+
+@pytest.mark.parametrize("extra_first", [True, False])
+@resp_mock.activate
+def test_route_level_up_0907_is_cancelled_with_extra_voyage(
+    db_session, marix_line_company, extra_first
+):
+    """9/7 上り：定期便が欠航なので航路単位は cancelled（臨時便は書かない）。"""
+    records, _, _, up = _route_level(
+        db_session, marix_line_company, _list_0907(extra_first), _PAGES_0907, _DAY_0907
+    )
+
+    assert _status_of(records, up, _DAY_0907) == OperationStatusEnum.cancelled
+
+
+@resp_mock.activate
+def test_route_level_extra_only_day_is_no_service(db_session, marix_line_company):
+    """臨時便しか無い今日は、今までどおり no_service（extra の行は返さない）。"""
+    records, _, _, up = _route_level(
+        db_session,
+        marix_line_company,
+        _list_html([], [("temporary alert", EXTRA_UP_0927, _INFO2_NAZE_0927)]),
+        {EXTRA_UP_0927: "extra_up_naze_20260927.html"},
+        _DAY_0927,
+    )
+
+    assert _status_of(records, up, _DAY_0927) == OperationStatusEnum.no_service
+
+
+@resp_mock.activate
+def test_route_level_extra_found_by_detail_page_when_list_class_is_regular(
+    db_session, marix_line_company
+):
+    """一覧に temporary が無くても、詳細ページで臨時便とわかれば航路単位に書かない（R1）。"""
+    records, _, down, _ = _route_level(
+        db_session,
+        marix_line_company,
+        _list_html(
+            [("route alert", EXTRA_DOWN_0906, _INFO2_DOWN_0906), _DOWN_0906], []
+        ),
+        _PAGES_0906,
+        date(2026, 9, 6),
+    )
+
+    assert _status_of(records, down, date(2026, 9, 6)) == OperationStatusEnum.delayed
+    assert OperationStatusEnum.extra not in {r["status"] for r in records}
+
+
+@resp_mock.activate
+def test_route_level_never_returns_extra_status(db_session, marix_line_company):
+    """operation_statuses の ENUM に extra は無いので、parse() は extra を返さない。"""
+    records, _, _, _ = _route_level(
+        db_session, marix_line_company, _list_0907(True), _PAGES_0907, _DAY_0907
+    )
+    assert OperationStatusEnum.extra not in {r["status"] for r in records}
+
+
+@resp_mock.activate
+def test_route_level_unreadable_unknown_voyage_writes_nothing(
+    db_session, marix_line_company
+):
+    """SC-009：一覧のクラスが読めず詳細ページも取れない便だけの日は、航路単位を書かない。"""
+    records, logs, _, up = _route_level(
+        db_session,
+        marix_line_company,
+        _list_html([], [("foo alert", EXTRA_UP_0907, _INFO2_UP_0907)]),
+        {EXTRA_UP_0907: 500},
+        _DAY_0907,
+    )
+
+    assert _status_of(records, up, _DAY_0907) is None
+    assert len([log for log in logs if log["event"] == "voyage_kind_unknown"]) == 1
+
+
+@resp_mock.activate
+def test_route_level_readable_unknown_voyage_is_fallback_row(
+    db_session, marix_line_company
+):
+    """一覧のクラスが読めれば、詳細ページが取れなくても今までどおり書く（控えの行）。"""
+    records, _, _, up = _route_level(
+        db_session,
+        marix_line_company,
+        _list_html([], [("route alert", EXTRA_UP_0907, _INFO2_UP_0907)]),
+        {EXTRA_UP_0907: 500},
+        _DAY_0907,
+    )
+
+    assert _status_of(records, up, _DAY_0907) == OperationStatusEnum.delayed
+
+
+@pytest.mark.parametrize("unknown_cls", ["route alert", "foo alert"])
+@pytest.mark.parametrize("unknown_first", [True, False])
+@resp_mock.activate
+def test_route_level_regular_voyage_beats_unknown_voyage(
+    db_session, marix_line_company, unknown_cls, unknown_first
+):
+    """分からない便が一覧で先でも、同じ日の定期便があれば定期便で書く。"""
+    unknown = (unknown_cls, EXTRA_UP_0907, _INFO2_UP_0907)
+    voyages = (
+        [unknown, _CANCEL_UP_0907] if unknown_first else [_CANCEL_UP_0907, unknown]
+    )
+    records, _, _, up = _route_level(
+        db_session,
+        marix_line_company,
+        _list_html([], voyages),
+        {UP_0907: "up_cancel_20260907.html", EXTRA_UP_0907: 500},
+        _DAY_0907,
+    )
+
+    assert _status_of(records, up, _DAY_0907) == OperationStatusEnum.cancelled
+
+
+@resp_mock.activate
+def test_run_writes_route_level_and_extra_rows_for_0907(db_session, marix_line_company):
+    """SC-005：9/7 の一覧（定期便の欠航＋臨時便）を run() で DB に書く。
+
+    航路単位は欠航、那覇・名瀬のクロスは臨時便。トップ・通知メールは、12 の既存テスト
+    （testIndexCardShowsExtraDepartureUnderRouteBadge・testStatusTextForExtraPorts・
+    testExtraPortsAreLabeledExtra）と同じ形の行から出る。
+    """
+    from scraper.db.models import OperationStatus
+
+    db_session.autoflush = False
+    setup_port_master(db_session, marix_line_company)
+    _mock_extra_pages(_list_0907(True), _PAGES_0907)
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with (
+        patch("scraper.scrapers.marix_line.date", _make_date_mock(_DAY_0907)),
+        patch(
+            "scraper.scrapers.marix_line.datetime",
+            _make_datetime_mock(datetime(2026, 9, 7, 6, 0)),
+        ),
+    ):
+        scraper.run()
+    db_session.commit()
+
+    _, up = _routes(db_session, marix_line_company)
+    route_rows = db_session.query(OperationStatus).filter_by(route_id=up.id).all()
+    assert [(r.valid_date, r.status) for r in route_rows] == [
+        (_DAY_0907, OperationStatusEnum.cancelled)
+    ]
+    assert _up_cross(db_session) == [
+        ("名瀬", "extra", EXTRA_UP_0907),
+        ("那覇", "extra", EXTRA_UP_0907),
+    ]
+
+
+# ---------------------------------------------------------------------------
+# PR #90 レビュー：temporary は状態ではなく便の種類
+# ---------------------------------------------------------------------------
+
+
+@resp_mock.activate
+def test_extra_port_with_state_class_keeps_the_state(db_session, marix_line_company):
+    """臨時便の港が `temporary cancel alert` なら、unknown ではなく cancelled（臨時便そのものの欠航）。"""
+    page = _set_port_class(
+        read_fixture("marix/extra_down_20260906.html"),
+        "鹿児島",
+        ["single", "firstport", "temporary", "cancel", "alert"],
+    )
+    records, ports, logs, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([_EXTRA_DOWN_0906], []),
+        {EXTRA_DOWN_0906: page},
+        date(2026, 9, 6),
+    )
+    down, _ = _routes(db_session, marix_line_company)
+
+    (row,) = _rows_for(records, ports, down, "鹿児島", CROSS)
+    assert row["status"] == OperationStatusEnum.cancelled
+    assert "detail_status_unknown" not in {log["event"] for log in logs}
+
+
+@resp_mock.activate
+def test_voyage_kind_regular_when_only_one_port_is_temporary(
+    db_session, marix_line_company
+):
+    """定期便が1港だけ臨時寄港（temporary）しても、見出しが臨時便でなければ定期便。"""
+    page = _set_port_class(
+        read_fixture("marix/down_route_change_20260906.html"),
+        "本部",
+        ["single", "temporary", "alert"],
+    )
+    assert (
+        _kind_of(
+            db_session,
+            marix_line_company,
+            "route alert",
+            DOWN_0906,
+            page,
+            _INFO2_DOWN_0906,
+        )
+        == "regular"
+    )
+
+
+@resp_mock.activate
+def test_unread_extra_rows_removed_when_extra_vanishes_before_departure(
+    db_session, marix_line_company
+):
+    """臨時便だけの日：出港前に一覧から消えたら、同じキーの定期便が無くても「臨時便」の行を消す。"""
+    db_session.autoflush = False
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], [_EXTRA_UP_0907]),
+        {EXTRA_UP_0907: "extra_up_20260907.html"},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 0),
+    )
+    assert _up_cross(db_session)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], []),
+        {},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 30),
+    )
+    assert _up_cross(db_session) == []
+
+
+@resp_mock.activate
+def test_unread_extra_rows_kept_when_extra_vanishes_after_departure(
+    db_session, marix_line_company
+):
+    """出港後に一覧から消えた臨時便の行は、便ごと残す。"""
+    db_session.autoflush = False
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], [_EXTRA_UP_0907]),
+        {EXTRA_UP_0907: "extra_up_20260907.html"},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 0),
+    )
+    first = _up_cross(db_session)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], []),
+        {},
+        _DAY_0907,
+        datetime(2026, 9, 7, 8, 0),
+    )
+    assert _up_cross(db_session) == first
+
+
+# ---------------------------------------------------------------------------
+# PR #90 レビュー（2回目）
+# ---------------------------------------------------------------------------
+
+
+def _plus_page_with_motobu(classes: list[str]) -> str:
+    return _set_port_class(
+        read_fixture("marix/down_route_change_20260906.html"), "本部", classes
+    )
+
+
+@resp_mock.activate
+def test_regular_voyage_temporary_port_is_not_extra_and_later_cancel_shows(
+    db_session, marix_line_company
+):
+    """定期便が1港だけ臨時寄港（temporary）しても、その港は臨時便の行にならない。次の欠航も出る。"""
+    db_session.autoflush = False
+    today = date(2026, 9, 6)
+    regular_only = _list_html([_DOWN_0906], [])
+    _run_extra(
+        db_session,
+        marix_line_company,
+        regular_only,
+        {DOWN_0906: _plus_page_with_motobu(["single", "temporary", "alert"])},
+        today,
+        datetime(2026, 9, 6, 6, 0),
+    )
+    first = {r[0]: r[2] for r in _db_rows(db_session, PLUS)}
+    assert first["本部"] == "operating"  # 臨時便の行（extra）ではない
+
+    _run_extra(
+        db_session,
+        marix_line_company,
+        regular_only,
+        {DOWN_0906: _plus_page_with_motobu(["single", "cancel", "alert"])},
+        today,
+        datetime(2026, 9, 6, 6, 30),
+    )
+    second = {r[0]: r[2] for r in _db_rows(db_session, PLUS)}
+    assert second["本部"] == "cancelled"
+
+
+def _null_departure_times(db_session):
+    from sqlalchemy import update
+
+    db_session.execute(update(DepartureStatus).values(scheduled_departure_at=None))
+    db_session.commit()
+
+
+@resp_mock.activate
+def test_vanished_extra_without_times_is_removed_when_date_is_future(
+    db_session, marix_line_company
+):
+    """出港予定が全部 NULL の臨時便は、出港日が今日より後なら未出港として、一覧から消えたら消す。"""
+    db_session.autoflush = False
+    first_day = date(2026, 9, 6)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], [_EXTRA_UP_0907]),
+        {EXTRA_UP_0907: "extra_up_20260907.html"},
+        first_day,
+        datetime(2026, 9, 6, 6, 0),
+    )
+    _null_departure_times(db_session)
+    assert _up_cross(db_session)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], []),
+        {},
+        first_day,
+        datetime(2026, 9, 6, 6, 30),
+    )
+    assert _up_cross(db_session) == []
+
+
+@resp_mock.activate
+def test_vanished_extra_without_times_is_kept_when_date_is_today(
+    db_session, marix_line_company
+):
+    """時刻が NULL で出港日が今日なら、出港済みかもしれないので残す。"""
+    db_session.autoflush = False
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], [_EXTRA_UP_0907]),
+        {EXTRA_UP_0907: "extra_up_20260907.html"},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 0),
+    )
+    _null_departure_times(db_session)
+    kept = _up_cross(db_session)
+    _run_extra(
+        db_session,
+        marix_line_company,
+        _list_html([], []),
+        {},
+        _DAY_0907,
+        datetime(2026, 9, 7, 6, 30),
+    )
+    assert _up_cross(db_session) == kept

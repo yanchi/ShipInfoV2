@@ -40,6 +40,28 @@ final readonly class PortBoardDay
     }
 
     /**
+     * その会社の、その方向に、臨時便（状態が Extra）以外の便（発表済み・運航予定）があるか。始発港の行も見る。
+     * 状態が分からない便（船名なしの行など）も数える。「臨時便しか無い日」の判定に使う（13-marix-extra-voyages FR-014）。
+     */
+    public function hasRegularDeparturesOf(int $companyId, RouteDirectionEnum $direction): bool
+    {
+        foreach ($this->directions as $d) {
+            if ($d->direction !== $direction) {
+                continue;
+            }
+            foreach ($d->rows as $row) {
+                foreach ($row->entries as $entry) {
+                    if ($entry->companyId === $companyId && $entry->isDeparture() && $entry->status !== OperationStatusEnum::Extra) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * その会社の、その方向の始発港（先頭の行）を除いた港を出る便（発表済み・運航予定）。
      *
      * @return list<PortBoardEntry>

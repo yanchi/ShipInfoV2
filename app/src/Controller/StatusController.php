@@ -112,6 +112,7 @@ class StatusController extends AbstractController
      * 前日に始発港を出た便が今日途中の港を出る日は、その区間（始発港を除いた港を出る便）の状態を出す。
      * 全便が同じ状態ならそれを badge。バラけていて欠航・運休・条件付・遅延が混じれば changed（スケジュール変更）、
      * 混じらなければ通常運航 → 不明 → 運航予定の順で badge。
+     * 臨時便以外の行が無く（始発港の行も見る）臨時便があれば「臨時便」の badge（13-marix-extra-voyages FR-014）。
      *
      * @param list<array{company: FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: ?OperationStatus}>}> $companies
      *
@@ -125,6 +126,11 @@ class StatusController extends AbstractController
             foreach ($companyData['routes'] as $routeId => $r) {
                 $direction = $r['route']->getDirection();
                 if ($today === null || $direction === null || $r['status']?->getStatus() !== OperationStatusEnum::NoService) {
+                    continue;
+                }
+                if (!$today->hasRegularDeparturesOf($companyId, $direction) && $today->firstExtraDepartureOf($companyId, $direction) !== null) {
+                    $result[$routeId] = ['kind' => 'badge', 'state' => null, 'status' => OperationStatusEnum::Extra];
+
                     continue;
                 }
                 $display = $this->midwayDisplay($today->midwayDeparturesOf($companyId, $direction));
