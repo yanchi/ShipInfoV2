@@ -6,13 +6,13 @@
 
 ## Summary
 
-今日その方向に臨時便がある航路は、会社カードのバッジが「✓ 通常運航」「○ 運航予定」になるところを「▲ スケジュール変更」にする。臨時便の1行には、臨時便が寄らない港があれば「・抜港あり」を足す。通知メールの「通常運航（臨時便あり）」は「スケジュール変更（臨時便あり）」にする。
+今日その方向に臨時便がある航路は、会社カードのバッジが「✓ 通常運航」「○ 運航予定」になるところを「▲ スケジュール変更」にする。臨時便の1行には、臨時便が寄らない港があれば「・抜港あり」を足す。通知メールは、航路が通常運航で港の行に臨時便があれば、状況の頭を「スケジュール変更」にする。
 
 - Web だけを変える。スクレイパー・DB は変えない
   - `StatusController`：航路のバッジを組み立てた後に、臨時便がある航路を `changed` にする（R1・R2）。`routesDepartingMidway` は `routeBadges` に名前を変える
   - `PortBoard`：臨時便の運航に抜港があるかを返す（R3）。`PortBoardExtraDeparture` に `skipsPorts`
   - `index.html.twig`：変数名の変更と「・抜港あり」
-  - `IrregularService::statusText()`：文言を1か所（R4）
+  - `IrregularService::statusText()`：臨時便がある日の頭の文言（R4）
 - 12・13 の「臨時便は定期便の通常運航と混ざってもスケジュール変更にしない」を、この機能の契約で上書きする（FR-010）
 
 ---
@@ -119,8 +119,8 @@ specs/13-marix-extra-voyages/contracts/ui-status.md
 
 ### Phase C：通知メールと文書（US3・FR-006・FR-010）
 
-- `IrregularService::statusText()`：`OperationStatusEnum::Operating->label() . '（臨時便あり）'` → `'スケジュール変更（臨時便あり）'`（R4）
-- テスト：`IrregularServiceCollectorTest` の「通常運航・全部 Extra」の期待を書き換える
+- `IrregularService::statusText()`：航路×日付が通常運航で港の行に Extra が1つでもあれば、頭を「スケジュール変更」にする（R4）
+- テスト：`IrregularServiceCollectorTest` の「通常運航・全部 Extra」の期待を書き換え、「通常運航・Extra＋欠航」「通常運航・欠航だけ」を足す
 - 12・13 の契約の該当箇所に「15-extra-voyage-badge で変更」の注記とリンク
 - `make test-php`・`make phpstan`・`make cs-php`・`make lint-php`
 

@@ -40,7 +40,8 @@
 `PortBoardExtraDeparture` に `bool $skipsPorts`（既定 `false`）を足し、`routesWithExtra()` で詰める。テンプレートは `{% if extra.skipsPorts %}・抜港あり{% endif %}`。
 
 **Rationale**:
-- 臨時便は寄らない港の行を作らない（マルエー 12 の FR-006、マリックス 13 の FR-003）。行が無いことで抜港と分かり、会社を問わない
+- 臨時便は寄らない港の行を作らない（マルエー 12 の FR-006、マリックス 13 の FR-003）。同じ船の寄る行が無いことで抜港と分かり、会社を問わない
+- 寄港かどうかは、運航の出港日の範囲にある同じ船の行で見る。同じ日に同じ船が別の運航でその港に寄ると、それも寄港に数える（抜港を見落とす）。同じ船の臨時便が1日に2回出た例は無いので割り切る
 - 日をまたぐ運航（今日 22:00 発・翌日に次の港）は、ボードの4日分から同じ船の続きを拾える。前日に始発港を出た運航（10/27 の名瀬 03:50）は、ボードに前日の行が無いので今日の最初の港からになる。それより前の港は数えない（spec Edge Cases）
 - 寄港順の位置はボードの行の並び（`findBoardStops()`）。今の4航路は2社とも同じ港・同じ順なので、ボードの並びをそのまま使える
 - マリックス 9/7 上り（那覇・名瀬が臨時便、本部〜亀徳は定期便の欠航の行）は、本部〜亀徳が欠航なので抜港。spec の US2-3 どおり
@@ -51,9 +52,19 @@
 
 ## R4: 通知メール
 
-**Decision**: `IrregularService::statusText()` の「通常運航（臨時便あり）」を「スケジュール変更（臨時便あり）」にする。「スケジュール変更」はトップのバッジの文言と同じ。ほかの分岐は変えない（FR-006）。
+**Decision**: `IrregularService::statusText()` で、航路×日付が通常運航（`$operating`）で、港の行に Extra が1つでもあれば、状況の頭を「通常運航」から「スケジュール変更」にする（FR-006）。
 
-**Rationale**: 1行だけの変更。件名・送る条件・港の並びは変えない。
+| 港の行 | 状況 |
+|---|---|
+| 全部 Extra | スケジュール変更（臨時便あり） |
+| Extra とそれ以外 | スケジュール変更（途中の港に変更あり） |
+| Extra なし | 通常運航（途中の港に変更あり）（今のまま） |
+
+航路×日付が便なし・行なしのとき（「臨時便あり」「情報なし（途中の港に変更あり）」）と、欠航などのときは変えない。
+
+**Rationale**: サイトのバッジ（R1）と同じ条件にする。「スケジュール変更」はトップのバッジの文言と同じ。件名・送る条件・港の並びは変えない。
+
+**Alternatives considered**: 全部 Extra のときだけ変える：臨時便と欠航が混ざる日に「通常運航」と書いてしまい、サイトと食い違う。却下
 
 ## R5: 今あるテストへの影響
 
@@ -64,6 +75,7 @@ FR-001 で振る舞いが変わるので、次のテストの期待を書き換�
 | `StatusControllerTest::testIndexCardOriginExtraWithMidwayRegularKeepsRegularBadge` | ✓ 通常運航 | ▲ スケジュール変更 |
 | `StatusControllerTest::testIndexCardMidwayRegularPlusExtraKeepsRegularBadge` | ✓ 通常運航・スケジュール変更なし | ▲ スケジュール変更 |
 | `IrregularServiceCollectorTest` の「通常運航・全部 Extra」 | 通常運航（臨時便あり） | スケジュール変更（臨時便あり） |
+| `IrregularServiceCollectorTest` に通常運航・Extra＋欠航のケースがあれば | 通常運航（途中の港に変更あり） | スケジュール変更（途中の港に変更あり） |
 
 `testIndexCardShowsExtraDepartureUnderRouteBadge`（航路単位が欠航）・`testIndexCardOriginExtraKeepsCancelledBadge`・`testIndexCardMidwayCancelledPlusExtraShowsCancelled` は欠航のままなので変わらない（FR-002）。
 

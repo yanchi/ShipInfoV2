@@ -44,10 +44,11 @@
 
 - [ ] T002 [US1] `app/tests/Controller/StatusControllerTest.php` にテストを足す（実装の前に落ちることを確かめる）:
   - (a) SC-001：`createPortBoardData()`、`setRouteStatus(Operating)`、`addTodayDeparture('名瀬', '臨時丸', Extra, '03:50')`・`addTodayDeparture('本部', '臨時丸', Extra, '12:00')` → カードの `.status-badge` が「▲ スケジュール変更」で `href` が `/company/{id}`、注意書き（「公式サイトをご確認ください」）が無い、`.route-extra` に「◆ 臨時便 名瀬 03:50発」が入っている
-  - (b) 臨時便が出港済みでも戻らない：(a) と同じで、臨時便の時刻を `00:01` にする（テストの実行時刻より前）→ 「▲ スケジュール変更」
+  - (b) 臨時便が出港済みでも戻らない：(a) と同じで、臨時便の時刻を `00:00` にする（今日の 0:00 は必ず実行時刻以前）→ 「▲ スケジュール変更」
   - (c) US1-2：`setRouteStatus(NoService)`、港別テスト丸の今日の名瀬の行を運航予定（`updateTestDeparture(0, 'status', null)`）、`addTodayDeparture('本部', '臨時丸', Extra, '12:00')` → 「▲ スケジュール変更」
   - (d) 臨時便の行が抜粋で欠航なら数えない：`setRouteStatus(Operating)`、`addTodayDeparture('本部', '臨時丸', Cancelled, '12:00')` → 「✓ 通常運航」で、`.route-extra` が無い
   - (e) 条件付・遅延は変えない：`setRouteStatus(Delayed)`、本部に臨時便 → 「▲ 条件付・遅延」と注意書き
+  - (f) 不明は変えない：`setRouteStatus(Unknown)`、本部に臨時便 → 「？ 不明」のまま、`.route-extra` は出る
 - [ ] T003 [US1] research R5 の2本を書き換える（`app/tests/Controller/StatusControllerTest.php`）:
   - `testIndexCardOriginExtraWithMidwayRegularKeepsRegularBadge` → 名前を `testIndexCardOriginExtraWithMidwayRegularShowsScheduleChange` にし、期待を「▲ スケジュール変更」に。説明に「15-extra-voyage-badge で、臨時便がある日は通常運航にしない決まりに変えた」
   - `testIndexCardMidwayRegularPlusExtraKeepsRegularBadge` → 名前を `testIndexCardMidwayRegularPlusExtraShowsScheduleChange` にし、期待を「▲ スケジュール変更」に。説明は同じく（PR #87 レビューの決まりを変えたこと）
@@ -61,7 +62,7 @@
     - `$result` に入れなかった（航路単位でバッジが決まる）で、航路単位の状態が `Operating`
     - `$result[$routeId]` が `badge` で、`status === Operating` または `state === Scheduled`
   - `midwayDisplay()` の「臨時便は会社カードの専用の1行で伝える。定期便の通常運航と混ざっても『スケジュール変更』にしない」のコメントを、「臨時便の行を除いて決める。臨時便がある日の通常運航・運航予定は routeBadges() でスケジュール変更にする」に直す
-- [ ] T005 [US1] `app/templates/status/index.html.twig`：`routesDepartingMidway` → `routeBadges`、`midway` → `badge` などに名前を変える。`changed` の分岐のコメントを「途中の港の状態がバラけている日、または臨時便がある日（15-extra-voyage-badge）」に直す
+- [ ] T005 [US1] `app/templates/status/index.html.twig`：`routesDepartingMidway` → `routeBadges`、`midway` → `routeBadge` に名前を変える（`routeBadge.kind == 'badge'` と読めるように）。`changed` の分岐のコメントを「途中の港の状態がバラけている日、または臨時便がある日（15-extra-voyage-badge）」に直す
 - [ ] T006 [US1] `make test-php` で T002・T003 が通り、ほかのテスト（欠航・臨時便しか無い日・臨時便なし）が変わらず通ることを確かめる
 
 **Checkpoint**: `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` が通る → コミット
@@ -85,7 +86,7 @@
   - (f) 日をまたぐ：今日 22:00 名瀬が Extra、明日 06:00 亀徳が Extra、明日 和泊は行なし、明日 10:00 与論が Extra → true
   - (g) 明日だけの臨時便（今日に Extra なし、明日に抜港あり）→ false
   - (h) 運航が2つ：船 A は全港に寄る、船 B は抜港あり（どちらも今日）→ true
-  - (i) 同じ船が今日2回出る（名瀬 03:50・本部 12:00 のあとに、鹿児島 18:00・名瀬 23:00）：寄港順が戻るところで切るので、2回目の運航の鹿児島〜名瀬のあいだは抜港にならない（1回目の亀徳・和泊・与論が行なしなら true、全部 Extra なら false）
+  - (i) 同じ船が今日2回出る（名瀬 03:50・本部 12:00 のあとに、鹿児島 18:00・名瀬 23:00）：寄港順が戻るところで切るので、2回目の運航の鹿児島〜名瀬のあいだは抜港にならない（1回目の亀徳・和泊・与論が行なしなら true、全部 Extra なら false）。1回目のあいだの港に2回目の運航の行があるケースは作らない（research R3 の割り切り）
   - (j) 別の会社（`companyId: 2`）の Extra は見ない → false
 - [ ] T008 [P] [US2] `app/tests/Controller/StatusControllerTest.php` にテストを足す:
   - (a) SC-004：`addTodayDeparture('名瀬', '臨時丸', Extra, '03:50')`・`addTodayDeparture('本部', '臨時丸', Extra, '12:00')` → `.route-extra` が「◆ 臨時便 名瀬 03:50発・抜港あり」
@@ -109,12 +110,15 @@
 
 ## Phase 4: User Story 3 - 通知メールの状況も揃える (Priority: P3)
 
-**Goal**: 航路×日付が通常運航で、通常以外の港の行が臨時便だけのとき、状況は「スケジュール変更（臨時便あり）」（FR-006）
+**Goal**: 航路×日付が通常運航で、通常以外の港の行に臨時便が1つでもあれば、状況の頭は「スケジュール変更」（FR-006）
 
-**Independent Test**: `IrregularServiceCollectorTest` の「通常運航・全部 Extra」が「スケジュール変更（臨時便あり）」
+**Independent Test**: `IrregularServiceCollectorTest` の「通常運航・全部 Extra」が「スケジュール変更（臨時便あり）」、「通常運航・Extra＋欠航」が「スケジュール変更（途中の港に変更あり）」
 
-- [ ] T013 [US3] `app/tests/Service/IrregularServiceCollectorTest.php` の「通常運航・全部 Extra」の期待を `'スケジュール変更（臨時便あり）'` に書き換える（落ちることを確かめる）。ほかのケース（行なし・便なし・全部 Extra は「臨時便あり」）はそのまま
-- [ ] T014 [US3] `app/src/View/IrregularService.php` の `statusText()`：`OperationStatusEnum::Operating->label() . '（臨時便あり）'` を `'スケジュール変更（臨時便あり）'` にする。コメントに「トップのバッジと同じく、臨時便がある日を通常運航と書かない（15-extra-voyage-badge）」を足す
+- [ ] T013 [US3] `app/tests/Service/IrregularServiceCollectorTest.php`（落ちることを確かめる）:
+  - 「通常運航・全部 Extra」の期待を `'スケジュール変更（臨時便あり）'` に書き換える
+  - 足す：「通常運航・Extra＋Cancelled」→ `'スケジュール変更（途中の港に変更あり）'`、「通常運航・Cancelled だけ」→ `'通常運航（途中の港に変更あり）'`、「行なし・Extra＋Cancelled」→ `'情報なし（途中の港に変更あり）'`
+  - ほかのケース（行なし・便なし・全部 Extra は「臨時便あり」）はそのまま
+- [ ] T014 [US3] `app/src/View/IrregularService.php` の `statusText()`：`$operating` で港の行に Extra が1つでもあれば、頭を `OperationStatusEnum::Operating->label()` から `'スケジュール変更'` にする（全部 Extra →「スケジュール変更（臨時便あり）」、混ざる →「スケジュール変更（途中の港に変更あり）」。research R4 の表）。コメントに「トップのバッジと同じく、臨時便がある日を通常運航と書かない（15-extra-voyage-badge）」を足す
 - [ ] T015 [US3] `grep -rn '通常運航（臨時便あり）' app/` で残りが無いことを確かめる（`IrregularStatusMailerTest` など）
 
 **Checkpoint**: `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` が通る → コミット
@@ -124,10 +128,10 @@
 ## Phase 5: Polish & 文書
 
 - [ ] T016 [P] `specs/12-marue-extra-voyages/contracts/ui-status.md` の「出るところ」の「定期便の通常運航と臨時便が混ざっても『スケジュール変更』にしない」と、「トップの会社カード（FR-016）」の「航路のバッジ・注意書きは変えない」の後ろに、「→ 15-extra-voyage-badge で変更（[contracts/ui-status.md](../../15-extra-voyage-badge/contracts/ui-status.md)）」を足す
-- [ ] T017 [P] `specs/12-marue-extra-voyages/contracts/notification-mail.md` の状況の行の「通常運航（臨時便あり）」の後ろに、「→ 15-extra-voyage-badge で『スケジュール変更（臨時便あり）』に変更」を足す
+- [ ] T017 [P] `specs/12-marue-extra-voyages/contracts/notification-mail.md` の状況の行の「通常運航（臨時便あり）」の後ろに、「→ 15-extra-voyage-badge で『スケジュール変更（臨時便あり）』に変更。臨時便とそれ以外が混ざる日は『スケジュール変更（途中の港に変更あり）』（[contracts/notification-mail.md](../../15-extra-voyage-badge/contracts/notification-mail.md)）」を足す
 - [ ] T018 [P] `specs/13-marix-extra-voyages/contracts/ui-status.md` の「航路単位が便なしでない日」の節に、「臨時便がある日の通常運航・運航予定は 15-extra-voyage-badge で『▲ スケジュール変更』に変更」を足す
 - [ ] T019 quickstart.md の手順でローカルのトップを開き、バッジ・「・抜港あり」・臨時便の無い航路が変わらないことを見る。`make notify-dry-run` で状況の文言を見る
-- [ ] T020 `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` が全部通る
+- [ ] T020 `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` が全部通る。会社詳細・港別ページ・異常の要約・凡例のテスト（`StatusControllerTest` の `testPorts*`・`testCompany*`・`testIndexAlertSummary*`）の期待を変えていないこと（FR-009）
 
 **Checkpoint**: コミット
 
