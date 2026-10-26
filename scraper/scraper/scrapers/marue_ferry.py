@@ -152,6 +152,14 @@ class MarueFerry(BaseScraper):
         codes = self._load_port_codes()
         now = datetime.now()
 
+        # 船ステータス（鹿児島航路ページ）。便の行から 2日先以降の検索キーを決めるので、便検索より先に読む
+        resp = self.http.get(KAGOSHIMA_URL, timeout=30)
+        resp.raise_for_status()
+        resp.encoding = resp.apparent_encoding
+        self._ships = self._parse_ships(resp.text)
+        self._voyage_cache: dict[tuple[str, int, date, date], ShipInfo] = {}
+        forced = self._voyage_search_keys(routes)
+
         for offset in range(settings.marue_search_days_ahead + 1):
             d = self._valid_date + timedelta(days=offset)
             for route in routes:
@@ -163,7 +171,11 @@ class MarueFerry(BaseScraper):
                 end_code = codes.get(stops[-1].port_id)
                 for stop in stops[:-1]:
                     key = (route.id, stop.port_id, d)
-                    if offset >= 2 and not self._needs_far_search(key, now):
+                    if (
+                        offset >= 2
+                        and key not in forced
+                        and not self._needs_far_search(key, now)
+                    ):
                         continue
                     start_code = codes.get(stop.port_id)
                     if start_code is None or end_code is None:
@@ -172,13 +184,6 @@ class MarueFerry(BaseScraper):
                         )
                         continue
                     self._searches[key] = self._search(start_code, end_code, d)
-
-        # 船ステータス（鹿児島航路ページ）
-        resp = self.http.get(KAGOSHIMA_URL, timeout=30)
-        resp.raise_for_status()
-        resp.encoding = resp.apparent_encoding
-        self._ships = self._parse_ships(resp.text)
-        self._voyage_cache: dict[tuple[str, int, date, date], ShipInfo] = {}
 
         # 船別詳細ページ（港別情報の抽出用。失敗しても続ける）
         self._ship_details: dict[str, str | None] = {}
@@ -203,6 +208,36 @@ class MarueFerry(BaseScraper):
             + self._normalized_origin_searches(routes)
             + " -->"
         )
+
+    def _voyage_search_keys(self, routes: list[Route]) -> set[tuple[int, int, date]]:
+        """抜粋の便の行から決まる、2日先以降の検索キー（間隔に関係なく検索する。R5）。
+
+        途中の港から書いた行は始発の出港日が1日前のこともあるので、行の日付と前日の両方を始発の出港日とみなす。
+        """
+        directions = self._route_directions()
+        first = self._valid_date + timedelta(days=2)
+        last = self._valid_date + timedelta(days=settings.marue_search_days_ahead)
+        keys: set[tuple[int, int, date]] = set()
+        for ship in self._ships.values():
+            for voyage in ship.voyages:
+                route = next(
+                    (r for r in routes if directions.get(r.id) == voyage.direction),
+                    None,
+                )
+                stops = self._stops.get(route.id, []) if route else []
+                if route is None or len(stops) < 2:
+                    continue
+                for start in (
+                    voyage.departure_date,
+                    voyage.departure_date - timedelta(days=1),
+                ):
+                    for stop in stops[:-1]:
+                        d = start + timedelta(
+                            days=stop.day_offset - stops[0].day_offset
+                        )
+                        if first <= d <= last:
+                            keys.add((route.id, stop.port_id, d))
+        return keys
 
     def _needs_far_search(self, key: tuple[int, int, date], now: datetime) -> bool:
         """2日先以降の検索キー：行が無いか、最後の確認から MARUE_FAR_SEARCH_INTERVAL_HOURS たっていれば検索する。"""
@@ -502,7 +537,9 @@ class MarueFerry(BaseScraper):
                         row.ship_name, ships, route_id, port_id
                     )
                 else:
-                    status, detail = None, None  # 運航予定（FR-021）
+                    status, detail = self._future_voyage_status(
+                        row.ship_name, ships, route_id, row
+                    )
                 records.append(
                     {
                         **base,
@@ -627,6 +664,30 @@ class MarueFerry(BaseScraper):
             accepted.append(voyage)
             result.append(voyage)
         return result
+
+    def _future_voyage_status(
+        self, ship_name: str, ships: dict[str, ShipInfo], route_id: int, row: SearchRow
+    ) -> tuple[OperationStatusEnum | None, str | None]:
+        """今の便より後の便の行：抜粋にその便の行があればその状態（全港同じ）、無ければ運航予定。
+
+        港別情報は使わない（FR-004。どの便の話か書いていないことが多い）。
+        """
+        ship = ships.get(ship_name)
+        stops = self._stops.get(route_id, [])
+        if ship is None or not ship.voyages or not stops or row.arrival_at is None:
+            return None, None
+        arrival_date = row.arrival_at.date()
+        origin_date = arrival_date - timedelta(
+            days=stops[-1].day_offset - stops[0].day_offset
+        )
+        line = self._voyage_line(ship, route_id, origin_date, arrival_date)
+        if line is None:
+            return None, None
+        if len(ship.voyages) >= 2:
+            ship = replace(ship, status=line.status)
+        if ship.status is None:
+            return None, None
+        return ship.status, self._ship_detail_text(ship)
 
     def _current_voyage_status(
         self, ship_name: str, ships: dict[str, ShipInfo], route_id: int, port_id: int

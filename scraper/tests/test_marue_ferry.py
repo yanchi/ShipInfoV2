@@ -1828,18 +1828,35 @@ def test_voyage_line_prefers_departure_date_over_range(db_session, marue_with_po
     assert line.status == OperationStatusEnum.cancelled
 
 
+def kagoshima_1026(lines: str | None = None, tags: list[str] | None = None) -> str:
+    """保存版 2026-10-26 の波之上のブロックの、抜粋の便の行（<br> 区切り）とタグを差し替える。"""
+    html = read_fixture("marue/kagoshima_20261026.html")
+    if lines is not None:
+        html, n = re.subn(
+            r'(フェリー波之上</div>.*?<div class="situation-excerpt">).*?(</div>)',
+            rf"\g<1>{lines}\g<2>",
+            html,
+            count=1,
+            flags=re.S,
+        )
+        assert n == 1
+    if tags is not None:
+        spans = "".join(f'<span class="tag-canceled">{t}</span>' for t in tags)
+        html, n = re.subn(
+            r'(フェリー波之上</div>.*?<div class="tag-list">).*?(</div>)',
+            rf"\g<1>{spans}\g<2>",
+            html,
+            count=1,
+            flags=re.S,
+        )
+        assert n == 1
+    return html
+
+
 def _ship_with(scraper, lines: str):
     """波之上の抜粋の便の行を差し替えて読む。"""
-    html, n = re.subn(
-        r'(フェリー波之上</div>.*?<div class="situation-excerpt">).*?(</div>)',
-        rf"\g<1>{lines}\g<2>",
-        read_fixture("marue/kagoshima_20261026.html"),
-        count=1,
-        flags=re.S,
-    )
-    assert n == 1
     with fixed_now(NOW_1026):
-        return scraper._parse_ships(html)["フェリー波之上"]
+        return scraper._parse_ships(kagoshima_1026(lines))["フェリー波之上"]
 
 
 def test_voyage_line_range_only_for_lines_from_midway(db_session, marue_with_ports):
@@ -1872,3 +1889,161 @@ def test_voyage_line_range_only_for_lines_from_midway(db_session, marue_with_por
             scraper._voyage_line(ship, down.id, date(2026, 10, 27), date(2026, 10, 28))
             is None
         )
+
+
+# ---------------------------------------------------------------------------
+# 先の便（US1）
+# ---------------------------------------------------------------------------
+
+DOWN_PORT_NAMES = ["鹿児島", "名瀬", "亀徳", "和泊", "与論", "本部"]
+UP_1028_ROWS = _voyage_searches(
+    "フェリー波之上",
+    {
+        NAHA: "2026年10月28日 05:00",
+        MOTOBU: "2026年10月28日 07:20",
+        YORON: "2026年10月28日 10:10",
+        WADOMARI: "2026年10月28日 12:40",
+        KAMETOKU: "2026年10月28日 15:00",
+        NAZE: "2026年10月28日 19:20",
+    },
+    KAGOSHIMA,
+    "2026年10月28日",
+    "2026年10月29日 07:30",
+)
+
+
+@resp_mock.activate
+def test_future_voyage_gets_voyage_line_status(db_session, marue_with_ports):
+    """SC-001：10/27 那覇発上りは全港「欠航」。今の便（10/25 鹿児島発）の 10/26 の行は今までどおり。"""
+    company, ports = marue_with_ports
+    down, up = routes_of(db_session, company)
+
+    _, _, departures, _ = run_1026(
+        db_session, company.id, {**down_1025_rows(), **up_1027_rows()}
+    )
+
+    for name in UP_PORTS:
+        row = find(departures, up, ports[name], date(2026, 10, 27))
+        assert row["status"] == OperationStatusEnum.cancelled, name
+        assert "10月27日（火）那覇港発上り便…欠航" in row["status_detail"]
+    for name in ["和泊", "与論", "本部"]:
+        row = find(departures, down, ports[name], date(2026, 10, 26))
+        assert row["status"] == OperationStatusEnum.cancelled, name
+
+
+@resp_mock.activate
+def test_future_voyage_line_status_ignores_port_notices(db_session, marue_with_ports):
+    """先の便の行が「条件付運航」なら全港 delayed。詳細ページの「寄港いたしません」で抜港にしない（FR-004）。"""
+    company, ports = marue_with_ports
+    _, up = routes_of(db_session, company)
+    # 行が2つ以上あれば行の状態を使う（1つだけならタグ）
+    lines = "■10月27日（火）那覇港発上り便…条件付運航<br />■10月23日（金）鹿児島新港発下り便…欠航"
+
+    _, _, departures, _ = run_1026(
+        db_session,
+        company.id,
+        {**down_1025_rows(), **up_1027_rows()},
+        kagoshima=kagoshima_1026(lines),
+    )
+
+    for name in UP_PORTS:
+        row = find(departures, up, ports[name], date(2026, 10, 27))
+        assert row["status"] == OperationStatusEnum.delayed, name
+        assert row["status_detail"]
+
+
+@resp_mock.activate
+def test_future_voyage_without_line_stays_scheduled(db_session, marue_with_ports):
+    """SC-004：抜粋に行の無い先の便は運航予定のまま（status・status_detail ともに None）。"""
+    company, ports = marue_with_ports
+    down, _ = routes_of(db_session, company)
+    searches = {
+        **down_1025_rows(),
+        (KAGOSHIMA, NAHA, "2026年10月29日"): search_html(
+            [marue("フェリー波之上", "2026年10月29日 18:00", "2026年10月30日 19:00")]
+        ),
+    }
+
+    _, _, departures, _ = run_1026(db_session, company.id, searches)
+
+    row = find(departures, down, ports["鹿児島"], date(2026, 10, 29))
+    assert row["status"] is None and row["status_detail"] is None
+
+
+@resp_mock.activate
+def test_future_voyage_with_single_line_uses_ship_tag(db_session, marue_with_ports):
+    """便の行が1つだけで先の便に合う → 船のタグのステータス（抜粋の文より確か）。"""
+    company, ports = marue_with_ports
+    _, up = routes_of(db_session, company)
+
+    _, _, departures, _ = run_1026(
+        db_session,
+        company.id,
+        {**down_1025_rows(), **up_1027_rows()},
+        kagoshima=kagoshima_1026("■10月27日（火）那覇港発上り便…条件付運航"),
+    )
+
+    for name in UP_PORTS:
+        row = find(departures, up, ports[name], date(2026, 10, 27))
+        assert row["status"] == OperationStatusEnum.cancelled, name
+
+
+@resp_mock.activate
+def test_future_extra_voyage_line_is_operating(db_session, marue_with_ports):
+    """「臨時便運航」の先の便は operating で詳細なし。
+    ※本番では臨時便は便検索に出てこない（spec の範囲外）。ここで流す検索結果は仮のデータ。
+    """
+    company, ports = marue_with_ports
+    _, up = routes_of(db_session, company)
+
+    _, _, departures, _ = run_1026(
+        db_session,
+        company.id,
+        {**down_1025_rows(), **up_1027_rows(), **UP_1028_ROWS},
+    )
+
+    for name in UP_PORTS:
+        row = find(departures, up, ports[name], date(2026, 10, 28))
+        assert row["status"] == OperationStatusEnum.operating, name
+        assert row["status_detail"] is None
+
+
+@resp_mock.activate
+def test_far_search_is_forced_only_for_keys_from_voyage_lines(
+    db_session, marue_with_ports
+):
+    """SC-005：便の行から決まる 2日先以降のキーは、確認済みでも検索する。行の無い日付は今までどおり飛ばす。
+    ※抜粋の「10/28 那覇港発上り便」は、本番では臨時便の行。キーの決め方だけを確かめる仮のデータ。
+    """
+    company, ports = marue_with_ports
+    down, up = routes_of(db_session, company)
+    checked = NOW_1026 - timedelta(hours=1)
+    for route, names in ((down, DOWN_PORT_NAMES), (up, UP_PORTS)):
+        for name in names:
+            for d in (date(2026, 10, 28), date(2026, 10, 29)):
+                db_session.add(
+                    DepartureStatus(
+                        route_id=route.id,
+                        port_id=ports[name].id,
+                        departure_date=d,
+                        ship_name="",
+                        status="no_service",
+                        content_hash="x" * 64,
+                        scraped_at=checked,
+                        checked_at=checked,
+                    )
+                )
+    db_session.commit()
+
+    run_1026(
+        db_session,
+        company.id,
+        {**up_1027_rows(), **UP_1028_ROWS},
+        kagoshima=kagoshima_1026("■10月28日（水）那覇港発上り便…欠航"),
+    )
+
+    far = {c for c in search_calls() if c[2] in ("2026年10月28日", "2026年10月29日")}
+    assert far == {
+        (code, KAGOSHIMA, "2026年10月28日")
+        for code in (NAHA, MOTOBU, YORON, WADOMARI, KAMETOKU, NAZE)
+    }

@@ -62,17 +62,17 @@
 
 ### Tests（先に書いて落ちることを確かめる）
 
-- [ ] T006 [P] [US1] `scraper/tests/test_marue_ferry.py` に SC-001 のテスト `test_future_voyage_gets_voyage_line_status`：上の Independent Test（`run_1026()`）。10/27 の行の `status_detail` に「10月27日（火）那覇港発上り便…欠航」が入る
-- [ ] T007 [P] [US1] `scraper/tests/test_marue_ferry.py` にテストを足す：(a) `run_1026()` の鹿児島航路ページの 10/27 の行を「条件付運航」に差し替え → 全港 `delayed`。詳細ページ（`ship_detail_naminoue_20261026.html`）の「亀徳港…和泊港…与論港には寄港いたしません」が読まれていても `skipped`・`operating` にならない（FR-004）、(b) 抜粋に行の無い先の便は `status is None`・`status_detail is None`（SC-004。既存の `test_later_voyage_of_same_ship_is_scheduled` もそのまま通る）、(c) 便の行が1つだけで先の便に合う → 船のタグのステータス、(d) 先の便の行が「臨時便運航」：`up_1027_rows()` と同じ形で 10/28 那覇発上り（波之上、那覇 05:00・本部 07:20・与論 10:10・和泊 12:40・亀徳 15:00・名瀬 19:20、下船 2026-10-29 07:30。詳細ページの臨時便の時刻）の検索結果を作って渡す。本番では臨時便は便検索に出てこない（spec の範囲外）ので、テストのコメントに「仮のデータ」と書く → 10/28 の各港の行が `operating`・`status_detail is None`（US2 の後で通る。`xfail` にせず、US2 の Phase まで落ちたままでいい）
+- [X] T006 [P] [US1] `scraper/tests/test_marue_ferry.py` に SC-001 のテスト `test_future_voyage_gets_voyage_line_status`：上の Independent Test（`run_1026()`）。10/27 の行の `status_detail` に「10月27日（火）那覇港発上り便…欠航」が入る
+- [X] T007 [P] [US1] `scraper/tests/test_marue_ferry.py` にテストを足す：(a) `run_1026()` の鹿児島航路ページの 10/27 の行を「条件付運航」に差し替え → 全港 `delayed`。詳細ページ（`ship_detail_naminoue_20261026.html`）の「亀徳港…和泊港…与論港には寄港いたしません」が読まれていても `skipped`・`operating` にならない（FR-004）、(b) 抜粋に行の無い先の便は `status is None`・`status_detail is None`（SC-004。既存の `test_later_voyage_of_same_ship_is_scheduled` もそのまま通る）、(c) 便の行が1つだけで先の便に合う → 船のタグのステータス、(d) 先の便の行が「臨時便運航」：`up_1027_rows()` と同じ形で 10/28 那覇発上り（波之上、那覇 05:00・本部 07:20・与論 10:10・和泊 12:40・亀徳 15:00・名瀬 19:20、下船 2026-10-29 07:30。詳細ページの臨時便の時刻）の検索結果を作って渡す。本番では臨時便は便検索に出てこない（spec の範囲外）ので、テストのコメントに「仮のデータ」と書く → 10/28 の各港の行が `operating`・`status_detail is None`（US2 の後で通る。`xfail` にせず、US2 の Phase まで落ちたままでいい）
 
 ### Implementation
 
-- [ ] T008 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `parse_departures()` で、今の便でないマルエーの行に `_future_voyage_status(row.ship_name, ships, route_id, row)` を使う。船ブロックが無い・便の行が0・`_voyage_line()` が None なら `(None, None)`。合えば、行が1つなら `ship.status`、2つ以上なら行の `status`。詳細は operating なら None、それ以外は `_ship_detail_text()` と同じ抜粋（research R3・data-model の表）。始発の出港日は `row.arrival_at.date() −（終点の day_offset − 始発港の day_offset）`
+- [X] T008 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `parse_departures()` で、今の便でないマルエーの行に `_future_voyage_status(row.ship_name, ships, route_id, row)` を使う。船ブロックが無い・便の行が0・`_voyage_line()` が None なら `(None, None)`。合えば、行が1つなら `ship.status`、2つ以上なら行の `status`。詳細は operating なら None、それ以外は `_ship_detail_text()` と同じ抜粋（research R3・data-model の表）。始発の出港日は `row.arrival_at.date() −（終点の day_offset − 始発港の day_offset）`
 
 ### FR-010（2日先以降の検索）
 
-- [ ] T009 [P] [US1] `scraper/tests/test_marue_ferry.py` にテストを足す（SC-005）：`run_1026()` で、2日先（10/28）と3日先（10/29）の全キーについて、DB に `checked_at = NOW_1026 − 1時間` の行を入れておく（既存の `test_far_searches_are_decided_per_key` の作り方）。抜粋の「10/28 那覇港発上り便」から決まる 10/28 の那覇発上りのキー（那覇・本部・与論・和泊・亀徳・名瀬）は検索され、10/28・10/29 の鹿児島発下りのキーは検索されない（`search_calls()` で確かめる）。抜粋の 10/28 の行は臨時便のもので、本番では便検索に出てこない。キーの決め方を確かめる仮のデータとして使うことを、テストのコメントに書く
-- [ ] T010 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `fetch()` を「鹿児島航路ページ → `_parse_ships()` → 便検索 → 船別詳細ページ」の順に入れ替える。便の行から2日先以降の検索を足すキーの集合を作り（data-model「2日先以降の検索を足すキー」）、`offset >= 2 and not self._needs_far_search(key, now) and key not in forced` のときだけ飛ばす。戻り値の文字列（`raw_html_hash` の元）は変えない
+- [X] T009 [P] [US1] `scraper/tests/test_marue_ferry.py` にテストを足す（SC-005）：`run_1026()` で、2日先（10/28）と3日先（10/29）の全キーについて、DB に `checked_at = NOW_1026 − 1時間` の行を入れておく（既存の `test_far_searches_are_decided_per_key` の作り方）。抜粋の「10/28 那覇港発上り便」から決まる 10/28 の那覇発上りのキー（那覇・本部・与論・和泊・亀徳・名瀬）は検索され、10/28・10/29 の鹿児島発下りのキーは検索されない（`search_calls()` で確かめる）。抜粋の 10/28 の行は臨時便のもので、本番では便検索に出てこない。キーの決め方を確かめる仮のデータとして使うことを、テストのコメントに書く
+- [X] T010 [US1] `scraper/scraper/scrapers/marue_ferry.py` の `fetch()` を「鹿児島航路ページ → `_parse_ships()` → 便検索 → 船別詳細ページ」の順に入れ替える。便の行から2日先以降の検索を足すキーの集合を作り（data-model「2日先以降の検索を足すキー」）、`offset >= 2 and not self._needs_far_search(key, now) and key not in forced` のときだけ飛ばす。戻り値の文字列（`raw_html_hash` の元）は変えない
 
 **Checkpoint**: T006・T007(a)〜(c)・T009 が通る。T007(d) だけ落ちている。ほかの既存テストは全部通る → コミット
 
