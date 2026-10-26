@@ -35,7 +35,7 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 ## Phase 1: Setup
 
 - [ ] T001 `make up` → `make test-scraper`・`make test-php` が全部通ることを確認してから始める
-- [ ] T002 [P] `specs/13-marix-extra-voyages/samples/` の6本を `scraper/tests/fixtures/marix/` に、quickstart.md の表の名前でコピーする（service6727 → `extra_down_20260906.html`、downstream20260906 → `down_route_change_20260906.html`、service6731 → `extra_up_20260907.html`、upstream20260907 → `up_cancel_20260907.html`、service6819 → `extra_up_naze_20260927.html`、service6664 → `extra_down_20260827.html`）。コピーの後 `cmp` で同じ中身を確かめる
+- [ ] T002 [P] `specs/13-marix-extra-voyages/samples/` の6本を `scraper/tests/fixtures/marix/` に、quickstart.md の表の名前でコピーする（service6727 → `extra_down_20260906.html`、downstream20260906 → `down_route_change_20260906.html`、service6731 → `extra_up_20260907.html`、upstream20260907 → `up_cancel_20260907.html`、service6819 → `extra_up_naze_20260927.html`、service6664 → `extra_down_20260827.html`）
 - [ ] T003 `scraper/tests/test_marix_line.py` に、一覧の HTML を組み立てるテスト用の関数 `_list_html(down: list[tuple[str, str, str]], up: list[tuple[str, str, str]]) -> str` を足す。要素は（便のクラス、詳細ページの URL、info2 の文）。今の `fixtures/marix/list.html` と同じ形で、`div.service_list > div.down_stream_services` と `div.up_stream_services` の中に `div.status_single_cover {cls} > a.status_single {cls}[href] > div.info1 p.exp ＋ div.info2` を並べる。あわせて、URL と fixture 名の対応から `resp_mock` を登録する `_mock_extra_pages(list_html, pages: dict[str, str])` も足す（URL の定数：`EXTRA_DOWN_0906 = "https://marixline.com/service/service6727/"`、`DOWN_0906`・`EXTRA_UP_0907`・`UP_0907`・`EXTRA_UP_0927`・`EXTRA_DOWN_0827` も同じく）
 
 **Checkpoint**: 既存テストが全部通る（コミットなし）
@@ -127,7 +127,7 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
   - (b) (a) の2回目を、臨時便を一覧に残したまま臨時便の詳細ページを 500 にして読む → 同じく `extra` のまま
   - (c) 9/7 の一覧で `_run_departures()` → 臨時便の詳細ページの那覇・名瀬の日付を「09月08日」に書き換えて `_run_departures()` → 9/7 の那覇・名瀬のクロスは `cancelled`（`source_url = UP_0907`）に戻り、9/8 に `extra` の行がある（research R7）
   - (d) DB の `extra` の行と同じキーの定期便が `operating` → 定期便で上書きする
-- [ ] T014 [US1] `marix_line.py` に `_extra_rows_kept(self, route_ids: list[int], since: date) -> dict[tuple, str]` を作る（キー → `source_url`。`status = 'extra'` で `departure_date >= since` の行）。`_resolve_extra_conflicts()` で、臨時便の行が無いキーの定期便の行（状態が `cancelled`・`suspended`・`skipped`・`unknown`）について、DB の `extra` の行があり、その `source_url` が `extra_urls`（この回に詳細ページを読めた臨時便の URL）に無ければ、定期便の行を落とす（research R5）。`since` はこの回の定期便の行の出港日のいちばん前。`make test-scraper`・`make lint-scraper`
+- [ ] T014 [US1] `marix_line.py` に `_extra_rows_kept(self, route_ids: list[int], since: date) -> dict[tuple, str]` を作る（キー → `source_url`。`status = 'extra'` で `departure_date >= since` の行）。`parse_departures()` の頭で1回だけ呼び、結果を `_resolve_extra_conflicts()` と T016 の予備ルートの両方に渡す。`since` は一覧の便の始発日（`_parse_date()`）のいちばん前、一覧に便が無ければ今日（research R5）。`_resolve_extra_conflicts()` で、臨時便の行が無いキーの定期便の行（状態が `cancelled`・`suspended`・`skipped`・`unknown`）について、DB の `extra` の行があり、その `source_url` が `extra_urls`（この回に詳細ページを読めた臨時便の URL）に無ければ、定期便の行を落とす。`make test-scraper`・`make lint-scraper`
 
 ### 予備ルート（research R6）
 
@@ -136,7 +136,7 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
   - (b) 前の回に臨時便の行（那覇・名瀬・クロス・`extra`）を DB に書いた後、臨時便が一覧に無く定期便の詳細ページも 500 の回 → 那覇・名瀬の船名なしの行を作らない（DB の `extra` の行で見る）
   - (c) 定期便の詳細ページが 500 の回（臨時便なし）で `_run_departures()` → 那覇・名瀬・本部…に船名なしの `cancelled` の行ができる → 次の回に臨時便が出て、定期便の詳細ページは 500 のまま `_run_departures()` → 那覇・名瀬の船名なしの行が消え、クロスの `extra` の行がある。本部などの船名なしの行は残る
 - [ ] T016 [US1] `marix_line.py` を直す（research R6）:
-  - `parse_departures()` で、先に臨時便のブロックを処理して、臨時便の行の `(route_id, port_id, departure_date)` の集合を作る。`_fallback_departures()` に渡し、その集合にあるか、DB に同じ `(route_id, port_id, departure_date)` の `extra` の行（どの船でも。`_extra_rows_kept()` の結果を使う）があれば、その港の行を作らない。行の順番は一覧の順に戻す（T012 の「元の順を保つ」と合わせる）
+  - `parse_departures()` で、先に臨時便のブロックを処理して、臨時便の行の `(route_id, port_id, departure_date)` の集合を作る。`_fallback_departures()` に渡し、その集合にあるか、DB に同じ `(route_id, port_id, departure_date)` の `extra` の行（どの船でも。T014 で頭に読んだ `_extra_rows_kept()` の結果を使う）があれば、その港の行を作らない。行の順番は一覧の順に戻す（T012 の「元の順を保つ」と合わせる）
   - `_upsert_departures(self, records)` を上書きする：`super()._upsert_departures(records)` の後、`extra_voyage` の行の `(route_id, port_id, departure_date)` について `ship_name = ""` の行を消す（`synchronize_session="fetch"`）。戻り値は Base のまま
   - `make test-scraper`・`make lint-scraper`
 
@@ -162,7 +162,7 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 ### トップのバッジ（research R9、contracts/ui-status.md）
 
 - [ ] T019 [P] [US4] `app/tests/Controller/StatusControllerTest.php` にテストを足す（実装の前に落ちることを確かめる）。既存の `testIndexCardMidwayExtraOnlyShowsExtraBadge()` と同じ道具（`createPortBoardData()`・`updateTestDeparture()`・`setRouteStatus()`・`findCard()`）を使う:
-  - (a) `testIndexCardOriginExtraOnlyShowsExtraBadge`：航路が `NoService`、今日の便が始発港の Extra だけ（途中の港の行を消すか別の日にする）→ バッジが「◆ 臨時便」、`.route-extra` が「◆ 臨時便 〇〇 HH:MM発」、「便なし」が出ない（SC-007）
+  - (a) `testIndexCardOriginExtraOnlyShowsExtraBadge`：航路が `NoService`、今日の便が始発港の Extra だけ（`createPortBoardData()` の後、途中の港の行を消す）→ バッジが「◆ 臨時便」、`.route-extra` が「◆ 臨時便 〇〇 HH:MM発」、「便なし」が出ない（SC-007）
   - (b) `testIndexCardOriginExtraWithMidwayRegularKeepsRegularBadge`：始発港が Extra、途中の港に定期便の通常運航 → 今までどおり定期便のバッジ（通常運航）
   - (c) 航路が欠航で始発港が Extra → バッジは欠航のまま（既存の `testIndexCardShowsExtraDepartureUnderRouteBadge` と同じ結果を確かめる）
 - [ ] T020 [US4] `app/src/Controller/StatusController.php` の `routesDepartingMidway()` で、`midwayDisplay()` が null のとき `$today->firstExtraDepartureOf($companyId, $direction)` が null でなければ `['kind' => 'badge', 'state' => null, 'status' => OperationStatusEnum::Extra]` にする。メソッドの docblock に「途中の港を出る便が無く、始発港を出る臨時便があれば「臨時便」（13-marix-extra-voyages FR-014）」を足す。`make test-php`・`make phpstan`・`make cs-php`
@@ -183,7 +183,13 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
   - (c) 今日 2026-09-27、上りの欄に 9/27 の臨時便だけ → 上り 9/27 は `no_service`（`extra` の行を返さない）
   - (d) (a) で、一覧の臨時便のクラスを `route alert` にして（一覧に temporary が無い場合。research R1）、詳細ページで臨時便とわかる → 結果は (a) と同じ
   - (e) `parse()` の結果に `status = extra` の行が1つも無い（`operation_statuses` の ENUM に無いため）
-- [ ] T022 [US5] `marix_line.py` の `parse()` で、`self._is_extra_voyage(block, detail_html)` が True のブロックは行を作らず、`seen` にも入れずに次へ（research R8）。`detail_html` は `getattr(self, "_detail_pages", {}).get(urljoin(SOURCE_URL, href))`（`fetch()` を通らずに `parse()` を呼ぶ既存テストのため `getattr`）。`make test-scraper`・`make lint-scraper`
+  - (f) 今日 2026-09-07、9/7 上りの欄に、臨時便を一覧のクラス `foo alert`（状態として読めず temporary も無い）・詳細ページ 500 で先に、定期便（`cancel alert`）を後に置く → `fetch()` → `parse()` の上り 9/7 が `cancelled`。`voyage_kind_unknown` の警告が1件（E1）
+  - (g) 既存の `test_unknown_class_voyage_is_unknown_not_cancelled`（一覧のクラスは読めないが、詳細ページは取れて定期便とわかる）は今までどおり `unknown`。既存の `test_unknown_class_voyage_fallback_is_unknown`（港別の予備ルート）も今までどおり
+- [ ] T022 [US5] `marix_line.py` の `parse()` を直す（research R8）:
+  - `self._is_extra_voyage(block, detail_html)` が True のブロックは行を作らず、`seen` にも入れずに次へ
+  - 一覧のクラスが状態として読めず、`_detail_pages` にその URL があって値が None（詳細ページが取れなかった）なら、`voyage_kind_unknown`（url）を出して、行を作らず `seen` にも入れずに次へ
+  - `detail_html` は `getattr(self, "_detail_pages", {}).get(urljoin(SOURCE_URL, href))`（`fetch()` を通らずに `parse()` を呼ぶ既存テストのため `getattr`）
+  - `make test-scraper`・`make lint-scraper`
 
 **Checkpoint**: T021 が通る・既存テストが全部通る → コミット
 
@@ -195,7 +201,8 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 - [ ] T024 [P] `specs/12-marue-extra-voyages/contracts/ui-status.md` の「出るところ」の `midwayDisplay()` の段落の後に「始発港を出る臨時便しか無い日は specs/13-marix-extra-voyages/contracts/ui-status.md」と1行足す
 - [ ] T025 全部のチェックを流す：`make test-scraper`・`make lint-scraper`・`make test-php`・`make phpstan`・`make cs-php`・`make lint-php`・`make check-schema`・`make verify-prod`
 - [ ] T026 `make up` → `make scraper-run` で、今の公式の一覧（臨時便なし）でエラー・新しい警告が出ないこと、`/ports`・トップが今と同じことを目で見る。`make notify-dry-run` で本文が崩れないこと。臨時便が出ていない日なので、臨時便の表示は T019 の画面と 12 の既存テストで代える
-- [ ] T027 quickstart.md の本番の確認手順を、実装に合わせて直す（ログのイベント名 `extra_voyage_detail_missing`・`extra_voyage_conflict`、SQL）
+- [ ] T026a SC-005 をマリックスのデータで確かめる。今日を 2026-09-07 にした `scraper/tests/test_marix_line.py` のテストで、9/7 の一覧（定期便＋臨時便）を `_run_departures()` と `run()` で DB に書き、上り 9/7 の航路単位が `cancelled`、那覇・名瀬のクロスが `extra` であることを確かめる。画面と通知は、同じ形の行を `app/tests/Controller/StatusControllerTest.php`（航路が欠航・始発港が Extra →「✗ 欠航」と「◆ 臨時便 那覇 07:00発」）と `app/tests/Service/IrregularStatusMailerTest.php`（欠航の航路に Extra の港 → 本文に「- 那覇 07:00発 クイーンコーラルクロス：臨時便」、状況は「欠航」）で確かめる。12 の既存テストで同じ形がもう確かめられていれば、そのテスト名を quickstart.md に書いて足さない
+- [ ] T027 quickstart.md の本番の確認手順を、実装に合わせて直す（ログのイベント名 `extra_voyage_detail_missing`・`extra_voyage_conflict`・`voyage_kind_unknown`、SQL）
 
 **Checkpoint**: 全部通る → コミット → PR
 
