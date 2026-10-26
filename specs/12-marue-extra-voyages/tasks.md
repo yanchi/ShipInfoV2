@@ -104,13 +104,13 @@
   - `_current_voyage`
   - 10/25 鹿児島発の定期便の `_voyage_departed()`・`_recorded_voyage()`
   - `_recorded_search_keys()`（10/28 の上りの臨時便を cancelled にしておいても、10/28 のキーが入らない）
-  - `_needs_far_search()`（10/28 那覇のキーに臨時便の行しか無ければ、間隔に関係なく検索する）
+  - `_needs_far_search(key, now)` を直接呼ぶ：10/28 那覇のキーに、`checked_at` が今の臨時便の行だけがある → True（臨時便の行の確認時刻で間隔を数えない）。同じキーに `checked_at` が今の便検索の行もある → False。`run_1026()` の中で確かめない（そのキーは抜粋の便の行で毎回検索されるので、直す前でも通ってしまう。analyze T1）
 
 ### Implementation
 
 - [ ] T015 [US1] `scraper/scraper/scrapers/marue_ferry.py` にモジュールの条件 `_SEARCH_ROWS = or_(DepartureStatus.source_url.is_(None), DepartureStatus.source_url == SEARCH_URL)` を作る。`_recorded_voyages()`・`_recorded_voyage()`・`_recorded_search_keys()`・`_needs_far_search()` の WHERE に足す（research R5）
 - [ ] T016 [US1] `parse_departures()` の最後に `_extra_records(records, now)` を呼んで、臨時便の行を足す（data-model「行の作り方」、research R4・R7）
-  - 状態：`_voyage_line(ship, route_id, 始発港の出港日, 終点の入港日)` が cancelled・suspended・delayed ならそれ＋`_ship_detail_text()`、それ以外は `extra`＋`skip_note`。ただし同じ船・同じ航路で、始発港の出港日が同じ定期便がこの回の便検索の記録にあれば（`_departure_date(route_id, row.arrival_at)` で求める）、抜粋の行は当てずに `extra`
+  - 状態：`_voyage_line(ship, route_id, 始発港の出港日, 終点の入港日)` が cancelled・suspended・delayed ならそれ＋`_ship_detail_text()`、それ以外は `extra`＋`skip_note`。ただし同じ船・同じ航路で、始発港の出港日が同じ定期便がこの回の便検索の記録か DB の `_SEARCH_ROWS` の行にあれば（`_departure_date(route_id, arrival_at)` で求める）、抜粋の行は当てずに `extra`
   - `source_url` は詳細ページの URL、`freeze_after_departure=True`、`replace_scope` は付けない
   - ぶつかったとき、記録に出港時刻があって臨時便と違えば、便検索の記録の `status_detail` に足し（None なら「臨時便 HH:MM発あり」だけ）、`extra_voyage_key_conflict`（船・航路・港・日付・両方の時刻）を出す
 - [ ] T017 [US1] `make test-scraper`・`make lint-scraper`。既存テストの期待値は変えない
@@ -157,13 +157,14 @@
   - (h) 抜粋の上りの行が「…欠航」になる → 上りの6行が cancelled（US3-2）
   - (i) 前日に始発港を出た臨時便（本文を書き換えて、下りを 10/26 23:00 鹿児島発・10/27 15:00 名瀬・10/27 22:00 本部・10/28 那覇着にする）の行を DB に入れ、10/27 10:00 に【臨時便(下り)】を消して実行 → 名瀬・本部の行が残る（始発港の行の出港日 10/26 は範囲の外でも、出港済みの判定に使う。analyze U1）
   - (j) DB に何も無い状態で、10/27 05:00 に初めて読む → 下りは名瀬（10/27 03:50）・鹿児島（10/26 16:00）の行は作らず、本部（10/27 12:00）だけ作る（Edge Cases「初めて読んだときに始発港をもう出港している」）
+  - (k) (j) のあと 10/27 10:00 に【臨時便(下り)】を消して実行 → 本部の行が残る（便の中に始発港の行が無いので出港済みとみなす。analyze U4）
 
 ### Implementation
 
 - [ ] T024 [US3] `scraper/scraper/scrapers/base.py` の `_upsert_departures()` のルール5で、scope のキーに `source_url` を足し、DELETE の条件に `DepartureStatus.source_url == source_url` を足す（research R6）。docstring のルール5も直す
 - [ ] T025 [US3] `scraper/scraper/scrapers/marue_ferry.py` で `_upsert_departures(records)` を上書きする（data-model「消し方」）
   - 親を呼んだあとに、`_extra_voyages` が None でない船の臨時便の行を読む（マルエーの航路・`scheduled_arrival_at > now`。**出港日では絞らない**）
-  - 便（route_id, scheduled_arrival_at）ごとにまとめ、`scheduled_departure_at` の最小が今より後の便だけ、出港日が今日〜`MARUE_SEARCH_DAYS_AHEAD` 日先で今回書かなかったキーの行を消す
+  - 便（route_id, scheduled_arrival_at）ごとにまとめ、始発港（`_get_stops()[route_id][0]`）の行がある便で、`scheduled_departure_at` の最小が今より後の便だけ、出港日が今日〜`MARUE_SEARCH_DAYS_AHEAD` 日先で今回書かなかったキーの行を消す
   - 消した行の数を `extra_voyage_rows_deleted`（船・件数）でログに出す
   - 戻り値（created, updated）は親のまま
 - [ ] T026 [US3] `make test-scraper`・`make lint-scraper`

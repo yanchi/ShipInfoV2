@@ -64,7 +64,7 @@ _extra_voyages: dict[str, tuple[ExtraVoyage, ...] | None]
 for ship, voyages in _extra_voyages (None は飛ばす):
   for v in voyages:
     status, detail = 抜粋に合う行の状態（cancelled/suspended/delayed）か extra（R4）
-                     ※同じ船・方向・始発港の出港日の定期便が便検索にあれば、抜粋の行は当てず extra
+                     ※同じ船・方向・始発港の出港日の定期便が便検索（この回の記録か DB の _SEARCH_ROWS）にあれば、抜粋の行は当てず extra
     for stop in v.stops[:-1]:                         # 終点は作らない
       key = (v.route_id, stop.port_id, stop.departure_at.date(), ship)
       if not 今日 <= key.date <= 今日 + MARUE_SEARCH_DAYS_AHEAD: continue    # FR-009
@@ -87,6 +87,7 @@ for 船 in _extra_voyages（None でない船）:
   rows = DB の臨時便の行（その船・マルエーの航路・scheduled_arrival_at > now）   # 出港日では絞らない（前日に始発港を出た便の始発港の行も読む）
   便ごと（route_id, scheduled_arrival_at）にまとめる
   for 便 in 便ごと:
+    if 便の中に始発港（航路の最初の港）の行が無い: continue   # 始発港を出た後に初めて読んだ・便検索とぶつかった → 出港済みとみなして全部残す
     if min(scheduled_departure_at) <= now: continue     # 始発港を出港済み → 全部残す
     for row in 便:
       if row.departure_date が今日〜N日先 and row のキー not in written: delete   # 消すのは範囲の中だけ
