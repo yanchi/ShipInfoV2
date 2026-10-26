@@ -155,17 +155,19 @@ class IrregularServiceCollectorTest extends TestCase
         $this->assertSame('臨時便あり', $items[0]->statusText());
     }
 
-    /** 「状況」の文言：臨時便だけの日は、定期便に変更があるとは書かない */
+    /** 「状況」の文言：臨時便だけの日は、定期便に変更があるとは書かない。航路が通常運航で臨時便がある日は「スケジュール変更」（15-extra-voyage-badge） */
     public function testStatusTextForExtraPorts(): void
     {
         $extra = fn (string $port) => $this->departure($this->route, '2026-10-28', $port, OperationStatusEnum::Extra, '05:00', 'フェリー波之上');
         $cases = [
-            '行なし・全部 Extra'     => [[], [$extra('那覇'), $extra('本部')], '臨時便あり'],
-            '便なし・全部 Extra'     => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::NoService)], [$extra('那覇')], '臨時便あり'],
-            '通常運航・全部 Extra'   => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::Operating)], [$extra('那覇')], '通常運航（臨時便あり）'],
-            '欠航は今までどおり'     => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::Cancelled)], [$extra('那覇')], '欠航'],
-            'Extra と条件付が混ざる' => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::Operating)], [$extra('那覇'), $this->departure($this->route, '2026-10-28', '名瀬', OperationStatusEnum::Delayed)], '通常運航（途中の港に変更あり）'],
-            '行なし・Extra と欠航'   => [[], [$extra('那覇'), $this->departure($this->route, '2026-10-28', '名瀬', OperationStatusEnum::Cancelled)], '情報なし（途中の港に変更あり）'],
+            '行なし・全部 Extra'       => [[], [$extra('那覇'), $extra('本部')], '臨時便あり'],
+            '便なし・全部 Extra'       => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::NoService)], [$extra('那覇')], '臨時便あり'],
+            '通常運航・全部 Extra'     => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::Operating)], [$extra('那覇')], 'スケジュール変更（臨時便あり）'],
+            '欠航は今までどおり'       => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::Cancelled)], [$extra('那覇')], '欠航'],
+            'Extra と条件付が混ざる'   => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::Operating)], [$extra('那覇'), $this->departure($this->route, '2026-10-28', '名瀬', OperationStatusEnum::Delayed)], 'スケジュール変更（途中の港に変更あり）'],
+            '通常運航・Extra と欠航'   => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::Operating)], [$extra('那覇'), $this->departure($this->route, '2026-10-28', '名瀬', OperationStatusEnum::Cancelled)], 'スケジュール変更（途中の港に変更あり）'],
+            '通常運航・Cancelled だけ' => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::Operating)], [$this->departure($this->route, '2026-10-28', '名瀬', OperationStatusEnum::Cancelled)], '通常運航（途中の港に変更あり）'],
+            '行なし・Extra と欠航'     => [[], [$extra('那覇'), $this->departure($this->route, '2026-10-28', '名瀬', OperationStatusEnum::Cancelled)], '情報なし（途中の港に変更あり）'],
         ];
 
         foreach ($cases as $label => [$operations, $departures, $expected]) {

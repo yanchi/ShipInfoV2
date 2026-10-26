@@ -119,13 +119,13 @@
 
 **Independent Test**: `IrregularServiceCollectorTest` の「通常運航・全部 Extra」が「スケジュール変更（臨時便あり）」、「Extra と条件付が混ざる」が「スケジュール変更（途中の港に変更あり）」
 
-- [ ] T014 [US3] `app/tests/Service/IrregularServiceCollectorTest.php` の `testStatusTextForExtraPorts`（落ちることを確かめる）:
+- [X] T014 [US3] `app/tests/Service/IrregularServiceCollectorTest.php` の `testStatusTextForExtraPorts`（落ちることを確かめる）:
   - 書き換え：「通常運航・全部 Extra」→ `'スケジュール変更（臨時便あり）'`、「Extra と条件付が混ざる」（通常運航＋Extra＋Delayed）→ `'スケジュール変更（途中の港に変更あり）'`（research R5）
   - 足す：「通常運航・Cancelled だけ」→ `'通常運航（途中の港に変更あり）'`
   - そのまま：「行なし・全部 Extra」「便なし・全部 Extra」（臨時便あり）、「欠航は今までどおり」、「行なし・Extra と欠航」（情報なし（途中の港に変更あり））
   - docblock を「臨時便だけの日は、定期便に変更があるとは書かない。航路が通常運航で臨時便がある日は『スケジュール変更』（15-extra-voyage-badge）」に直す
-- [ ] T015 [US3] `app/src/View/IrregularService.php` の `statusText()`：`$operating` で港の行に Extra が1つでもあれば、頭を `OperationStatusEnum::Operating->label()` から `'スケジュール変更'` にする（全部 Extra →「スケジュール変更（臨時便あり）」、混ざる →「スケジュール変更（途中の港に変更あり）」。research R4 の表）。コメントに「トップのバッジと同じく、臨時便がある日を通常運航と書かない（15-extra-voyage-badge）」を足す
-- [ ] T016 [US3] `grep -rn '通常運航（臨時便あり）' app/` で残りが無いことを確かめる（`IrregularStatusMailerTest` など）
+- [X] T015 [US3] `app/src/View/IrregularService.php` の `statusText()`：`$operating` で港の行に Extra が1つでもあれば、頭を `OperationStatusEnum::Operating->label()` から `'スケジュール変更'` にする（全部 Extra →「スケジュール変更（臨時便あり）」、混ざる →「スケジュール変更（途中の港に変更あり）」。research R4 の表）。コメントに「トップのバッジと同じく、臨時便がある日を通常運航と書かない（15-extra-voyage-badge）」を足す
+- [X] T016 [US3] `grep -rn '通常運航（臨時便あり）' app/` で残りが無いことを確かめる（`IrregularStatusMailerTest` など）
 
 **Checkpoint**: `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` が通る → コミット
 

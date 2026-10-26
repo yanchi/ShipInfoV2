@@ -43,13 +43,18 @@ final readonly class IrregularService
 
         $operating = $this->routeStatus?->getStatus() === OperationStatusEnum::Operating;
 
+        // 臨時便がある日は通常運航と書かない。トップのバッジと同じ「スケジュール変更」にする（15-extra-voyage-badge）
+        $head = $operating && array_filter($this->ports, static fn (IrregularPort $p): bool => $p->status === OperationStatusEnum::Extra) !== []
+            ? 'スケジュール変更'
+            : OperationStatusEnum::Operating->label();
+
         // 臨時便だけの日は、定期便に変更があるとは書かない（臨時便まるごとを「途中の港の変更」と読まれないため）
         if ($this->ports !== [] && array_filter($this->ports, static fn (IrregularPort $p): bool => $p->status !== OperationStatusEnum::Extra) === []) {
-            return $operating ? OperationStatusEnum::Operating->label() . '（臨時便あり）' : '臨時便あり';
+            return $operating ? $head . '（臨時便あり）' : '臨時便あり';
         }
 
         if ($operating) {
-            return OperationStatusEnum::Operating->label() . '（途中の港に変更あり）';
+            return $head . '（途中の港に変更あり）';
         }
 
         return '情報なし（途中の港に変更あり）';
