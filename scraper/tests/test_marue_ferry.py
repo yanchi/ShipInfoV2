@@ -2667,3 +2667,60 @@ def test_route_status_departed_with_heavier_tag_uses_tag(db_session, marue_with_
         next(r for r in records if r["route_id"] == down.id)["status"]
         == OperationStatusEnum.cancelled
     )
+
+
+def _seed_checked_far_rows(db_session, down, up, ports):
+    """2〜3日先（10/28・10/29）の全キーに、1時間前に確認済みの行（便なし）を入れる。"""
+    checked = NOW_1026 - timedelta(hours=1)
+    for route, names in ((down, DOWN_PORT_NAMES), (up, UP_PORTS)):
+        for name in names:
+            for d in (date(2026, 10, 28), date(2026, 10, 29)):
+                db_session.add(
+                    DepartureStatus(
+                        route_id=route.id,
+                        port_id=ports[name].id,
+                        departure_date=d,
+                        ship_name="",
+                        status="no_service",
+                        content_hash="x" * 64,
+                        scraped_at=checked,
+                        checked_at=checked,
+                    )
+                )
+    db_session.commit()
+
+
+def _far_up_keys(*days: str) -> set[tuple[str, str, str]]:
+    return {
+        (code, KAGOSHIMA, day)
+        for day in days
+        for code in (NAHA, MOTOBU, YORON, WADOMARI, KAMETOKU, NAZE)
+    }
+
+
+@pytest.mark.parametrize(
+    "line, expected_days",
+    [
+        # 始発港の行は、その日のキーだけ（前日の存在しない便は検索しない）
+        ("■10月29日（水）那覇港発上り便…欠航", ("2026年10月29日",)),
+        # 途中の港から書いた行は、始発が前日のこともあるので前日も検索する
+        ("■10月29日（水）名瀬発上り便…欠航", ("2026年10月28日", "2026年10月29日")),
+    ],
+)
+@resp_mock.activate
+def test_previous_day_is_searched_only_for_lines_from_midway(
+    db_session, marue_with_ports, line, expected_days
+):
+    company, ports = marue_with_ports
+    down, up = routes_of(db_session, company)
+    _seed_checked_far_rows(db_session, down, up, ports)
+
+    run_1026(
+        db_session,
+        company.id,
+        up_1027_rows(),
+        kagoshima=kagoshima_1026(line),
+    )
+
+    far = {c for c in search_calls() if c[2] in ("2026年10月28日", "2026年10月29日")}
+    assert far == _far_up_keys(*expected_days)

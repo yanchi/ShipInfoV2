@@ -80,7 +80,7 @@ recorded_voyage_status(voyage) =
 ```
 for ship in ships, v in ship.voyages:
     route = 方向が v.direction の航路
-    for start in (v.departure_date, v.departure_date - 1日):   # 途中の港から書いた行のぶん
+    starts = [v.departure_date] + ([v.departure_date - 1日] if v.from_midway else [])   # 途中の港から書いた行だけ前日も
         for stop in stops[:-1]:
             d = start + (stop.day_offset - stops[0].day_offset)
             if today + 2日 <= d <= today + MARUE_SEARCH_DAYS_AHEAD:

@@ -249,7 +249,8 @@ class MarueFerry(BaseScraper):
     def _voyage_search_keys(self, routes: list[Route]) -> set[tuple[int, int, date]]:
         """抜粋の便の行から決まる、2日先以降の検索キー（間隔に関係なく検索する。R5）。
 
-        途中の港から書いた行は始発の出港日が1日前のこともあるので、行の日付と前日の両方を始発の出港日とみなす。
+        途中の港から書いた行（from_midway）は始発の出港日が1日前のこともあるので、行の日付と前日の両方を
+        始発の出港日とみなす。始発港の行は行の日付だけ（前日の存在しない便は検索しない）。
         """
         directions = self._route_directions()
         first = self._valid_date + timedelta(days=2)
@@ -264,10 +265,10 @@ class MarueFerry(BaseScraper):
                 stops = self._stops.get(route.id, []) if route else []
                 if route is None or len(stops) < 2:
                     continue
-                for start in (
-                    voyage.departure_date,
-                    voyage.departure_date - timedelta(days=1),
-                ):
+                starts = [voyage.departure_date]
+                if voyage.from_midway:
+                    starts.append(voyage.departure_date - timedelta(days=1))
+                for start in starts:
                     for stop in stops[:-1]:
                         d = start + timedelta(
                             days=stop.day_offset - stops[0].day_offset
