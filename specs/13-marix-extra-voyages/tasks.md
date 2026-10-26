@@ -209,7 +209,7 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 
 **Independent Test**: 9/6・9/7 の一覧を2通りの並び順で `parse()` させ、航路単位が 9/6 下り `delayed`、9/7 上り `cancelled` であることを確かめる（SC-004）。
 
-- [ ] T023 [P] [US5] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）。`fetch()` → `parse()`:
+- [X] T023 [P] [US5] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）。`fetch()` → `parse()`:
   - (a) `@pytest.mark.parametrize("extra_first", [True, False])`、今日 2026-09-06、9/6 下りの欄に定期便（`route alert`）と臨時便（`temporary alert`）→ 下り 9/6 が `delayed`。`unknown` の行が無い。`unknown_status_class` が出ない
   - (b) 同じく今日 2026-09-07、9/7 上りの欄に定期便（`cancel alert`）と臨時便 → 上り 9/7 が `cancelled`
   - (c) 今日 2026-09-27、上りの欄に 9/27 の臨時便だけ → 上り 9/27 は `no_service`（`extra` の行を返さない）
@@ -220,7 +220,7 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
   - (h) 今日 2026-09-07、上りの欄に `route alert`・詳細ページ 500 の便を先、定期便（`cancel alert`・詳細ページあり）を後に置く → 上り 9/7 が `cancelled`（定期便が控えの行に勝つ）。(f) の便を先にしても同じ
   - (i) 既存の `test_unknown_class_voyage_is_unknown_not_cancelled`（一覧のクラスは読めないが、詳細ページは取れて定期便とわかる）は今までどおり `unknown`
   - (j) 既存の航路単位のテスト（`test_normal_down_delayed_up`・`test_both_cancelled`・`test_no_service_*` など。詳細ページをモックしていないので種類は `unknown`）が、期待値を変えずに全部通る（analyze H1）
-- [ ] T024 [US5] `marix_line.py` の `parse()` を直す（research R8）:
+- [X] T024 [US5] `marix_line.py` の `parse()` を直す（research R8）:
   - ブロックごとに `kind = self._voyage_kind(block, detail_html)`（`detail_html` は `getattr(self, "_detail_pages", {}).get(urljoin(SOURCE_URL, href))`）
   - `extra` → 行を作らず、`seen` にも入れずに次へ
   - `unknown` で一覧のクラスが状態として読める → 今までどおりの行（一覧のクラスの状態・詳細）を作るが、`records` には入れず `fallback_records`（控えの行）にためて次へ。`seen` にも入れない

@@ -2080,3 +2080,167 @@ def test_direction_unknown_without_column_or_destination(
     with structlog.testing.capture_logs() as logs:
         scraper.parse(scraper._list_html)
     assert "direction_unknown" in {log["event"] for log in logs}
+
+
+# ---------------------------------------------------------------------------
+# US5: 航路単位（トップのバッジ）は定期便で決まる（research R8）
+# ---------------------------------------------------------------------------
+
+
+def _route_level(db_session, company, list_html, pages, today):
+    """一覧と詳細ページを登録して fetch() → parse()。(行, ログ, 下り, 上り) を返す。"""
+    setup_port_master(db_session, company)
+    _mock_extra_pages(list_html, pages)
+    scraper = MarixLine(db_session, company.id)
+    with (
+        patch("scraper.scrapers.marix_line.date", _make_date_mock(today)),
+        structlog.testing.capture_logs() as logs,
+    ):
+        records = scraper.parse(scraper.fetch())
+    down, up = _routes(db_session, company)
+    return records, logs, down, up
+
+
+def _status_of(records, route, day):
+    """その航路・日付の行のステータス（1行だけのはず）。無ければ None。"""
+    found = [
+        r["status"]
+        for r in records
+        if r["route_id"] == route.id and r["valid_date"] == day
+    ]
+    assert len(found) <= 1
+    return found[0] if found else None
+
+
+@pytest.mark.parametrize("extra_first", [True, False])
+@resp_mock.activate
+def test_route_level_down_0906_ignores_extra_voyage(
+    db_session, marix_line_company, extra_first
+):
+    """9/6 下り：定期便（航行経路変更）が delayed。臨時便が先でも「不明」にならない（SC-004）。"""
+    voyages = (
+        [_EXTRA_DOWN_0906, _DOWN_0906]
+        if extra_first
+        else [_DOWN_0906, _EXTRA_DOWN_0906]
+    )
+    records, logs, down, _ = _route_level(
+        db_session,
+        marix_line_company,
+        _list_html(voyages, []),
+        _PAGES_0906,
+        date(2026, 9, 6),
+    )
+
+    assert _status_of(records, down, date(2026, 9, 6)) == OperationStatusEnum.delayed
+    assert OperationStatusEnum.unknown not in {r["status"] for r in records}
+    assert "unknown_status_class" not in {log["event"] for log in logs}
+
+
+@pytest.mark.parametrize("extra_first", [True, False])
+@resp_mock.activate
+def test_route_level_up_0907_is_cancelled_with_extra_voyage(
+    db_session, marix_line_company, extra_first
+):
+    """9/7 上り：定期便が欠航なので航路単位は cancelled（臨時便は書かない）。"""
+    records, _, _, up = _route_level(
+        db_session, marix_line_company, _list_0907(extra_first), _PAGES_0907, _DAY_0907
+    )
+
+    assert _status_of(records, up, _DAY_0907) == OperationStatusEnum.cancelled
+
+
+@resp_mock.activate
+def test_route_level_extra_only_day_is_no_service(db_session, marix_line_company):
+    """臨時便しか無い今日は、今までどおり no_service（extra の行は返さない）。"""
+    records, _, _, up = _route_level(
+        db_session,
+        marix_line_company,
+        _list_html([], [("temporary alert", EXTRA_UP_0927, _INFO2_NAZE_0927)]),
+        {EXTRA_UP_0927: "extra_up_naze_20260927.html"},
+        _DAY_0927,
+    )
+
+    assert _status_of(records, up, _DAY_0927) == OperationStatusEnum.no_service
+
+
+@resp_mock.activate
+def test_route_level_extra_found_by_detail_page_when_list_class_is_regular(
+    db_session, marix_line_company
+):
+    """一覧に temporary が無くても、詳細ページで臨時便とわかれば航路単位に書かない（R1）。"""
+    records, _, down, _ = _route_level(
+        db_session,
+        marix_line_company,
+        _list_html(
+            [("route alert", EXTRA_DOWN_0906, _INFO2_DOWN_0906), _DOWN_0906], []
+        ),
+        _PAGES_0906,
+        date(2026, 9, 6),
+    )
+
+    assert _status_of(records, down, date(2026, 9, 6)) == OperationStatusEnum.delayed
+    assert OperationStatusEnum.extra not in {r["status"] for r in records}
+
+
+@resp_mock.activate
+def test_route_level_never_returns_extra_status(db_session, marix_line_company):
+    """operation_statuses の ENUM に extra は無いので、parse() は extra を返さない。"""
+    records, _, _, _ = _route_level(
+        db_session, marix_line_company, _list_0907(True), _PAGES_0907, _DAY_0907
+    )
+    assert OperationStatusEnum.extra not in {r["status"] for r in records}
+
+
+@resp_mock.activate
+def test_route_level_unreadable_unknown_voyage_writes_nothing(
+    db_session, marix_line_company
+):
+    """SC-009：一覧のクラスが読めず詳細ページも取れない便だけの日は、航路単位を書かない。"""
+    records, logs, _, up = _route_level(
+        db_session,
+        marix_line_company,
+        _list_html([], [("foo alert", EXTRA_UP_0907, _INFO2_UP_0907)]),
+        {EXTRA_UP_0907: 500},
+        _DAY_0907,
+    )
+
+    assert _status_of(records, up, _DAY_0907) is None
+    assert len([log for log in logs if log["event"] == "voyage_kind_unknown"]) == 1
+
+
+@resp_mock.activate
+def test_route_level_readable_unknown_voyage_is_fallback_row(
+    db_session, marix_line_company
+):
+    """一覧のクラスが読めれば、詳細ページが取れなくても今までどおり書く（控えの行）。"""
+    records, _, _, up = _route_level(
+        db_session,
+        marix_line_company,
+        _list_html([], [("route alert", EXTRA_UP_0907, _INFO2_UP_0907)]),
+        {EXTRA_UP_0907: 500},
+        _DAY_0907,
+    )
+
+    assert _status_of(records, up, _DAY_0907) == OperationStatusEnum.delayed
+
+
+@pytest.mark.parametrize("unknown_cls", ["route alert", "foo alert"])
+@pytest.mark.parametrize("unknown_first", [True, False])
+@resp_mock.activate
+def test_route_level_regular_voyage_beats_unknown_voyage(
+    db_session, marix_line_company, unknown_cls, unknown_first
+):
+    """分からない便が一覧で先でも、同じ日の定期便があれば定期便で書く。"""
+    unknown = (unknown_cls, EXTRA_UP_0907, _INFO2_UP_0907)
+    voyages = (
+        [unknown, _CANCEL_UP_0907] if unknown_first else [_CANCEL_UP_0907, unknown]
+    )
+    records, _, _, up = _route_level(
+        db_session,
+        marix_line_company,
+        _list_html([], voyages),
+        {UP_0907: "up_cancel_20260907.html", EXTRA_UP_0907: 500},
+        _DAY_0907,
+    )
+
+    assert _status_of(records, up, _DAY_0907) == OperationStatusEnum.cancelled

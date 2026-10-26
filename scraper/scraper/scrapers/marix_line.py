@@ -140,8 +140,12 @@ class MarixLine(BaseScraper):
     def parse(self, html: str) -> list[dict]:
         soup = BeautifulSoup(html, "lxml")
         down_route, up_route = self._load_routes()
+        detail_pages = getattr(self, "_detail_pages", {})
         records: list[dict] = []
         seen: set[tuple[int, date]] = set()
+        # 種類が分からない便（詳細ページが取れない）。定期便で埋まらなかったときだけ使う（research R8）
+        fallback_records: list[dict] = []
+        unknown_keys: set[tuple[int, date]] = set()
 
         for block in soup.find_all("div"):
             cls = block.get("class", [])
@@ -170,12 +174,24 @@ class MarixLine(BaseScraper):
                 self._log.warning("route_not_found", direction=direction)
                 continue
 
-            key = (route.id, valid_date)
-            if key in seen:
+            link = block.select_one("a.status_single[href]")
+            url = urljoin(SOURCE_URL, link["href"]) if link is not None else None
+            kind = self._voyage_kind(block, detail_pages.get(url) if url else None)
+            if kind == "extra":
+                # 臨時便は航路単位に書かない。seen にも入れない（同じ日の定期便を捨てないため）
                 continue
-            seen.add(key)
+
+            key = (route.id, valid_date)
+            if kind == "regular" and key in seen:
+                continue
 
             status = self._parse_status_from_classes(cls)
+            if kind == "unknown" and status is None:
+                # 一覧のクラスが読めず詳細ページも取れない。「不明」を書くと、一覧の HTML が
+                # 変わるまで直らない（raw_html_hash）ので書かない。「便なし」にもしない
+                self._log.warning("voyage_kind_unknown", url=url)
+                unknown_keys.add(key)
+                continue
             if status is None:
                 # 読み飛ばすと前回のステータス（通常運航など）が残るので unknown で書く
                 self._log.warning("unknown_status_class", classes=cls)
@@ -185,16 +201,27 @@ class MarixLine(BaseScraper):
             exp_text = exp.get_text(strip=True) if exp else None
             detail = exp_text if status != OperationStatusEnum.operating else None
 
-            records.append(
-                {
-                    "route_id": route.id,
-                    "status": status,
-                    "status_detail": detail,
-                    "valid_date": valid_date,
-                    "scraped_at": datetime.now(),
-                    "source_url": SOURCE_URL,
-                }
-            )
+            record = {
+                "route_id": route.id,
+                "status": status,
+                "status_detail": detail,
+                "valid_date": valid_date,
+                "scraped_at": datetime.now(),
+                "source_url": SOURCE_URL,
+            }
+            if kind == "unknown":
+                fallback_records.append(record)
+                continue
+            seen.add(key)
+            records.append(record)
+
+        # 控えの行：同じ航路・日付に定期便が無いときだけ、一覧の順で最初のものを書く
+        for record in fallback_records:
+            key = (record["route_id"], record["valid_date"])
+            if key not in seen:
+                seen.add(key)
+                records.append(record)
+        seen |= unknown_keys
 
         # 今日の便が存在しないルートに no_service を記録
         # （日付は info2 の最初の日付＝出発日なので、到着日としてのみ今日がある便は「便なし」）
