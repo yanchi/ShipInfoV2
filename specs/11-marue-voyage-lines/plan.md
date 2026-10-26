@@ -84,20 +84,20 @@ specs/4-departure-port-status/spec.md              # FR-021 の書き換え（FR
 ### Phase A：読み取り（US2）
 
 - `_parse_status_text()` に「臨時」→ operating（R4）
-- `VoyageStatus.from_origin` と `_VOYAGE_LINE` の港名の取り出し（R7）
+- `VoyageStatus.from_midway` と `_VOYAGE_LINE` の港名の取り出し（R7）
 - テスト：2026-10-26 の fixture で警告0件・波之上の便の行3つ・タグは cancelled（SC-002）
 
 ### Phase B：照合と判定（US1・US3）
 
 - `_voyage_line()`（R1・R7）、`_for_voyage()` の書き換え（R2・R7）、出港済みの判定
 - `parse_departures()` の先の便（R3）、`_route_status()`（R6）
-- 既存の `test_voyage_not_in_excerpt_keeps_ship_status` を operating に変える（R2）
+- 既存の `test_voyage_not_in_excerpt_keeps_ship_status` は結果を変えず、名前だけ `test_departed_voyage_not_in_excerpt_keeps_ship_status` に変える（R2）
 - テスト：SC-001（10/27 那覇発上りが全港 cancelled）、10/25 便が出港済みでタグのまま、SC-006（10/29 便が operating）、行0のときタグ、途中の港の行が範囲で合う、先の便に港別情報が付かない、行の無い先の便は None（SC-004）
 
 ### Phase C：検索の追加（FR-010）と文書
 
 - `fetch()` の順番の入れ替えと、便の行による2日先以降の検索（R5）
-- テスト：便の行がある2日先のキーは間隔内でも検索、無いキーは今までどおり飛ばす（SC-005）
+- テスト：便の行がある2日先のキーは間隔内でも検索、無いキーは今までどおり飛ばす（SC-005）。DB に status のある2日先のキーも検索する（行が消えたとき。R5）
 - docstring、4-departure-port-status の FR-021 の書き換え
 - `make test-scraper`・`make lint-scraper`
 

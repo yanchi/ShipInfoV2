@@ -44,3 +44,10 @@ ORDER BY d.departure_date, r.id, d.scheduled_departure_at"'
 ```
 
 公式の鹿児島航路ページ（https://www.aline-ferry.com/kagoshima/）の抜粋と見比べて、行のある便がその状態になっていること。
+
+通知メール（デプロイ後の最初の回。1・6・15時）：先の便の欠航・条件付も載るようになるので、件数と中身を一度見る。台風のときは件数が一気に増える。
+
+```bash
+docker logs --since 3h shipinfo-v2-app-1 2>&1 | grep -E '件を送りました|送信に失敗'
+```
+
