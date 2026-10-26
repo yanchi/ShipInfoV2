@@ -23,6 +23,8 @@
     <span class="status-badge status-badge--delayed">▲ {{ status.label() }}</span>
 {%- elseif status.value == 'skipped' -%}
     <span class="status-badge status-badge--skipped">≫ {{ status.label() }}</span>
+{%- elseif status.value == 'extra' -%}
+    <span class="status-badge status-badge--extra">◆ {{ status.label() }}</span>
 {%- elseif status.value == 'cancelled' -%}
     <span class="status-badge status-badge--cancelled">✗ {{ status.label() }}</span>
 {%- elseif status.value == 'suspended' -%}

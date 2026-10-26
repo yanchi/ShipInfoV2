@@ -144,6 +144,14 @@ GHCR が private なので、pull するには `docker login ghcr.io`（`read:pa
 
 マイグレーションは戻らない。DB の形を変えたコミットより前に戻すときは、先に `doctrine:migrations:migrate prev` などで DB を戻すこと。
 
+12-marue-extra-voyages（臨時便）より前のイメージに戻すときは、**先に** `extra` の行を消す。残したまま戻すと PHP の Enum が `extra` を読めず、/ports・トップ・会社ページ・`app:notify-irregular-statuses` が全部失敗する。
+
+```bash
+docker exec shipinfo-v2-mysql-1 sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u"$MYSQL_USER" "$MYSQL_DATABASE" -e "DELETE FROM departure_statuses WHERE status = \"extra\""'
+```
+
+抜粋で欠航などになった臨時便の行（`status` が `extra` でない）は、戻した後も読めるので残してよい。
+
 ## やってはいけないこと
 
 - `docker compose -f compose.prod.yml down -v`: 運航情報がすべて消える

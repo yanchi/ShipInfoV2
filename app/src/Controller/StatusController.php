@@ -18,6 +18,7 @@ use App\Service\PortFilterResolver;
 use App\View\PortBoard;
 use App\View\PortBoardDay;
 use App\View\PortBoardEntry;
+use App\View\PortBoardExtraDeparture;
 use App\View\PortFilter;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -63,6 +64,7 @@ class StatusController extends AbstractController
             'companies'             => $companies,
             'idleCompanies'         => $idleCompanies,
             'routesDepartingMidway' => $this->routesDepartingMidway($companies, $fullBoard->days[0] ?? null),
+            'routesWithExtra'       => $this->routesWithExtra($companies, $fullBoard->days[0] ?? null),
             'today'                 => $today,
             'now'                   => new \DateTimeImmutable(),
         ]);
@@ -136,6 +138,32 @@ class StatusController extends AbstractController
     }
 
     /**
+     * 今日その方向に臨時便がある航路の、いちばん早い臨時便（会社カードの「◆ 臨時便 鹿児島 16:00発」。12-marue-extra-voyages FR-016）。
+     *
+     * @param list<array{company: FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: ?OperationStatus}>}> $companies
+     *
+     * @return array<int, PortBoardExtraDeparture> [routeId => 臨時便]
+     */
+    private function routesWithExtra(array $companies, ?PortBoardDay $today): array
+    {
+        $result = [];
+        if ($today === null) {
+            return $result;
+        }
+        foreach ($companies as $companyData) {
+            foreach ($companyData['routes'] as $routeId => $r) {
+                $direction = $r['route']->getDirection();
+                $extra     = $direction === null ? null : $today->firstExtraDepartureOf($companyData['company']->getId(), $direction);
+                if ($extra !== null) {
+                    $result[$routeId] = $extra;
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * @param list<PortBoardEntry> $entries
      *
      * @return array{kind: 'changed'|'badge', state: ?DepartureDisplayStateEnum, status: ?OperationStatusEnum}|null 便が無ければ null
@@ -145,6 +173,13 @@ class StatusController extends AbstractController
         if ($entries === []) {
             return null;
         }
+        // 臨時便は会社カードの専用の1行で伝える。定期便の通常運航と混ざっても「スケジュール変更」にしない。
+        // 臨時便しか無いときだけ「臨時便」のバッジにする
+        $regular = array_values(array_filter($entries, static fn (PortBoardEntry $e) => $e->status !== OperationStatusEnum::Extra));
+        if ($regular === []) {
+            return ['kind' => 'badge', 'state' => null, 'status' => OperationStatusEnum::Extra];
+        }
+        $entries = $regular;
         // 全部同じ状態ならそれを出す（途中の港が1つで欠航なら「欠航」）
         $first = $entries[0];
         if (array_filter($entries, static fn (PortBoardEntry $e) => $e->state !== $first->state || $e->status !== $first->status) === []) {

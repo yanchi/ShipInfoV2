@@ -29,11 +29,11 @@ final readonly class PortBoardEntry
         return \in_array($this->state, [DepartureDisplayStateEnum::Status, DepartureDisplayStateEnum::Scheduled], true);
     }
 
-    /** 欠航・条件付・遅延・運休（異常の要約に入れ、行を目立たせる） */
+    /** 欠航・条件付・遅延・運休・臨時便（異常の要約に入れ、行を目立たせる） */
     public function isAlert(): bool
     {
         return $this->state === DepartureDisplayStateEnum::Status
-            && \in_array($this->status, [OperationStatusEnum::Cancelled, OperationStatusEnum::Delayed, OperationStatusEnum::Skipped, OperationStatusEnum::Suspended], true);
+            && \in_array($this->status, [OperationStatusEnum::Cancelled, OperationStatusEnum::Delayed, OperationStatusEnum::Skipped, OperationStatusEnum::Extra, OperationStatusEnum::Suspended], true);
     }
 
     /** 出港時刻を過ぎた通常運航・運航予定の便（異常の便は薄くしない） */

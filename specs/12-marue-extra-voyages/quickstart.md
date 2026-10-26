@@ -56,10 +56,10 @@ ORDER BY d.departure_date, d.scheduled_departure_at"'
 
 公式の船の詳細ページ（「欠航と臨時便」など）の【臨時便】と見比べる。
 
-読めなかった臨時便・便検索とぶつかった臨時便・終点の時刻が変わった臨時便:
+取りやめで消した臨時便の行（`extra_voyage_rows_deleted`：船・件数）と、読めなかった臨時便・便検索とぶつかった臨時便・終点の時刻が変わった臨時便:
 
 ```bash
-docker logs --since 3h shipinfo-v2-scraper-1 2>&1 | grep -E "extra_voyage_unreadable|extra_voyage_key_conflict|extra_voyage_arrival_changed"
+docker logs --since 3h shipinfo-v2-scraper-1 2>&1 | grep -E "extra_voyage_rows_deleted|extra_voyage_unreadable|extra_voyage_key_conflict|extra_voyage_arrival_changed"
 ```
 
 ## ロールバック

@@ -8,6 +8,7 @@ enum OperationStatusEnum: string
     case Cancelled = 'cancelled';
     case Delayed   = 'delayed';
     case Skipped   = 'skipped';
+    case Extra     = 'extra';
     case Suspended = 'suspended';
     case Unknown   = 'unknown';
     case NoService = 'no_service';
@@ -19,6 +20,7 @@ enum OperationStatusEnum: string
             self::Operating => '通常運航',
             self::Delayed   => '条件付・遅延',
             self::Skipped   => '抜港',
+            self::Extra     => '臨時便',
             self::Cancelled => '欠航',
             self::Suspended => '運休',
             self::Unknown   => '不明',
@@ -30,8 +32,8 @@ enum OperationStatusEnum: string
     public function isIrregular(): bool
     {
         return match ($this) {
-            self::Delayed, self::Skipped, self::Cancelled, self::Suspended, self::Unknown => true,
-            self::Operating, self::NoService                                              => false,
+            self::Delayed, self::Skipped, self::Extra, self::Cancelled, self::Suspended, self::Unknown => true,
+            self::Operating, self::NoService                                                           => false,
         };
     }
 

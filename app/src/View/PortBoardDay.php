@@ -2,6 +2,8 @@
 
 namespace App\View;
 
+use App\Enum\DepartureDisplayStateEnum;
+use App\Enum\OperationStatusEnum;
 use App\Enum\RouteDirectionEnum;
 
 final readonly class PortBoardDay
@@ -59,5 +61,35 @@ final readonly class PortBoardDay
         }
 
         return $entries;
+    }
+
+    /**
+     * その会社の、その方向の臨時便（状態が Extra）のうち、出港時刻がいちばん早いもの。出港済みでも返す。
+     */
+    public function firstExtraDepartureOf(int $companyId, RouteDirectionEnum $direction): ?PortBoardExtraDeparture
+    {
+        $first = null;
+        foreach ($this->directions as $d) {
+            if ($d->direction !== $direction) {
+                continue;
+            }
+            foreach ($d->rows as $row) {
+                foreach ($row->entries as $entry) {
+                    if (
+                        $entry->companyId !== $companyId
+                        || $entry->state !== DepartureDisplayStateEnum::Status
+                        || $entry->status !== OperationStatusEnum::Extra
+                        || $entry->departureAt === null
+                    ) {
+                        continue;
+                    }
+                    if ($first === null || $entry->departureAt < $first->departureAt) {
+                        $first = new PortBoardExtraDeparture($row->port->getName(), $entry->departureAt);
+                    }
+                }
+            }
+        }
+
+        return $first;
     }
 }

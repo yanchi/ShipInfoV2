@@ -11,7 +11,7 @@ class PortBoardEntryTest extends TestCase
 {
     public function testIsAlert(): void
     {
-        foreach ([OperationStatusEnum::Cancelled, OperationStatusEnum::Delayed, OperationStatusEnum::Skipped, OperationStatusEnum::Suspended] as $status) {
+        foreach ([OperationStatusEnum::Cancelled, OperationStatusEnum::Delayed, OperationStatusEnum::Skipped, OperationStatusEnum::Extra, OperationStatusEnum::Suspended] as $status) {
             $this->assertTrue($this->statusEntry($status)->isAlert(), $status->value);
         }
         foreach ([OperationStatusEnum::Operating, OperationStatusEnum::Unknown, OperationStatusEnum::NoService] as $status) {
@@ -33,7 +33,7 @@ class PortBoardEntryTest extends TestCase
         $scheduled = new PortBoardEntry(DepartureDisplayStateEnum::Scheduled, departureAt: $departure);
         $this->assertTrue($scheduled->isDeparted(new \DateTimeImmutable('2026-10-01 06:00')));
 
-        foreach ([OperationStatusEnum::Delayed, OperationStatusEnum::Skipped, OperationStatusEnum::Cancelled, OperationStatusEnum::Suspended] as $status) {
+        foreach ([OperationStatusEnum::Delayed, OperationStatusEnum::Skipped, OperationStatusEnum::Extra, OperationStatusEnum::Cancelled, OperationStatusEnum::Suspended] as $status) {
             $this->assertFalse($this->statusEntry($status, $departure)->isDeparted(new \DateTimeImmutable('2026-10-01 06:00')), $status->value);
         }
 

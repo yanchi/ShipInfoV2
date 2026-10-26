@@ -258,3 +258,39 @@ def test_conditional_list_with_island_then_port_in_parentheses(resolver, text):
     assert set(notices) == {"亀徳", "和泊", "与論"}
     assert all(n.kind == "conditional" for n in notices.values())
     assert all(n.sentence == text for n in notices.values())  # 括弧を残した元の文
+
+
+def _naminoue_with_boilerplate() -> str:
+    """臨時便の詳細ページ（保存版 2026-10-26）の status-archive の最後に定型の注意書きを足す。"""
+    html = read_fixture("marue/ship_detail_naminoue_20261026.html")
+    anchor = "(西川運輸)</u></p>"
+    assert html.count(anchor) == 1
+    return html.replace(
+        anchor, anchor + "<p>台風の影響や荒天の場合は欠航となる場合があります。</p>"
+    )
+
+
+def test_extra_voyage_announcement_is_not_read_as_port_notice(resolver):
+    """FR-015：臨時便の「寄港いたしません」は、定期便の抜港として読まない。"""
+    html = _naminoue_with_boilerplate()
+    assert "台風の影響や" in html
+
+    text = extract_notice_text("", html)
+
+    assert "気象・海象荒天の影響により" in text
+    assert "【欠航】" in text
+    for dropped in ("【臨時便", "寄港いたしません", "乗船手続き", "13時00分"):
+        assert dropped not in text, dropped
+    assert extract_port_notices(text, resolver) == []
+
+
+def test_extra_voyage_skipping_does_not_hide_the_boilerplate_marker():
+    """【臨時便】の直後に定型の注意書きが来ても、本文を返す（マーカーを飛ばさない）。"""
+    html = (
+        '<div class="status-archive"><h4>x</h4>'
+        "<p>本文です。</p><p>【臨時便(上り)】</p>"
+        "<p>10月28日(水)那覇港　05:00(出港)</p>"
+        "<p>台風の影響や荒天の場合は…</p></div>"
+    )
+
+    assert extract_notice_text("", html) == "本文です。"

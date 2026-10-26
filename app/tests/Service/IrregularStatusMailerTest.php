@@ -111,6 +111,38 @@ TEXT, $body);
         $this->assertStringContainsString('  状況　: 通常運航（途中の港に変更あり）', $body);
     }
 
+    /** 臨時便の行は「臨時便」として載る。臨時便だけの日の状況は「臨時便あり」（12-marue-extra-voyages US4） */
+    public function testExtraPortsAreLabeledExtra(): void
+    {
+        $company = (new FerryCompany())->setName('マルエーフェリー');
+        $route   = (new Route())->setFerryCompany($company)->setName('航路')->setDirection(RouteDirectionEnum::Up);
+        $note    = '※ 亀徳港(徳之島)には寄港いたしません。';
+        $items   = [new IrregularService($company, $route, new \DateTimeImmutable('2026-10-28'), null, [
+            new IrregularPort('那覇', 'フェリー波之上', new \DateTime('2026-10-28 05:00'), OperationStatusEnum::Extra, null),
+            new IrregularPort('本部', 'フェリー波之上', new \DateTime('2026-10-28 07:20'), OperationStatusEnum::Extra, $note),
+        ])];
+
+        $sent      = [];
+        $transport = $this->createMock(MailerInterface::class);
+        $transport->method('send')->willReturnCallback(static function (Email $email) use (&$sent): void {
+            $sent[] = $email;
+        });
+        $this->mailer($transport)->send($items);
+
+        $this->assertSame(<<<'TEXT'
+以下の運航情報で通常運航以外のステータスが検出されました。
+
+  会社名: マルエーフェリー
+  運航日: 2026-10-28（水）
+  方向　: 上り（鹿児島行き）
+  状況　: 臨時便あり
+  港　　:
+    - 那覇 05:00発 フェリー波之上：臨時便
+    - 本部 07:20発 フェリー波之上：臨時便（※ 亀徳港(徳之島)には寄港いたしません。）
+
+TEXT, (string) $sent[0]->getTextBody());
+    }
+
     /**
      * @return iterable<string, array{int}>
      */
