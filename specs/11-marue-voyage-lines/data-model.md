@@ -15,7 +15,7 @@ DB のスキーマは変えない。`departure_statuses`・`operation_statuses` 
 | status | OperationStatusEnum | — | 「臨時便運航」は operating（R4） |
 | conditional | bool | — | |
 | schedule_changed | bool | — | |
-| from_midway | bool | **追加** | 「…発」の前に途中の港（名瀬・亀徳・和泊・与論・本部。「名瀬港」なども含む）の名前があるか。True の行だけ範囲で照合する（R7） |
+| from_midway | bool | **追加** | 最後の「発」より前を `PortResolver.resolve()` で引いた港が、行の方向の航路の途中の港（`route_stops` の始発・終点以外）か。True の行だけ範囲で照合する（R7） |
 
 ### 便と行の照合（R1・R7）
 
@@ -35,8 +35,8 @@ _voyage_line(ship, route_id, origin_date, arrival_date) -> VoyageStatus | None
 | 今の便 | 0 | — | 船のタグ（今まで） | 今まで |
 | 今の便 | 1 | 合う | 船のタグ（今まで） | 今まで |
 | 今の便 | 2以上 | 合う | 行の状態 ＋ 港別情報（今まで） | 今まで |
-| 今の便・出港前 | 1以上 | 合わない・タグ ≦ 行の一番重いもの | **operating**（FR-011） | なし |
-| 今の便・出港前 | 1以上 | 合わない・タグ ＞ 行の一番重いもの | 船のタグ＋`voyage_tag_heavier_than_lines` | 今まで |
+| 今の便・出港前 | 1以上 | 合わない・タグ ≦ 行の一番重いもの・（タグに条件付があれば条件付の行あり） | **operating**（FR-011） | なし |
+| 今の便・出港前 | 1以上 | 合わない・タグ ＞ 行の一番重いもの、またはタグに条件付があるのに条件付の行なし | 船のタグ＋`voyage_tag_heavier_than_lines` | 今まで |
 | 今の便・出港済み | 1以上 | 合わない | **前回記録したその港の行のステータス**（無ければその便で一番重いもの、それも無ければ船のタグ） | 前回の行の詳細（無ければ今まで） |
 | 先の便 | 0 | — | None（運航予定。今まで） | なし |
 | 先の便 | 1 | 合う | **船のタグ**（全港。港別情報なし） | 抜粋（operating ならなし） |
@@ -89,6 +89,7 @@ DB の行による追加（行が消えたとき。R5）:
 ```
 forced |= {(r.route_id, r.port_id, r.departure_date)
            for r in departure_statuses
-           if r.route_id in マルエーの航路 and r.status is not None
+           if r.route_id in マルエーの航路 and r.ship_name != ""
+           and r.status in (cancelled, suspended, delayed, operating)
            and today + 2日 <= r.departure_date <= today + MARUE_SEARCH_DAYS_AHEAD}
 ```
