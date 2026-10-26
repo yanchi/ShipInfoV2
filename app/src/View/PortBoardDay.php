@@ -87,10 +87,12 @@ final readonly class PortBoardDay
 
     /**
      * その会社の、その方向の臨時便（状態が Extra）のうち、出港時刻がいちばん早いもの。出港済みでも返す。
+     * どれかの臨時便の行が「この港を出たあとに抜港あり」なら skipsPorts（「・抜港あり」。16-extra-skip-flag）。
      */
     public function firstExtraDepartureOf(int $companyId, RouteDirectionEnum $direction): ?PortBoardExtraDeparture
     {
-        $first = null;
+        $first      = null;
+        $skipsPorts = false;
         foreach ($this->directions as $d) {
             if ($d->direction !== $direction) {
                 continue;
@@ -105,13 +107,14 @@ final readonly class PortBoardDay
                     ) {
                         continue;
                     }
-                    if ($first === null || $entry->departureAt < $first->departureAt) {
-                        $first = new PortBoardExtraDeparture($row->port->getName(), $entry->departureAt);
+                    $skipsPorts = $skipsPorts || $entry->skipsPortsAfter;
+                    if ($first === null || $entry->departureAt < $first['at']) {
+                        $first = ['port' => $row->port->getName(), 'at' => $entry->departureAt];
                     }
                 }
             }
         }
 
-        return $first;
+        return $first === null ? null : new PortBoardExtraDeparture($first['port'], $first['at'], $skipsPorts);
     }
 }

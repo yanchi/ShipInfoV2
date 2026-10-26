@@ -34,16 +34,16 @@
 **Goal**: Web はフラグを読むだけにし、逆算を消す（FR-006〜FR-008）
 **Independent Test**: PHPUnit で、臨時便の行のフラグだけで「・抜港あり」が切り替わる
 
-- [ ] T012 [US2] app/src/View/PortBoardEntry.php：`skipsPortsAfter` を足し、`noServiceShipNames`・`isCalling()` を消す
-- [ ] T013 [US2] app/src/Service/PortBoardBuilder.php：`skipsPortsAfter` を詰め、`$hidden` と `noServiceShipNames` を消す
-- [ ] T014 [US2] app/src/View/PortBoardDay.php：`firstExtraDepartureOf()` で、対象の臨時便のエントリーのどれかが `skipsPortsAfter` なら `skipsPorts = true`
-- [ ] T015 [US2] app/src/View/PortBoard.php の `extraSkipsPortsOf()`・`isPortIn()`・`callsAt()`、app/src/View/PortBoardExtraDeparture.php の `withSkipsPorts()` を消す
-- [ ] T016 [US2] app/src/Controller/StatusController.php：`routesWithExtra()` から `$portIds` と `extraSkipsPortsOf` の呼び出しを消す（使わなくなった `use` も）
-- [ ] T017 [P] [US2] app/tests/View/PortBoardDayTest.php：フラグありで true／なしで false／状態が欠航の行は数えない／ほかの会社・方向は数えない
-- [ ] T018 [P] [US2] app/tests/Service/PortBoardBuilderTest.php：`noServiceShipNames` のテストを `skipsPortsAfter` が渡るテストに置き換える
-- [ ] T019 [P] [US2] app/tests/View/PortBoardTest.php・app/tests/View/PortBoardEntryTest.php：逆算・`isCalling()` のテストを消す
-- [ ] T020 [US2] app/tests/Controller/StatusControllerTest.php：10/27 の「・抜港あり」のテストを名瀬の行にフラグを立てる形に直し、フラグなしでは出ないテストを足す
-- [ ] T021 [US2] `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` を通してコミット
+- [X] T012 [US2] app/src/View/PortBoardEntry.php：`skipsPortsAfter` を足し、`noServiceShipNames`・`isCalling()` を消す
+- [X] T013 [US2] app/src/Service/PortBoardBuilder.php：`skipsPortsAfter` を詰め、`$hidden` と `noServiceShipNames` を消す
+- [X] T014 [US2] app/src/View/PortBoardDay.php：`firstExtraDepartureOf()` で、対象の臨時便のエントリーのどれかが `skipsPortsAfter` なら `skipsPorts = true`
+- [X] T015 [US2] app/src/View/PortBoard.php の `extraSkipsPortsOf()`・`isPortIn()`・`callsAt()`、app/src/View/PortBoardExtraDeparture.php の `withSkipsPorts()` を消す
+- [X] T016 [US2] app/src/Controller/StatusController.php：`routesWithExtra()` から `$portIds` と `extraSkipsPortsOf` の呼び出しを消す（使わなくなった `use` も）
+- [X] T017 [P] [US2] app/tests/View/PortBoardDayTest.php：フラグありで true／なしで false／状態が欠航の行は数えない／ほかの会社・方向は数えない
+- [X] T018 [P] [US2] app/tests/Service/PortBoardBuilderTest.php：`noServiceShipNames` のテストを `skipsPortsAfter` が渡るテストに置き換える
+- [X] T019 [P] [US2] app/tests/View/PortBoardTest.php・app/tests/View/PortBoardEntryTest.php：逆算・`isCalling()` のテストを消す
+- [X] T020 [US2] app/tests/Controller/StatusControllerTest.php：10/27 の「・抜港あり」のテストを名瀬の行にフラグを立てる形に直し、フラグなしでは出ないテストを足す
+- [X] T021 [US2] `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` を通してコミット
 
 ## Phase 5: Polish
 
