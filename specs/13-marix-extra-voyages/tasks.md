@@ -79,7 +79,7 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 
 **Independent Test**: 9/6 の一覧（下りの欄に定期便 `route alert`＋臨時便 `temporary alert`）を読ませ、鹿児島のクロス 09:00 の行が `extra`、プラスの行が今までどおりであることを確かめる（SC-002 の前半）。
 
-- [ ] T008 [US2] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）。`_list_html()` で 9/6 の下りの欄に定期便（`route alert`・`DOWN_0906`）と臨時便（`temporary alert`・`EXTRA_DOWN_0906`）を置き、今日を 2026-09-06 にして `fetch()` → `parse_departures()`:
+- [X] T008 [US2] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）。`_list_html()` で 9/6 の下りの欄に定期便（`route alert`・`DOWN_0906`）と臨時便（`temporary alert`・`EXTRA_DOWN_0906`）を置き、今日を 2026-09-06 にして `fetch()` → `parse_departures()`:
   - (a) 鹿児島・クイーンコーラルクロス・9/6 の行：`status = extra`、`scheduled_departure_at = 2026-09-06 09:00`、`scheduled_arrival_at = 2026-09-07 05:00`、`source_url = EXTRA_DOWN_0906`、`extra_voyage = True`、`replace_source` が無い
   - (b) (a) の `status_detail` に「臨時便で時間を変更し、航行経路を「鹿児島 → 那覇」に変更して運航します」が入る
   - (c) クイーンコーラルプラスの行は、臨時便を一覧から外して読んだときと同じ（名瀬・亀徳・本部が `delayed`、和泊・与論が `skipped`、出港時刻も同じ。`extra_voyage = False`）
@@ -87,7 +87,7 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
   - (e) 臨時便の詳細ページの鹿児島の港のクラスを `single firstport cancel alert` に書き換える → 鹿児島のクロスの行が `cancelled`（臨時便そのものの欠航。Edge Cases）
   - (f) 臨時便の詳細ページが 500 → 臨時便の行は0行、`extra_voyage_detail_missing` の警告が1件。予備ルートの行（船名なし）も作らない（FR-010）
   - (g) 一覧の臨時便のクラスを `route alert` にして、詳細ページが 500（種類 `unknown`）→ 今までどおり予備ルートの行（船名なし・`delayed`・`source_url = EXTRA_DOWN_0906`）が5港にできる（R6）
-- [ ] T009 [US2] `scraper/scraper/scrapers/marix_line.py` の `parse_departures()` を直す:
+- [X] T009 [US2] `scraper/scraper/scrapers/marix_line.py` の `parse_departures()` を直す:
   - ブロックごとに `kind = self._voyage_kind(block, detail_html)` を決める
   - `kind == "extra"` なら、一覧のクラスに関係なく便全体の状態を `OperationStatusEnum.extra` として `_departures_from_detail()` に渡す（research R3）。詳細ページが無い・読めないときは、予備ルートに行かずに `extra_voyage_detail_missing`（url・route_id）を出して次のブロックへ（research R6）。読めたら URL を `self._read_extra_urls` に足す（`parse_departures()` の頭で空の set にする）
   - `kind == "unknown"` は今までどおり（予備ルート）

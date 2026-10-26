@@ -224,6 +224,8 @@ class MarixLine(BaseScraper):
 
         soup = BeautifulSoup(list_html, "lxml")
         records: list[dict] = []
+        # この回に詳細ページを読めた臨時便の URL（後始末 _upsert_departures で使う。research R7）
+        self._read_extra_urls: set[str] = set()
         for block in soup.select("div.status_single_cover"):
             # 便のクラスを読めなくても、詳細ページの港ごとのクラスで判定する（parse で warning 済み）
             status = (
@@ -244,6 +246,10 @@ class MarixLine(BaseScraper):
 
             url = urljoin(SOURCE_URL, link["href"])
             detail_html = detail_pages.get(url)
+            kind = self._voyage_kind(block, detail_html)
+            if kind == "extra":
+                # 臨時便は一覧のクラスに関係なく便全体を extra として読む（research R3）
+                status = OperationStatusEnum.extra
             detail_records = (
                 self._departures_from_detail(
                     detail_html,
@@ -259,6 +265,14 @@ class MarixLine(BaseScraper):
             )
             if detail_records:
                 records.extend(detail_records)
+                if kind == "extra":
+                    self._read_extra_urls.add(url)
+                continue
+            if kind == "extra":
+                # 寄る港は詳細ページにしか無いので、予備ルートは使わない（research R6）
+                self._log.warning(
+                    "extra_voyage_detail_missing", url=url, route_id=route.id
+                )
                 continue
 
             self._log.warning("departure_fallback", url=url, route_id=route.id)
@@ -294,6 +308,7 @@ class MarixLine(BaseScraper):
             self._log.warning("detail_structure_unknown", url=url)
             return None
 
+        is_extra = voyage_status == OperationStatusEnum.extra
         stop_port_ids = {s.port_id for s in stops}
         terminal_port_id = stops[-1].port_id
         by_port: dict[int, dict] = {}
@@ -367,11 +382,16 @@ class MarixLine(BaseScraper):
                     "operated_by_company_id": None,
                     "source_url": url,
                     "freeze_after_departure": False,
+                    # 臨時便が書いた行か（同じキーの定期便との優先に使う。research R4）
+                    "extra_voyage": is_extra,
                     # 日付で消すと、出港日がずれて同じ日付になった別の便の行まで消えるので使わない（#28）
                     "replace_scope": None,
                     # 同じ便の、今回書かなかった行（予備ルートの行、遅延で前の日付になった行）を消すため
                     # （詳細ページの URL は便ごとに一つ：/service/downstream20260930/。予備ルートの行も同じ URL）
-                    "replace_source": (route.id, stop.port_id, url),
+                    # 臨時便は付けない（寄らなくなった港の行は _upsert_departures の後始末で消す。research R7）
+                    "replace_source": None
+                    if is_extra
+                    else (route.id, stop.port_id, url),
                 }
             )
         return records or None
@@ -416,6 +436,7 @@ class MarixLine(BaseScraper):
                     "operated_by_company_id": None,
                     "source_url": url,
                     "freeze_after_departure": False,
+                    "extra_voyage": False,
                     "replace_scope": None,
                 }
             )
