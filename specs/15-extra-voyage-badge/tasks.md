@@ -28,7 +28,7 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 `make up` → `make test-php` が全部通ることを確認してから始める
+- [X] T001 `make up` → `make test-php` が全部通ることを確認してから始める
 
 **Checkpoint**: 既存テストが全部通る（コミットなし）
 
@@ -42,28 +42,28 @@
 
 ### Tests for User Story 1
 
-- [ ] T002 [US1] `app/tests/Controller/StatusControllerTest.php` にテストを足す（実装の前に落ちることを確かめる）:
+- [X] T002 [US1] `app/tests/Controller/StatusControllerTest.php` にテストを足す（実装の前に落ちることを確かめる）:
   - (a) SC-001：`createPortBoardData()`、`setRouteStatus(Operating)`、`addTodayDeparture('名瀬', '臨時丸', Extra, '03:50')`・`addTodayDeparture('本部', '臨時丸', Extra, '12:00')` → カードの `.status-badge` が「▲ スケジュール変更」で `href` が `/company/{id}`、注意書き（「公式サイトをご確認ください」）が無い、`.route-extra` に「◆ 臨時便 名瀬 03:50発」が入っている
   - (b) 臨時便が全部出港済みでも戻らない：(a) と同じで、名瀬・本部の臨時便を両方 `00:00` にする（今日の 0:00 は必ず実行時刻以前）→ 「▲ スケジュール変更」、`.route-extra` は「◆ 臨時便 名瀬 00:00発」（時刻が同じときは `firstExtraDepartureOf()` が寄港順で先の港を返す。今の `<` の比較のまま）
   - (c) US1-2：`setRouteStatus(NoService)`、港別テスト丸の今日の名瀬の行を運航予定（`updateTestDeparture(0, 'status', null)`）、`addTodayDeparture('本部', '臨時丸', Extra, '12:00')` → 「▲ スケジュール変更」
   - (d) 臨時便の行が抜粋で欠航なら数えない：`setRouteStatus(Operating)`、`addTodayDeparture('本部', '臨時丸', Cancelled, '12:00')` → 「✓ 通常運航」で、`.route-extra` が無い
   - (e) 条件付・遅延は変えない：`setRouteStatus(Delayed)`、本部に臨時便 → 「▲ 条件付・遅延」と注意書き
   - (f) 不明は変えない：`setRouteStatus(Unknown)`、本部に臨時便 → 「？ 不明」のまま、`.route-extra` は出る
-- [ ] T003 [US1] research R5 の2本を書き換える（`app/tests/Controller/StatusControllerTest.php`）:
+- [X] T003 [US1] research R5 の2本を書き換える（`app/tests/Controller/StatusControllerTest.php`）:
   - `testIndexCardOriginExtraWithMidwayRegularKeepsRegularBadge` → 名前を `testIndexCardOriginExtraWithMidwayRegularShowsScheduleChange` にし、期待を「▲ スケジュール変更」に。説明に「15-extra-voyage-badge で、臨時便がある日は通常運航にしない決まりに変えた」
   - `testIndexCardMidwayRegularPlusExtraKeepsRegularBadge` → 名前を `testIndexCardMidwayRegularPlusExtraShowsScheduleChange` にし、期待を「▲ スケジュール変更」に。説明は同じく（PR #87 レビューの決まりを変えたこと）
   - 両方とも `.route-extra` の期待はそのまま
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] `app/src/Controller/StatusController.php`:
+- [X] T004 [US1] `app/src/Controller/StatusController.php`:
   - `routesDepartingMidway()` を `routeBadges()` に、`index()` で渡す変数を `routeBadges` に名前を変える。docblock の冒頭に「航路のバッジを航路単位の状態から変えるもの」と書き、航路単位が便なしの日の決まり（今の文）と、臨時便がある日の決まり（下）を並べる
   - ループの中で、今日その方向に臨時便がある（`$today->firstExtraDepartureOf($companyId, $direction) !== null`）航路について、次のどちらかなら `$result[$routeId] = ['kind' => 'changed', 'state' => null, 'status' => null]`（data-model.md の表）:
     - `$result` に入れなかった（航路単位でバッジが決まる）で、航路単位の状態が `Operating`
     - `$result[$routeId]` が `badge` で、`status === Operating` または `state === Scheduled`
   - `midwayDisplay()` の「臨時便は会社カードの専用の1行で伝える。定期便の通常運航と混ざっても『スケジュール変更』にしない」のコメントを、「臨時便の行を除いて決める。臨時便がある日の通常運航・運航予定は routeBadges() でスケジュール変更にする」に直す
-- [ ] T005 [US1] `app/templates/status/index.html.twig`：`routesDepartingMidway` → `routeBadges`、`midway` → `routeBadge` に名前を変える（`routeBadge.kind == 'badge'` と読めるように）。`changed` の分岐のコメントを「途中の港の状態がバラけている日、または臨時便がある日（15-extra-voyage-badge）」に直す
-- [ ] T006 [US1] `make test-php` で T002・T003 が通り、ほかのテスト（欠航・臨時便しか無い日・臨時便なし）が変わらず通ることを確かめる
+- [X] T005 [US1] `app/templates/status/index.html.twig`：`routesDepartingMidway` → `routeBadges`、`midway` → `routeBadge` に名前を変える（`routeBadge.kind == 'badge'` と読めるように）。`changed` の分岐のコメントを「途中の港の状態がバラけている日、または臨時便がある日（15-extra-voyage-badge）」に直す
+- [X] T006 [US1] `make test-php` で T002・T003 が通り、ほかのテスト（欠航・臨時便しか無い日・臨時便なし）が変わらず通ることを確かめる
 
 **Checkpoint**: `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` が通る → コミット
 
