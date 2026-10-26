@@ -770,7 +770,8 @@ class MarixLine(BaseScraper):
         if _EXTRA_CLASS in block.get("class", []):
             return "extra"
         kinds = getattr(self, "_voyage_kinds", None)
-        if kinds is None:
+        if kinds is None or url is None:
+            # リンクの無い便は詳細ページが無いので定期便（warning は出さない。URL がずれたときのを埋もれさせない）
             return "regular"
         if url not in kinds:
             # fetch() と URL の取り方がずれた。詳細ページを見ていないので臨時便でも定期便になる

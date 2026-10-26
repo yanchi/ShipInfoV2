@@ -2582,3 +2582,22 @@ def test_voyage_kind_warns_when_url_was_not_fetched(db_session, marix_line_compa
     with structlog.testing.capture_logs() as logs:
         assert scraper._voyage_kind(block, DOWN_0906) == "regular"
     assert "voyage_kind_not_fetched" in {log["event"] for log in logs}
+
+
+@resp_mock.activate
+def test_voyage_kind_without_url_is_regular_without_warning(
+    db_session, marix_line_company
+):
+    """リンクの無い便（url が None）は定期便。voyage_kind_not_fetched は出さない。"""
+    from bs4 import BeautifulSoup
+
+    setup_port_master(db_session, marix_line_company)
+    _mock_extra_pages(_list_html([], []), {})
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    block = BeautifulSoup(
+        _list_html([("route alert", DOWN_0906, _INFO2_DOWN_0906)], []), "lxml"
+    ).select_one("div.status_single_cover")
+    with structlog.testing.capture_logs() as logs:
+        assert scraper._voyage_kind(block, None) == "regular"
+    assert "voyage_kind_not_fetched" not in {log["event"] for log in logs}
