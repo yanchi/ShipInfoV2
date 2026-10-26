@@ -2086,6 +2086,9 @@ def test_extra_voyage_status_is_read_without_warnings(db_session, marue_with_por
         ("臨時便運休", OperationStatusEnum.suspended),
         ("臨時便条件付運航", OperationStatusEnum.delayed),
         ("臨時便欠航", OperationStatusEnum.cancelled),
+        # 休・欠を含むのに「欠航」「運休」の語が無い言い方は、運航にせず読めない扱い（警告が出る）
+        ("臨時休航", None),
+        ("臨時欠便", None),
     ],
 )
 def test_extra_voyage_text_does_not_hide_heavier_words(

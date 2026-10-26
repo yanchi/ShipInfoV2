@@ -1204,8 +1204,9 @@ class MarueFerry(BaseScraper):
             return OperationStatusEnum.suspended
         if "通常" in text:
             return OperationStatusEnum.operating
-        # 臨時便は運休・条件付などの語が無いときだけ（先に当てると「臨時便運休」が運航になる）
-        if "臨時" in text:
+        # 臨時便は運休・条件付などの語が無いときだけ（先に当てると「臨時便運休」が運航になる）。
+        # 「臨時休航」「臨時欠便」のように休・欠を含む言い方も運航にはしない（読めない扱いで警告する）
+        if "臨時" in text and not any(w in text for w in ("休", "欠")):
             return OperationStatusEnum.operating
         return None
 
