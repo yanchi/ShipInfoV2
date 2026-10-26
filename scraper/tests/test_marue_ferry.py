@@ -3602,3 +3602,52 @@ def test_changed_final_arrival_warns(db_session, marue_with_ports):
         len([log for log in logs if log["event"] == "extra_voyage_arrival_changed"])
         == 1
     )
+
+
+@resp_mock.activate
+def test_two_extra_voyages_on_same_key_keep_the_first(db_session, marue_with_ports):
+    """同じ船・港・出港日に臨時便が2本あっても、先の1本だけ作って警告する（uniq_departure を踏まない）。"""
+    company, ports = marue_with_ports
+    down, _ = routes_of(db_session, company)
+    second = (
+        "<p>【臨時便(下り)】</p>"
+        "<p>10月26日(月)鹿児島新港　23:00(出港)</p>"
+        "<p>10月27日(火)名瀬港　12:00(入港)/12:30(出港)</p>"
+        "<p>10月27日(火)那覇港　22:00(入港)</p>"
+    )
+    html = naminoue_detail(
+        ("<p>【臨時便(上り)】</p>", second + "<p>【臨時便(上り)】</p>")
+    )
+
+    _, _, departures, logs = run_1026(
+        db_session, company.id, down_1025_rows(), naminoue=html
+    )
+
+    downs = [r for r in extra_rows(departures) if r["route_id"] == down.id]
+    keys = [(r["port_id"], r["departure_date"]) for r in downs]
+    assert len(keys) == len(set(keys))
+    kagoshima = next(r for r in downs if r["port_id"] == ports["鹿児島"].id)
+    assert kagoshima["scheduled_departure_at"] == datetime(2026, 10, 26, 16, 0)
+    assert (
+        len([log for log in logs if log["event"] == "extra_voyage_duplicate_key"]) == 2
+    )
+
+
+@resp_mock.activate
+def test_withdrawn_rows_use_the_time_of_parsing(db_session, marue_with_ports):
+    """削除の判断は parse_departures と同じ「今」で行う（upsert の時刻に引きずられない）。"""
+    company, _ = marue_with_ports
+    _, up = routes_of(db_session, company)
+    seed_extra_rows(db_session, company)
+
+    scraper, _, departures, _ = run_1026(
+        db_session,
+        company.id,
+        down_1025_rows(),
+        naminoue=detail_without(DETAIL_UP_BLOCK),
+    )
+    flush(
+        scraper, db_session, departures, NOW_1028
+    )  # 上りの始発港(10/28 05:00)は upsert 時点では出港済み
+
+    assert extra_rows_in_db(db_session, up) == []

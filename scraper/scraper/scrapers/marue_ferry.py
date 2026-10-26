@@ -599,6 +599,9 @@ class MarueFerry(BaseScraper):
         ships = getattr(self, "_ships", {})
         marix_id = self._marix_company_id()
         now = datetime.now()
+        self._parse_now = (
+            now  # 臨時便の削除（_upsert_departures）も同じ「今」で判断する
+        )
         self._get_resolver()
         self._notices: dict[str, list[PortNotice]] = {}
 
@@ -725,6 +728,7 @@ class MarueFerry(BaseScraper):
             for r in records
         }
         result: list[dict] = []
+        seen: set[tuple] = set()
         for ship_name, parsed in extra.items():
             if parsed is None:
                 continue
@@ -748,6 +752,18 @@ class MarueFerry(BaseScraper):
                         continue
                     if key[1:3] in recorded:
                         continue
+                    if key in seen:
+                        # 同じ船・港・出港日に臨時便が2本。キーは1つしか持てないので先の1本だけ作る
+                        self._log.warning(
+                            "extra_voyage_duplicate_key",
+                            ship=ship_name,
+                            route_id=key[0],
+                            port_id=key[1],
+                            date=str(key[2]),
+                            skipped_departure=_iso(departure_at),
+                        )
+                        continue
+                    seen.add(key)
                     result.append(
                         {
                             "route_id": key[0],
@@ -801,7 +817,7 @@ class MarueFerry(BaseScraper):
         今回書かなかったキーの行を消す。始発港の行が無い便は出港済みとみなして残す（消すより残すほうが安全）。
         """
         extra = getattr(self, "_extra_voyages", None) or {}
-        now = datetime.now()
+        now = getattr(self, "_parse_now", None) or datetime.now()
         today = getattr(self, "_valid_date", None) or date.today()
         last = today + timedelta(days=settings.marue_search_days_ahead)
         route_ids = [r.id for r in self._load_routes() if r]
