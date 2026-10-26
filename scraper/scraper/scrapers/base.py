@@ -207,7 +207,8 @@ class BaseScraper(ABC):
         3. content_hash が違う → 内容と scraped_at・checked_at を更新
         4. freeze_after_departure で出港済み → 既存行は一切更新しない。既存行が無ければ INSERT しない
            （出港済みかは今回の出港予定で判定する。遅延で後ろにずれた便は、まだ更新する）
-        5. replace_scope があれば、そのキーで今回に無い ship_name の行を消す（出港済みの行は残す）
+        5. replace_scope があれば、そのキーで今回に無い ship_name の行を消す（出港済みの行は残す）。
+           消すのは同じ source_url の行だけ（別の出どころの行は、同じ航路・港・日付でも消さない）
         6. replace_source があれば、同じ航路・港・source_url（＝同じ便）で今回書かなかった
            (departure_date, ship_name) の行を消す。遅延で出港日がずれたときに、前の日付の行を
            残さないため。古い行は同じ便の新しい情報で置き換わったものなので、出港予定を
@@ -226,7 +227,7 @@ class BaseScraper(ABC):
             key = (rec["route_id"], rec["port_id"], rec["departure_date"], ship_name)
             scope = rec.get("replace_scope")
             if scope is not None:
-                scopes.setdefault(tuple(scope), set()).add(ship_name)
+                scopes.setdefault((*scope, rec.get("source_url")), set()).add(ship_name)
             source = rec.get("replace_source")
             if source is not None:
                 sources.setdefault(tuple(source), set()).add((key[2], ship_name))
@@ -294,13 +295,14 @@ class BaseScraper(ABC):
                 )
                 created += 1
 
-        for (route_id, port_id, departure_date), names in scopes.items():
+        for (route_id, port_id, departure_date, source_url), names in scopes.items():
             self.session.execute(
                 delete(DepartureStatus)
                 .where(
                     DepartureStatus.route_id == route_id,
                     DepartureStatus.port_id == port_id,
                     DepartureStatus.departure_date == departure_date,
+                    DepartureStatus.source_url == source_url,
                     DepartureStatus.ship_name.not_in(names),
                     or_(
                         DepartureStatus.scheduled_departure_at.is_(None),

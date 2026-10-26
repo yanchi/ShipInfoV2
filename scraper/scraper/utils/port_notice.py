@@ -4,6 +4,8 @@
 誤判定より取りこぼしを選ぶ（拾えなければ船ステータスで表示する）。
 
 - 対象は鹿児島航路ページの抜粋と、船別詳細ページの h4 の後〜定型の注意書き（「台風の影響や」の段落）の手前
+- 臨時便の告知（【臨時便(上り/下り)】から次の【…】の手前まで）は読まない。臨時便の「寄港いたしません」を
+  定期便の抜港と取り違えないため。定型の注意書きの確かめは読み飛ばしている間も続ける（12-marue-extra-voyages R8）
 - 文（「。」と改行）ごとに見る。港名・キーワードは、括弧書き（「和泊港(沖永良部島)」の島名など）を取り除いた文で探す
   （括弧の中の島名が港の別名に当たったり、列挙が切れたりするため）。ただし括弧の中が港名だけなら
   （「徳之島(亀徳港)」のように島名の後ろに港名を書く場合）、直前の島名ごと括弧の中の港名に置き換える。
@@ -79,13 +81,16 @@ def _detail_body(detail_html: str) -> str | None:
     if h4 is None:
         return None
     texts: list[str] = []
+    in_extra = False  # 【臨時便…】から次の【…】の手前まで読み飛ばす
     for el in h4.find_all_next(["p", "li"]):
         if archive not in el.parents:
             break
         text = el.get_text(" ", strip=True)
         if BOILERPLATE_MARKER in text:
             return "\n".join(texts)
-        if text:
+        if text.startswith("【"):
+            in_extra = text.startswith("【臨時便")
+        if text and not in_extra:
             texts.append(text)
     return None  # 定型文の区切りが見つからない → 本文は使わない
 

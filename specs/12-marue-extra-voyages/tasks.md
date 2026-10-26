@@ -85,7 +85,7 @@
 
 ### Tests（先に書く）
 
-- [ ] T012 [US1] `scraper/tests/test_marue_ferry.py` にテストを足す。`run_1026(db_session, id, down_1025_rows())`（10/26・10/28 の那覇発の検索は空）→ `_upsert_departures()` まで流す:
+- [X] T012 [US1] `scraper/tests/test_marue_ferry.py` にテストを足す。`run_1026(db_session, id, down_1025_rows())`（10/26・10/28 の那覇発の検索は空）→ `_upsert_departures()` まで流す:
   - (a) SC-001：波之上の `source_url == NAMINOUE_25492` の行が9行
     - 下り：鹿児島 10/26 16:00、名瀬 10/27 03:50、本部 10/27 12:00
     - 上り：那覇・本部・与論・和泊・亀徳・名瀬（10/28）
@@ -94,14 +94,14 @@
   - (b) 下りの3行の `status_detail` が寄港しない港の文。上りは None
   - (c) `MARUE_SEARCH_DAYS_AHEAD=1` にすると 10/28 の上りの行は作らない（FR-009）
   - (d) 抜粋の「■10月28日（水）那覇港発上り便…臨時便運航」を「…欠航」に書き換えた鹿児島航路ページ（`kagoshima=`）では、上りの6行が cancelled で、詳細は抜粋の文（FR-004）
-- [ ] T013 [US1] FR-003 のテストを足す：
+- [X] T013 [US1] FR-003 のテストを足す：
   - (a) 10/28 那覇の検索結果に波之上の定期便（07:00）がある → 那覇 10/28 の臨時便の行は作らない。便検索の行の詳細の後ろに「（臨時便 05:00発あり）」が付き、`extra_voyage_key_conflict` が1件出る
   - (b) 同じ時刻（05:00）なら詳細は変えず、警告も出ない
   - (c) DB に 10/28 那覇の波之上の便検索の行（`SEARCH_URL`）があり、この回にそのキーを検索していない → 作らない
   - (d) 便検索の記録が時刻なしの抜港（skipped）→ 臨時便の行は作らず、抜港の行の詳細は変えず、警告も出ない
   - (e) 10/28 那覇の検索結果に波之上の定期便（07:00。上り・始発港の出港日 10/28）があり、抜粋に「■10月28日（水）那覇港発上り便…欠航」→ 那覇以外の上りの臨時便の行（本部〜名瀬）は extra のまま（抜粋の行は定期便のもの。FR-004）
   - (f) 抜粋に「■10月26日（月）名瀬港発下り便…欠航」（10/25 鹿児島発の定期便の行）を足した鹿児島航路ページ → 10/26 鹿児島発の臨時便の下りの3行は extra のまま（この行は from_midway で日付が 10/26 なので、`_voyage_line()` の1段目でも当たってしまう。臨時便には from_midway の行を使わない。PR #87 レビュー）。あわせて「■10月26日（月）鹿児島新港発下り便…欠航」に書き換えると3行が cancelled（始発港から書いた行は当たる）
-- [ ] T014 [US1] FR-014 のテストを足す：臨時便の行（a の9行）を DB に入れた状態で、もう一度 `run_1026()` する。そのとき次が、臨時便の行を入れる前と同じになる
+- [X] T014 [US1] FR-014 のテストを足す：臨時便の行（a の9行）を DB に入れた状態で、もう一度 `run_1026()` する。そのとき次が、臨時便の行を入れる前と同じになる
   - `_current_voyage`
   - 10/25 鹿児島発の定期便の `_voyage_departed()`・`_recorded_voyage()`
   - `_recorded_search_keys()`（10/28 の上りの臨時便を cancelled にしておいても、10/28 のキーが入らない）
@@ -109,12 +109,12 @@
 
 ### Implementation
 
-- [ ] T015 [US1] `scraper/scraper/scrapers/marue_ferry.py` にモジュールの条件 `_SEARCH_ROWS = or_(DepartureStatus.source_url.is_(None), DepartureStatus.source_url == SEARCH_URL)` を作る。`_recorded_voyages()`・`_recorded_voyage()`・`_recorded_search_keys()`・`_needs_far_search()` の WHERE に足す（research R5）
-- [ ] T016 [US1] `parse_departures()` の最後に `_extra_records(records, now)` を呼んで、臨時便の行を足す（data-model「行の作り方」、research R4・R7）
+- [X] T015 [US1] `scraper/scraper/scrapers/marue_ferry.py` にモジュールの条件 `_SEARCH_ROWS = or_(DepartureStatus.source_url.is_(None), DepartureStatus.source_url == SEARCH_URL)` を作る。`_recorded_voyages()`・`_recorded_voyage()`・`_recorded_search_keys()`・`_needs_far_search()` の WHERE に足す（research R5）
+- [X] T016 [US1] `parse_departures()` の最後に `_extra_records(records, now)` を呼んで、臨時便の行を足す（data-model「行の作り方」、research R4・R7）
   - 状態：抜粋の便の行のうち、`from_midway` でなく、方向が同じで日付が始発港の出港日と同じ行（`_voyage_line()` は使わない。1段目でも `from_midway` の行が日付で当たるため。research R4）が cancelled・suspended・delayed ならそれ＋`_ship_detail_text()`、それ以外は `extra`＋`skip_note`。ただし同じ船・同じ航路で、始発港の出港日が同じ定期便がこの回の便検索の記録か DB の `_SEARCH_ROWS` の行にあれば（`_departure_date(route_id, arrival_at)` で求める）、抜粋の行は当てずに `extra`
   - `source_url` は詳細ページの URL、`freeze_after_departure=True`、`replace_scope` は付けない
   - ぶつかったとき、記録に出港時刻があって臨時便と違えば、便検索の記録の `status_detail` に足し（None なら「臨時便 HH:MM発あり」だけ）、`extra_voyage_key_conflict`（船・航路・港・日付・両方の時刻）を出す
-- [ ] T017 [US1] `make test-scraper`・`make lint-scraper`。既存テストの期待値は変えない
+- [X] T017 [US1] `make test-scraper`・`make lint-scraper`。既存テストの期待値は変えない
 
 **Checkpoint**: T012〜T014 が通る。既存テストが全部通る → コミット
 
@@ -126,13 +126,13 @@
 
 **Independent Test**: `run_1026()` で、10/26〜10/27 の亀徳・和泊・与論の下りに波之上の臨時便の行が0行（SC-002）。定型の注意書きのある詳細ページでも、定期便の亀徳・和泊・与論が抜港にならない（SC-007 の前半）。
 
-- [ ] T018 [P] [US2] `scraper/tests/test_marue_ferry.py` にテストを足す：T012 の流れで、10/26〜10/27 の下りの亀徳・和泊・与論に `source_url == NAMINOUE_25492` の行が無い（SC-002）（T016 で通るはず。通らなければ T016 を直す）
-- [ ] T019 [P] [US2] `scraper/tests/test_port_notice.py` にテストを足す：(b) 【臨時便(上り)】のブロックの直後（次の【…】が無い位置）に `<p>台風の影響や…</p>` を置いた HTML で、`_detail_body()` が None を返さず本文を返す（マーカーを飛ばさない。PR #87 レビュー）。(a) `ship_detail_naminoue_20261026.html` の `status-archive` の最後に `<p>台風の影響や…</p>` を足した HTML で、`extract_notice_text()` の結果に、次が入らない。入るのは【欠航】までの本文だけ
+- [X] T018 [P] [US2] `scraper/tests/test_marue_ferry.py` にテストを足す：T012 の流れで、10/26〜10/27 の下りの亀徳・和泊・与論に `source_url == NAMINOUE_25492` の行が無い（SC-002）（T016 で通るはず。通らなければ T016 を直す）
+- [X] T019 [P] [US2] `scraper/tests/test_port_notice.py` にテストを足す：(b) 【臨時便(上り)】のブロックの直後（次の【…】が無い位置）に `<p>台風の影響や…</p>` を置いた HTML で、`_detail_body()` が None を返さず本文を返す（マーカーを飛ばさない。PR #87 レビュー）。(a) `ship_detail_naminoue_20261026.html` の `status-archive` の最後に `<p>台風の影響や…</p>` を足した HTML で、`extract_notice_text()` の結果に、次が入らない。入るのは【欠航】までの本文だけ
   - 【臨時便(下り)】〜【臨時便(上り)】の行
   - 「寄港いたしません」
   - 乗船手続きの行
-- [ ] T020 [US2] `scraper/scraper/utils/port_notice.py` の `_detail_body()` で、【臨時便…】の `p` から次の【…】の `p`（臨時便以外）または定型の注意書きの手前までを飛ばす。`BOILERPLATE_MARKER` の確かめは飛ばしている間も続ける（research R8）。モジュールの docstring にも書く
-- [ ] T021 [US2] `scraper/tests/test_marue_ferry.py` にテストを足す：T019 の HTML を詳細ページにして `run_1026()` し、今の便が亀徳・和泊・与論を通る日の定期便の行（`down_1025_rows()` の 10/26）が skipped にならない（SC-007）。`make test-scraper`・`make lint-scraper`
+- [X] T020 [US2] `scraper/scraper/utils/port_notice.py` の `_detail_body()` で、【臨時便…】の `p` から次の【…】の `p`（臨時便以外）または定型の注意書きの手前までを飛ばす。`BOILERPLATE_MARKER` の確かめは飛ばしている間も続ける（research R8）。モジュールの docstring にも書く
+- [X] T021 [US2] `scraper/tests/test_marue_ferry.py` にテストを足す：T019 の HTML を詳細ページにして `run_1026()` し、今の便が亀徳・和泊・与論を通る日の定期便の行（`down_1025_rows()` の 10/26）が skipped にならない（SC-007）。`make test-scraper`・`make lint-scraper`
 
 **Checkpoint**: T018〜T021 が通る → コミット
 
@@ -146,7 +146,7 @@
 
 ### Tests（先に書く）
 
-- [ ] T022 [P] [US3] `scraper/tests/test_base_departures.py` にテストを足す：`replace_scope` の行と同じ航路・港・日付に、別の `source_url` で別の船の行がある → 消えない。同じ `source_url` の別の船の行は今までどおり消える
+- [X] T022 [P] [US3] `scraper/tests/test_base_departures.py` にテストを足す：`replace_scope` の行と同じ航路・港・日付に、別の `source_url` で別の船の行がある → 消えない。同じ `source_url` の別の船の行は今までどおり消える
 - [ ] T023 [US3] `scraper/tests/test_marue_ferry.py` にテストを足す。T012 の9行を DB に入れた状態から:
   - (a) 10/27 10:00 に、【臨時便(上り)】を消した詳細ページで実行 → 上りの6行が消える。下りは、名瀬（10/27 03:50）が出港済みでも始発（10/26 16:00）が出港済みなので3行とも残る
   - (b) 10/28 08:00 に、【臨時便(上り)】を消した詳細ページで実行 → 上りの6行が全部残る（那覇を 05:00 に出港済み。US3-3）
@@ -162,7 +162,7 @@
 
 ### Implementation
 
-- [ ] T024 [US3] `scraper/scraper/scrapers/base.py` の `_upsert_departures()` のルール5で、scope のキーに `source_url` を足し、DELETE の条件に `DepartureStatus.source_url == source_url` を足す（research R6）。docstring のルール5も直す
+- [X] T024 [US3] `scraper/scraper/scrapers/base.py` の `_upsert_departures()` のルール5で、scope のキーに `source_url` を足し、DELETE の条件に `DepartureStatus.source_url == source_url` を足す（research R6）。docstring のルール5も直す
 - [ ] T025 [US3] `scraper/scraper/scrapers/marue_ferry.py` で `_upsert_departures(records)` を上書きする（data-model「消し方」）
   - 親を呼んだあとに、`_extra_voyages` が None でない船の臨時便の行を読む（マルエーの航路・`scheduled_arrival_at > now`。**出港日では絞らない**）
   - 便（route_id, scheduled_arrival_at）ごとにまとめ、始発港（`_get_stops()[route_id][0]`）の行がある便で、`scheduled_departure_at` の最小が今より後の便だけ、出港日が今日〜`MARUE_SEARCH_DAYS_AHEAD` 日先で今回書かなかったキーの行を消す

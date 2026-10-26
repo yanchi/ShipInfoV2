@@ -272,6 +272,30 @@ def test_replace_scope_deletes_old_ship_rows(db_session, setup):
     assert [r.ship_name for r in rows] == ["フェリーあけぼの"]
 
 
+def test_replace_scope_only_deletes_rows_from_same_source(db_session, setup):
+    """別の source_url の行は、同じ航路・港・日付でも replace_scope で消えない（12-marue-extra-voyages R6）。"""
+    scraper, _, route, port = setup
+    scope = (route.id, port.id, date.today())
+    scraper._upsert_departures(
+        [
+            _rec(
+                route, port, ship_name="臨時丸", source_url="https://example.com/ship/"
+            ),
+            _rec(route, port, ship_name="旧丸", replace_scope=scope),
+        ]
+    )
+    db_session.commit()
+
+    # 今回の検索結果は別の船だけ → 同じ source_url の旧丸は消え、別の出どころの臨時丸は残る
+    scraper._upsert_departures([_rec(route, port, replace_scope=scope)])
+    db_session.commit()
+
+    assert sorted(r.ship_name for r in _rows(db_session)) == [
+        "フェリーあけぼの",
+        "臨時丸",
+    ]
+
+
 def test_replace_scope_keeps_departed_rows(db_session, setup):
     """出港後の検索で便が返らなくなっても、出港済みの行は消えない（FR-020）。"""
     scraper, _, route, port = setup

@@ -68,7 +68,7 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 
 from bs4 import BeautifulSoup
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from scraper.config import settings
 from scraper.db.models import (
@@ -89,6 +89,11 @@ from scraper.utils.ports import PortResolver
 
 SEARCH_URL = "https://www.aline-ferry.com/search/result.php"
 KAGOSHIMA_URL = "https://www.aline-ferry.com/kagoshima/"
+
+# 便検索から作った行（臨時便の行は source_url が船の詳細ページ。便の判定には混ぜない。research R5）
+_SEARCH_ROWS = or_(
+    DepartureStatus.source_url.is_(None), DepartureStatus.source_url == SEARCH_URL
+)
 
 # 船ステータスの重さ（検索に失敗したときの安全側の判定に使う）
 _SEVERITY = {
@@ -331,6 +336,7 @@ class MarueFerry(BaseScraper):
             )
             .where(
                 DepartureStatus.route_id.in_([r.id for r in routes]),
+                _SEARCH_ROWS,
                 DepartureStatus.ship_name != "",
                 DepartureStatus.status.in_(
                     [
@@ -358,6 +364,7 @@ class MarueFerry(BaseScraper):
                 DepartureStatus.route_id == route_id,
                 DepartureStatus.port_id == port_id,
                 DepartureStatus.departure_date == d,
+                _SEARCH_ROWS,
             )
         ).scalar()
         if last_checked is None:
@@ -684,8 +691,169 @@ class MarueFerry(BaseScraper):
                     }
                 )
 
+        records.extend(self._extra_records(records, now))
         self._log.info("parsed_departures", records=len(records))
         return records
+
+    # ------------------------------------------------------------------
+    # 臨時便（船の詳細ページの【臨時便】。specs/12-marue-extra-voyages）
+    # ------------------------------------------------------------------
+
+    def _extra_records(self, records: list[dict], now: datetime) -> list[dict]:
+        """臨時便の出港時刻のある港ごとに行を作る（data-model「行の作り方」）。
+
+        便検索の行とキー（航路・港・出港日・船名）がぶつかるときは便検索を優先し、作らない。
+        """
+        extra = getattr(self, "_extra_voyages", None) or {}
+        today = getattr(self, "_valid_date", None) or date.today()
+        last = today + timedelta(days=settings.marue_search_days_ahead)
+        by_key = {
+            (r["route_id"], r["port_id"], r["departure_date"], r["ship_name"]): r
+            for r in records
+        }
+        result: list[dict] = []
+        for ship_name, parsed in extra.items():
+            if parsed is None:
+                continue
+            for voyage in parsed.voyages:
+                status, detail = self._extra_status(voyage, records)
+                recorded = self._recorded_search_keys_of(voyage, today, last)
+                for stop in voyage.stops[:-1]:
+                    departure_at = stop.departure_at
+                    key = (
+                        voyage.route_id,
+                        stop.port_id,
+                        departure_at.date(),
+                        ship_name,
+                    )
+                    if not today <= key[2] <= last:
+                        continue
+                    searched = by_key.get(key)
+                    if searched is not None:
+                        self._note_extra_conflict(searched, voyage, departure_at)
+                        continue
+                    if key[1:3] in recorded:
+                        continue
+                    result.append(
+                        {
+                            "route_id": key[0],
+                            "port_id": key[1],
+                            "departure_date": key[2],
+                            "ship_name": ship_name,
+                            "status": status,
+                            "status_detail": detail,
+                            "scheduled_departure_at": departure_at,
+                            "scheduled_arrival_at": voyage.stops[-1].arrival_at,
+                            "operated_by_company_id": None,
+                            "source_url": self._ships[ship_name].detail_url,
+                            "freeze_after_departure": True,
+                        }
+                    )
+        return result
+
+    def _extra_status(
+        self, voyage: ExtraVoyage, records: list[dict]
+    ) -> tuple[OperationStatusEnum, str | None]:
+        """臨時便の行の状態（R4）。抜粋に合う行が欠航・運休・条件付ならそれ、それ以外は extra。
+
+        合う行は、始発港から書いた（from_midway でない）、方向が同じで日付が始発港の出港日と同じ行だけ。
+        同じ船・始発港の出港日の定期便が便検索にあるときは、抜粋の行は定期便のものとみなして当てない。
+        """
+        ship = self._ships.get(voyage.ship_name)
+        extra = (OperationStatusEnum.extra, voyage.skip_note)
+        if ship is None or not ship.voyages:
+            return extra
+        origin_date = voyage.stops[0].departure_at.date()
+        direction = self._route_directions().get(voyage.route_id)
+        line = next(
+            (
+                v
+                for v in ship.voyages
+                if v.direction == direction
+                and not v.from_midway
+                and v.departure_date == origin_date
+            ),
+            None,
+        )
+        if line is None or line.status not in (
+            OperationStatusEnum.cancelled,
+            OperationStatusEnum.suspended,
+            OperationStatusEnum.delayed,
+        ):
+            return extra
+        if self._has_regular_voyage(voyage, origin_date, records):
+            return extra
+        return line.status, self._ship_detail_text(replace(ship, status=line.status))
+
+    def _has_regular_voyage(
+        self, voyage: ExtraVoyage, origin_date: date, records: list[dict]
+    ) -> bool:
+        """同じ船・航路・始発港の出港日の定期便（便検索の行）が、この回の記録か DB にあるか。"""
+        for r in records:
+            arrival = r.get("scheduled_arrival_at")
+            if (
+                r["ship_name"] == voyage.ship_name
+                and r["route_id"] == voyage.route_id
+                and arrival is not None
+                and self._departure_date(voyage.route_id, arrival) == origin_date
+            ):
+                return True
+        stops = self._get_stops().get(voyage.route_id, [])
+        if not stops:
+            return False
+        arrival_date = origin_date + timedelta(
+            days=stops[-1].day_offset - stops[0].day_offset
+        )
+        start = datetime(arrival_date.year, arrival_date.month, arrival_date.day)
+        return (
+            self.session.execute(
+                select(DepartureStatus.id)
+                .where(
+                    DepartureStatus.ship_name == voyage.ship_name,
+                    DepartureStatus.route_id == voyage.route_id,
+                    _SEARCH_ROWS,
+                    DepartureStatus.scheduled_arrival_at >= start,
+                    DepartureStatus.scheduled_arrival_at < start + timedelta(days=1),
+                )
+                .limit(1)
+            ).first()
+            is not None
+        )
+
+    def _recorded_search_keys_of(
+        self, voyage: ExtraVoyage, first: date, last: date
+    ) -> set[tuple[int, date]]:
+        """DB にある、この船・航路の便検索の行の (port_id, 出港日)（この回に検索しなかったキーを含む。R7）。"""
+        rows = self.session.execute(
+            select(DepartureStatus.port_id, DepartureStatus.departure_date).where(
+                DepartureStatus.ship_name == voyage.ship_name,
+                DepartureStatus.route_id == voyage.route_id,
+                _SEARCH_ROWS,
+                DepartureStatus.departure_date >= first,
+                DepartureStatus.departure_date <= last,
+            )
+        ).all()
+        return {(r.port_id, r.departure_date) for r in rows}
+
+    def _note_extra_conflict(
+        self, searched: dict, voyage: ExtraVoyage, departure_at: datetime
+    ) -> None:
+        """便検索の記録に出港時刻があり臨時便と違えば、別の便として詳細の後ろに知らせる（R7）。"""
+        recorded_at = searched.get("scheduled_departure_at")
+        if recorded_at is None or recorded_at == departure_at:
+            return
+        note = f"臨時便 {departure_at:%H:%M}発あり"
+        detail = searched.get("status_detail")
+        searched["status_detail"] = f"{detail}（{note}）" if detail else note
+        self._log.warning(
+            "extra_voyage_key_conflict",
+            ship=voyage.ship_name,
+            route_id=voyage.route_id,
+            port_id=searched["port_id"],
+            date=str(searched["departure_date"]),
+            search_departure=_iso(recorded_at),
+            extra_departure=_iso(departure_at),
+        )
 
     @staticmethod
     def _skipped_record(base: dict, ship_name: str, detail: str) -> dict:
@@ -779,6 +947,7 @@ class MarueFerry(BaseScraper):
             )
             .where(
                 DepartureStatus.route_id.in_(route_ids),
+                _SEARCH_ROWS,
                 DepartureStatus.ship_name != "",
                 DepartureStatus.scheduled_arrival_at > now,
             )
@@ -1099,6 +1268,7 @@ class MarueFerry(BaseScraper):
                     DepartureStatus.route_id == route_id,
                     DepartureStatus.scheduled_arrival_at > arrival_at - _SAME_VOYAGE,
                     DepartureStatus.scheduled_arrival_at < arrival_at + _SAME_VOYAGE,
+                    _SEARCH_ROWS,
                 )
             ).all()
             ports = {
