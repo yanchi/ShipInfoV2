@@ -47,6 +47,8 @@
 
 各フェーズ完了後に `git commit` すること（NON-NEGOTIABLE）。
 
+PR をマージしたら、その head ブランチをローカル・リモートとも消すこと（master に切り替えて pull してから `git branch -d` と `git push origin --delete`）。
+
 ## よく使うコマンド
 
 ```bash
