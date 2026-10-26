@@ -62,16 +62,16 @@
     - 【欠航】の「9月27日(火)」は臨時便ではないので読まない（警告も出ない）
   - (b) 臨時便が無い詳細ページ（`ship_detail_normal.html`）→ 空のタプル
   - (c) `status-archive` が無い HTML・None → None
-  - (d) 次の書き換えのどれでも、その臨時便を作らずに `extra_voyage_unreadable`（船名・見出し・行）を1件出し、戻り値は None。曜日違い（「10月28日(木)那覇港」）、航路に無い港（「伊延港」）、順番違い（本部と与論を入れ替え）、途中の港で出港なし（「本部港　07:00(入港)」だけ）、終点の入港なし（鹿児島の行を消す）、時刻が前の港より前、知らない形の行
+  - (d) 次の書き換えのどれでも、その臨時便だけを入れずに `extra_voyage_unreadable`（船名・見出し・行）を1件出す。戻り値は `ExtraParse(voyages=(読めたほうの便,), complete=False)`（例：上りだけ曜日違い → 下りの1便が入る。PR #87 レビュー）。曜日違い（「10月28日(木)那覇港」）、航路に無い港（「伊延港」）、順番違い（本部と与論を入れ替え）、途中の港で出港なし（「本部港　07:00(入港)」だけ）、終点の入港なし（鹿児島の行を消す）、時刻が前の港より前、知らない形の行
   - (e) 見出しの括弧が半角・全角どちらでも読める
   - (f) 【臨時便(下り)】が2つ（日付違い）→ 下りの便が2つ（Edge Cases）
   - (g) `fixed_now(datetime(2026, 12, 30, 10, 0))` で「1月2日(土)」の臨時便 → 2027-01-02。曜日の確かめも 2027 年で行う（FR-010）
-- [ ] T010 `scraper/scraper/scrapers/marue_ferry.py` に `ExtraStop`・`ExtraVoyage`（frozen dataclass。data-model のとおり）と `_parse_extra_voyages(detail_html: str | None, ship_name: str) -> tuple[ExtraVoyage, ...] | None` を作る
+- [ ] T010 `scraper/scraper/scrapers/marue_ferry.py` に `ExtraStop`・`ExtraVoyage`（frozen dataclass。data-model のとおり）と `ExtraParse`（`voyages`・`complete`）と `_parse_extra_voyages(detail_html: str | None, ship_name: str) -> ExtraParse | None` を作る（data-model「船ごとの読み取り結果」）
   - `div.status-archive` の `p` を上から読み、【臨時便(上り/下り)】で始めて、次の【…】・《…》・終わりで閉じる（research R1）
   - 行の正規表現はモジュールの定数（`_EXTRA_HEADING`・`_EXTRA_STOP`）にする
   - 港は `self._get_resolver().resolve()`、航路は `_route_directions()`、順番は `self._get_stops()` の `stop_order` で確かめる（research R2・R3）
   - 月日から年を決める処理は `_parse_voyages()` から `_nearest_date(month, day, today) -> date | None` に切り出して、両方で使う（`_parse_voyages()` の結果は変えない）
-- [ ] T011 `fetch()` で、詳細ページを取ったあとに `self._extra_voyages: dict[str, tuple[ExtraVoyage, ...] | None]` を作る（船ごと。取れなかった船は None）。`make test-scraper`・`make lint-scraper`
+- [ ] T011 `fetch()` で、詳細ページを取ったあとに `self._extra_voyages: dict[str, ExtraParse | None]` を作る（船ごと。取れなかった船は None）。`make test-scraper`・`make lint-scraper`
 
 **Checkpoint**: 既存テストが全部通る（結果は変わらない）＋ T003〜T009 が通る → コミット
 
@@ -100,6 +100,7 @@
   - (c) DB に 10/28 那覇の波之上の便検索の行（`SEARCH_URL`）があり、この回にそのキーを検索していない → 作らない
   - (d) 便検索の記録が時刻なしの抜港（skipped）→ 臨時便の行は作らず、抜港の行の詳細は変えず、警告も出ない
   - (e) 10/28 那覇の検索結果に波之上の定期便（07:00。上り・始発港の出港日 10/28）があり、抜粋に「■10月28日（水）那覇港発上り便…欠航」→ 那覇以外の上りの臨時便の行（本部〜名瀬）は extra のまま（抜粋の行は定期便のもの。FR-004）
+  - (f) 抜粋に「■10月26日（月）名瀬港発下り便…欠航」（10/25 鹿児島発の定期便の行）を足した鹿児島航路ページ → 10/26 鹿児島発の臨時便の下りの3行は extra のまま（途中の港の行の範囲照合を臨時便には使わない。PR #87 レビュー）
 - [ ] T014 [US1] FR-014 のテストを足す：臨時便の行（a の9行）を DB に入れた状態で、もう一度 `run_1026()` する。そのとき次が、臨時便の行を入れる前と同じになる
   - `_current_voyage`
   - 10/25 鹿児島発の定期便の `_voyage_departed()`・`_recorded_voyage()`
@@ -110,7 +111,7 @@
 
 - [ ] T015 [US1] `scraper/scraper/scrapers/marue_ferry.py` にモジュールの条件 `_SEARCH_ROWS = or_(DepartureStatus.source_url.is_(None), DepartureStatus.source_url == SEARCH_URL)` を作る。`_recorded_voyages()`・`_recorded_voyage()`・`_recorded_search_keys()`・`_needs_far_search()` の WHERE に足す（research R5）
 - [ ] T016 [US1] `parse_departures()` の最後に `_extra_records(records, now)` を呼んで、臨時便の行を足す（data-model「行の作り方」、research R4・R7）
-  - 状態：`_voyage_line(ship, route_id, 始発港の出港日, 終点の入港日)` が cancelled・suspended・delayed ならそれ＋`_ship_detail_text()`、それ以外は `extra`＋`skip_note`。ただし同じ船・同じ航路で、始発港の出港日が同じ定期便がこの回の便検索の記録か DB の `_SEARCH_ROWS` の行にあれば（`_departure_date(route_id, arrival_at)` で求める）、抜粋の行は当てずに `extra`
+  - 状態：抜粋の便の行のうち、方向が同じで日付が始発港の出港日と同じ行（`_voyage_line()` の1段目だけ。途中の港の行の範囲照合は使わない）が cancelled・suspended・delayed ならそれ＋`_ship_detail_text()`、それ以外は `extra`＋`skip_note`。ただし同じ船・同じ航路で、始発港の出港日が同じ定期便がこの回の便検索の記録か DB の `_SEARCH_ROWS` の行にあれば（`_departure_date(route_id, arrival_at)` で求める）、抜粋の行は当てずに `extra`
   - `source_url` は詳細ページの URL、`freeze_after_departure=True`、`replace_scope` は付けない
   - ぶつかったとき、記録に出港時刻があって臨時便と違えば、便検索の記録の `status_detail` に足し（None なら「臨時便 HH:MM発あり」だけ）、`extra_voyage_key_conflict`（船・航路・港・日付・両方の時刻）を出す
 - [ ] T017 [US1] `make test-scraper`・`make lint-scraper`。既存テストの期待値は変えない
@@ -126,11 +127,11 @@
 **Independent Test**: `run_1026()` で、10/26〜10/27 の亀徳・和泊・与論の下りに波之上の臨時便の行が0行（SC-002）。定型の注意書きのある詳細ページでも、定期便の亀徳・和泊・与論が抜港にならない（SC-007 の前半）。
 
 - [ ] T018 [P] [US2] `scraper/tests/test_marue_ferry.py` にテストを足す：T012 の流れで、10/26〜10/27 の下りの亀徳・和泊・与論に `source_url == NAMINOUE_25492` の行が無い（SC-002）（T016 で通るはず。通らなければ T016 を直す）
-- [ ] T019 [P] [US2] `scraper/tests/test_port_notice.py` にテストを足す：`ship_detail_naminoue_20261026.html` の `status-archive` の最後に `<p>台風の影響や…</p>` を足した HTML で、`extract_notice_text()` の結果に、次が入らない。入るのは【欠航】までの本文だけ
+- [ ] T019 [P] [US2] `scraper/tests/test_port_notice.py` にテストを足す：(b) 【臨時便(上り)】のブロックの直後（次の【…】が無い位置）に `<p>台風の影響や…</p>` を置いた HTML で、`_detail_body()` が None を返さず本文を返す（マーカーを飛ばさない。PR #87 レビュー）。(a) `ship_detail_naminoue_20261026.html` の `status-archive` の最後に `<p>台風の影響や…</p>` を足した HTML で、`extract_notice_text()` の結果に、次が入らない。入るのは【欠航】までの本文だけ
   - 【臨時便(下り)】〜【臨時便(上り)】の行
   - 「寄港いたしません」
   - 乗船手続きの行
-- [ ] T020 [US2] `scraper/scraper/utils/port_notice.py` の `_detail_body()` で、【臨時便…】の `p` から次の【…】の `p`（臨時便以外）または終わりまでを飛ばす（research R8）。モジュールの docstring にも書く
+- [ ] T020 [US2] `scraper/scraper/utils/port_notice.py` の `_detail_body()` で、【臨時便…】の `p` から次の【…】の `p`（臨時便以外）または定型の注意書きの手前までを飛ばす。`BOILERPLATE_MARKER` の確かめは飛ばしている間も続ける（research R8）。モジュールの docstring にも書く
 - [ ] T021 [US2] `scraper/tests/test_marue_ferry.py` にテストを足す：T019 の HTML を詳細ページにして `run_1026()` し、今の便が亀徳・和泊・与論を通る日の定期便の行（`down_1025_rows()` の 10/26）が skipped にならない（SC-007）。`make test-scraper`・`make lint-scraper`
 
 **Checkpoint**: T018〜T021 が通る → コミット
@@ -150,7 +151,7 @@
   - (a) 10/27 10:00 に、【臨時便(上り)】を消した詳細ページで実行 → 上りの6行が消える。下りは、名瀬（10/27 03:50）が出港済みでも始発（10/26 16:00）が出港済みなので3行とも残る
   - (b) 10/28 08:00 に、【臨時便(上り)】を消した詳細ページで実行 → 上りの6行が全部残る（那覇を 05:00 に出港済み。US3-3）
   - (c) 詳細ページの取得が失敗（404）→ 何も消えない
-  - (d) 詳細ページの臨時便が読めない（曜日違い）→ 何も消えない、`extra_voyage_unreadable`
+  - (d) 上りの臨時便だけが読めない（曜日違い）→ 何も消えない、`extra_voyage_unreadable`。下りの3行は今までどおり書かれる（FR-007）
   - (e) 10/28 那覇の検索結果がほかの船だけ（または他社運航）→ 波之上の那覇 10/28 の臨時便の行が残る（US3-4）
   - (f) 本文の名瀬 10/28 の出港を 19:20 → 20:00 に書き換え → 行の `scheduled_departure_at` が 20:00。10/28 10:30 に本部（07:20）の時刻を書き換えても、本部の行は変わらない（出港済み。US3-5）
   - (g) 上りの臨時便から与論を消した本文（10/28 05:00 より前に実行）→ 与論の行だけ消える
@@ -165,7 +166,9 @@
 - [ ] T025 [US3] `scraper/scraper/scrapers/marue_ferry.py` で `_upsert_departures(records)` を上書きする（data-model「消し方」）
   - 親を呼んだあとに、`_extra_voyages` が None でない船の臨時便の行を読む（マルエーの航路・`scheduled_arrival_at > now`。**出港日では絞らない**）
   - 便（route_id, scheduled_arrival_at）ごとにまとめ、始発港（`_get_stops()[route_id][0]`）の行がある便で、`scheduled_departure_at` の最小が今より後の便だけ、出港日が今日〜`MARUE_SEARCH_DAYS_AHEAD` 日先で今回書かなかったキーの行を消す
+  - 対象の船は `_extra_voyages` が None でなく `complete` が True の船だけ
   - 消した行の数を `extra_voyage_rows_deleted`（船・件数）でログに出す
+  - 行を作るとき（T016 の中）、同じ船・航路で `scheduled_arrival_at` が違い、差が24時間未満の臨時便の行が DB にあれば `extra_voyage_arrival_changed`（船・航路・前と今の到着時刻）を出す（research R6 の既知の取りこぼし）。T023 に (l) として、名瀬の入港・終点の鹿児島の入港を書き換えたときにこの警告が1件出るテストを足す
   - 戻り値（created, updated）は親のまま
 - [ ] T026 [US3] `make test-scraper`・`make lint-scraper`
 
@@ -181,12 +184,14 @@
 
 - [ ] T027 [P] [US5] `app/tests/View/PortBoardTest.php` にテストを足す：`firstExtraDepartureOf(companyId, direction)` が出港時刻のいちばん早い Extra の便（港名・時刻）を返す。Extra が無ければ null、ほかの会社・ほかの方向・Extra 以外は見ない、出港済みでも返す
 - [ ] T028 [P] [US5] `app/src/View/PortBoardExtraDeparture.php` を作る（`final readonly`、`string $portName`・`\DateTimeInterface $departureAt`）。`app/src/View/PortBoardDay.php` に `firstExtraDepartureOf()` を作る（行の `port` から港名を取る）
-- [ ] T029 [US5] `app/src/Controller/StatusController.php` の `index()` で、`$fullBoard->days[0]`（今日）から航路ごとに `firstExtraDepartureOf(companyId, route->getDirection())` を求めて `routesWithExtra`（`[routeId => PortBoardExtraDeparture]`）をテンプレートに渡す。`app/templates/status/index.html.twig` の航路の `<li>` の最後（注意書きの後）に `<a href="{{ path('app_status_company', {id: company.id}) }}" class="route-extra small text-decoration-none">◆ 臨時便 {{ extra.portName }} {{ extra.departureAt|date('H:i') }}発</a>` を出す（contracts/ui-status.md）
+- [ ] T029 [US5] `app/src/Controller/StatusController.php` の `index()` で、`$fullBoard->days[0]`（今日）から航路ごとに `firstExtraDepartureOf(companyId, route->getDirection())` を求めて `routesWithExtra`（`[routeId => PortBoardExtraDeparture]`）をテンプレートに渡す。`app/templates/status/index.html.twig` の航路の `<li>` の最後（注意書きの後）に `<a href="{{ path('app_status_company', {id: company.id}) }}" class="route-extra small text-decoration-none">◆ 臨時便 {{ extra.portName }} {{ extra.departureAt|date('H:i') }}発</a>` を出す（contracts/ui-status.md）。同じファイルの `midwayDisplay()` は、Extra の entry を除いて今までどおり決め、除いた後に何も残らなければ `['kind' => 'badge', 'state' => null, 'status' => OperationStatusEnum::Extra]` を返す（research R9）
 - [ ] T030 [US5] `app/tests/Controller/StatusControllerTest.php` にテストを足す
   - (a) 航路単位が欠航・今日の下りに Extra の行（鹿児島 16:00）→ トップの下りに「欠航」と「◆ 臨時便 鹿児島 16:00発」が両方出る
   - (b) Extra の行が無い方向には出ない
   - (c) 航路単位が便なしで、途中の港の Extra だけ（名瀬 03:50・本部 12:00）→ 航路のバッジが「臨時便」、下に「◆ 臨時便 名瀬 03:50発」
   - (d) トップの「欠航・条件付などの便」に臨時便の行が入る（FR-017）
+  - (e) 航路単位が便なしで、途中の港が「定期便の通常運航（名瀬）＋臨時便（本部）」→ 航路のバッジは「通常運航」のまま（「スケジュール変更」にならない）、下に「◆ 臨時便 本部 HH:MM発」。PR #87 レビュー
+  - (f) 途中の港が「定期便の欠航＋臨時便」→ 航路のバッジは「欠航」（Extra を除いて今までどおり）
 - [ ] T031 [US5] `make test-php`・`make phpstan`・`make cs-php`・`make lint-php`
 
 **Checkpoint**: T027〜T030 が通る → コミット
@@ -195,13 +200,14 @@
 
 ## Phase 7: User Story 4 - 臨時便が通知メールに載る (Priority: P3)
 
-**Goal**: 臨時便の行が通知メールに「臨時便」として載る（FR-011。T003 で Enum に入っているので、確かめるだけ）。
+**Goal**: 臨時便の行が通知メールに「臨時便」として載る（FR-011。行は T003 の Enum で自動で入る）。臨時便だけの日の「状況」を「臨時便あり」にする（contracts/notification-mail.md）。
 
 - [ ] T032 [P] [US4] `app/tests/Service/IrregularServiceCollectorTest.php` にテストを足す：Extra の港の行だけがある日も1件になる（`ports` に入る）
 - [ ] T033 [P] [US4] `app/tests/Service/IrregularStatusMailerTest.php` にテストを足す：Extra の港の行が「- 那覇 05:00発 フェリー波之上：臨時便」の形で本文に出る（contracts/notification-mail.md）
-- [ ] T034 [US4] `app/tests/Repository/DepartureStatusRepositoryTest.php` に、`findIrregularBetween()` が `status = 'extra'` の行を返すテストを足す。`make test-php`
+- [ ] T034 [US4] `app/tests/Repository/DepartureStatusRepositoryTest.php` に、`findIrregularBetween()` が `status = 'extra'` の行を返すテストを足す
+- [ ] T034a [US4] `app/tests/Service/IrregularStatusMailerTest.php` に「状況」のテストを足す：航路×日付が便なし・行なしで港が全部 Extra →「臨時便あり」、航路が通常運航で港が全部 Extra →「通常運航（臨時便あり）」、Extra と条件付が混ざる →「〜（途中の港に変更あり）」、航路が欠航 →「欠航」。→ `app/src/View/IrregularService.php` の `statusText()` を直す（contracts/notification-mail.md）。`make test-php`・`make phpstan`
 
-**Checkpoint**: T032〜T034 が通る → コミット
+**Checkpoint**: T032〜T034a が通る → コミット
 
 ---
 
@@ -211,7 +217,7 @@
 - [ ] T036 [P] `specs/9-marue-port-skip/contracts/ui-status.md` の冒頭に「臨時便は specs/12-marue-extra-voyages/contracts/ui-status.md」と1行足す（凡例の一覧がどこにあるか追えるように）
 - [ ] T037 全部のチェックを流す：`make test-scraper`・`make lint-scraper`・`make test-php`・`make phpstan`・`make cs-php`・`make lint-php`・`make check-schema`・`make verify-prod`
 - [ ] T038 `make up` → `make scraper-run` → `/ports`・トップ・凡例を目で見る（臨時便が出ていない日は T030 のテストの画面で代える）。`make notify-dry-run` で本文が崩れないこと
-- [ ] T039 quickstart.md の本番の確認手順を、実装に合わせて直す（ログのイベント名・SQL）
+- [ ] T039 quickstart.md の本番の確認手順を、実装に合わせて直す（ログのイベント名・SQL）。`deploy/README.md` のロールバックの手順に「12-marue-extra-voyages 以降のイメージから戻すときは、先に `DELETE FROM departure_statuses WHERE status = 'extra'`」を足す（research R10）
 
 **Checkpoint**: 全部通る → コミット → PR
 
@@ -242,5 +248,5 @@ Phase 3〜7 → Phase 8
 ## Implementation Strategy
 
 - **MVP**：Phase 1〜4（US1・US2）。臨時便が港別ページに「臨時便」で出て、寄港しない港には出ない。ただし US3 が無いと、取りやめた臨時便が残るので、本番に出すのは Phase 5 まで入れてから
-- **次**：Phase 6（US5）でトップに出す。Phase 7（US4）は確かめるだけ
+- **次**：Phase 6（US5）でトップに出す。Phase 7（US4）は通知の行は確かめるだけで、「状況」の文言だけ直す
 - PR は1つ・デプロイは1回（PHP の Enum とスクレイパーを一緒に出すため。research R10）。急ぐ場合は、Phase 5 まで終わった時点で Phase 8 の T037 を流して PR を出し、Phase 6〜7 は別の PR にしてよい（Phase 2 で PHP の Enum・バッジは入っているので、港別ページは表示できる）

@@ -35,7 +35,7 @@
 - `BaseScraper.fetch()` / `parse()` / `parse_departures()` のシグネチャは変えない
 - 便検索から作る行の結果は変えない（SC-004）。変えてよいのは、臨時便の行を判定から除く分だけ
 - Base の変更は `replace_scope` を同じ `source_url` に絞るだけ（今使っているのはマルエーの便検索の行だけ）
-- PHP の Enum が先に入っていないと、`extra` の行で Doctrine が落ちる。PHP とスクレイパーは同じデプロイで出す（R10）
+- PHP の Enum が先に入っていないと、`extra` の行で Doctrine が落ちる。PHP とスクレイパーは同じデプロイで出す。戻すときは先に `extra` の行を消す（R10）
 **Scale/Scope**: `marue_ferry.py`・`port_notice.py`・`base.py`・`models.py`、PHP の Enum・View・Controller・テンプレート3〜4つとテスト
 
 未解決の NEEDS CLARIFICATION は無い。

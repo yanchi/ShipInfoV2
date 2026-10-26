@@ -52,18 +52,22 @@ DB のスキーマ（列・キー）は変えない。マイグレーション�
 ### 船ごとの読み取り結果
 
 ```
-_extra_voyages: dict[str, tuple[ExtraVoyage, ...] | None]
-  船名 → 臨時便のタプル（臨時便が無ければ空）
-         None ＝ 詳細ページが取れなかった・status-archive が無い・読めない臨時便があった
-                （この船の臨時便の行は消さない。R3・R6）
+ExtraParse(voyages: tuple[ExtraVoyage, ...], complete: bool)
+  voyages  ＝ 読めた臨時便（臨時便が無ければ空）。読めなかった臨時便は入れない
+  complete ＝ 読めない臨時便が1つも無かった（False ならこの船の臨時便の行は消さない。R3・R6）
+
+_extra_voyages: dict[str, ExtraParse | None]
+  船名 → ExtraParse
+         None ＝ 詳細ページが取れなかった・status-archive が無い（行も作らず、消しもしない）
 ```
 
 ## 行の作り方（parse_departures の最後）
 
 ```
-for ship, voyages in _extra_voyages (None は飛ばす):
-  for v in voyages:
+for ship, parsed in _extra_voyages (None は飛ばす):
+  for v in parsed.voyages:                            # complete が False でも、読めた臨時便は作る
     status, detail = 抜粋に合う行の状態（cancelled/suspended/delayed）か extra（R4）
+                     ※合う行は、方向が同じで日付が始発港の出港日と同じ行だけ（途中の港の行の範囲照合は使わない）
                      ※同じ船・方向・始発港の出港日の定期便が便検索（この回の記録か DB の _SEARCH_ROWS）にあれば、抜粋の行は当てず extra
     for stop in v.stops[:-1]:                         # 終点は作らない
       key = (v.route_id, stop.port_id, stop.departure_at.date(), ship)
@@ -83,7 +87,7 @@ for ship, voyages in _extra_voyages (None は飛ばす):
 ```
 super()._upsert_departures(records)
 written = 今回の臨時便の行のキー
-for 船 in _extra_voyages（None でない船）:
+for 船 in _extra_voyages（None でなく、complete が True の船）:
   rows = DB の臨時便の行（その船・マルエーの航路・scheduled_arrival_at > now）   # 出港日では絞らない（前日に始発港を出た便の始発港の行も読む）
   便ごと（route_id, scheduled_arrival_at）にまとめる
   for 便 in 便ごと:
