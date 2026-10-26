@@ -100,7 +100,7 @@
   - (c) DB に 10/28 那覇の波之上の便検索の行（`SEARCH_URL`）があり、この回にそのキーを検索していない → 作らない
   - (d) 便検索の記録が時刻なしの抜港（skipped）→ 臨時便の行は作らず、抜港の行の詳細は変えず、警告も出ない
   - (e) 10/28 那覇の検索結果に波之上の定期便（07:00。上り・始発港の出港日 10/28）があり、抜粋に「■10月28日（水）那覇港発上り便…欠航」→ 那覇以外の上りの臨時便の行（本部〜名瀬）は extra のまま（抜粋の行は定期便のもの。FR-004）
-  - (f) 抜粋に「■10月26日（月）名瀬港発下り便…欠航」（10/25 鹿児島発の定期便の行）を足した鹿児島航路ページ → 10/26 鹿児島発の臨時便の下りの3行は extra のまま（途中の港の行の範囲照合を臨時便には使わない。PR #87 レビュー）
+  - (f) 抜粋に「■10月26日（月）名瀬港発下り便…欠航」（10/25 鹿児島発の定期便の行）を足した鹿児島航路ページ → 10/26 鹿児島発の臨時便の下りの3行は extra のまま（この行は from_midway で日付が 10/26 なので、`_voyage_line()` の1段目でも当たってしまう。臨時便には from_midway の行を使わない。PR #87 レビュー）。あわせて「■10月26日（月）鹿児島新港発下り便…欠航」に書き換えると3行が cancelled（始発港から書いた行は当たる）
 - [ ] T014 [US1] FR-014 のテストを足す：臨時便の行（a の9行）を DB に入れた状態で、もう一度 `run_1026()` する。そのとき次が、臨時便の行を入れる前と同じになる
   - `_current_voyage`
   - 10/25 鹿児島発の定期便の `_voyage_departed()`・`_recorded_voyage()`
@@ -111,7 +111,7 @@
 
 - [ ] T015 [US1] `scraper/scraper/scrapers/marue_ferry.py` にモジュールの条件 `_SEARCH_ROWS = or_(DepartureStatus.source_url.is_(None), DepartureStatus.source_url == SEARCH_URL)` を作る。`_recorded_voyages()`・`_recorded_voyage()`・`_recorded_search_keys()`・`_needs_far_search()` の WHERE に足す（research R5）
 - [ ] T016 [US1] `parse_departures()` の最後に `_extra_records(records, now)` を呼んで、臨時便の行を足す（data-model「行の作り方」、research R4・R7）
-  - 状態：抜粋の便の行のうち、方向が同じで日付が始発港の出港日と同じ行（`_voyage_line()` の1段目だけ。途中の港の行の範囲照合は使わない）が cancelled・suspended・delayed ならそれ＋`_ship_detail_text()`、それ以外は `extra`＋`skip_note`。ただし同じ船・同じ航路で、始発港の出港日が同じ定期便がこの回の便検索の記録か DB の `_SEARCH_ROWS` の行にあれば（`_departure_date(route_id, arrival_at)` で求める）、抜粋の行は当てずに `extra`
+  - 状態：抜粋の便の行のうち、`from_midway` でなく、方向が同じで日付が始発港の出港日と同じ行（`_voyage_line()` は使わない。1段目でも `from_midway` の行が日付で当たるため。research R4）が cancelled・suspended・delayed ならそれ＋`_ship_detail_text()`、それ以外は `extra`＋`skip_note`。ただし同じ船・同じ航路で、始発港の出港日が同じ定期便がこの回の便検索の記録か DB の `_SEARCH_ROWS` の行にあれば（`_departure_date(route_id, arrival_at)` で求める）、抜粋の行は当てずに `extra`
   - `source_url` は詳細ページの URL、`freeze_after_departure=True`、`replace_scope` は付けない
   - ぶつかったとき、記録に出港時刻があって臨時便と違えば、便検索の記録の `status_detail` に足し（None なら「臨時便 HH:MM発あり」だけ）、`extra_voyage_key_conflict`（船・航路・港・日付・両方の時刻）を出す
 - [ ] T017 [US1] `make test-scraper`・`make lint-scraper`。既存テストの期待値は変えない

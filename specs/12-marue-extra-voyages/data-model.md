@@ -67,7 +67,7 @@ _extra_voyages: dict[str, ExtraParse | None]
 for ship, parsed in _extra_voyages (None は飛ばす):
   for v in parsed.voyages:                            # complete が False でも、読めた臨時便は作る
     status, detail = 抜粋に合う行の状態（cancelled/suspended/delayed）か extra（R4）
-                     ※合う行は、方向が同じで日付が始発港の出港日と同じ行だけ（途中の港の行の範囲照合は使わない）
+                     ※合う行は、from_midway でなく、方向が同じで日付が始発港の出港日と同じ行だけ（_voyage_line() は使わない）
                      ※同じ船・方向・始発港の出港日の定期便が便検索（この回の記録か DB の _SEARCH_ROWS）にあれば、抜粋の行は当てず extra
     for stop in v.stops[:-1]:                         # 終点は作らない
       key = (v.route_id, stop.port_id, stop.departure_at.date(), ship)
