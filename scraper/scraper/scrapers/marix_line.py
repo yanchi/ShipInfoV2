@@ -291,6 +291,37 @@ class MarixLine(BaseScraper):
         self._log.info("parsed_departures", records=len(records))
         return records
 
+    def _upsert_departures(self, records: list[dict]) -> tuple[int, int]:
+        """Base の処理の後、この回に詳細ページを読めた臨時便の、書かなくなった行を消す（research R7）。
+
+        臨時便の行には replace_source を付けないので、Base では消えない。
+        寄らなくなった港の行・出港日がずれた古い日付の行・種類が分からなかった回の予備ルートの行
+        （船名なし）が、臨時便の詳細ページの URL で見つかる。読めなかった回は消さない。
+        """
+        created, updated = super()._upsert_departures(records)
+        read_urls = getattr(self, "_read_extra_urls", None)
+        if not read_urls:
+            return created, updated
+        self.session.flush()  # 本番は autoflush=False。書いた行を読んでから消す
+        for url in read_urls:
+            written = {
+                (r["route_id"], r["port_id"], r["departure_date"], r["ship_name"] or "")
+                for r in records
+                if r.get("extra_voyage") and r["source_url"] == url
+            }
+            rows = self.session.execute(
+                select(DepartureStatus).where(DepartureStatus.source_url == url)
+            ).scalars()
+            for row in rows:
+                if (
+                    row.route_id,
+                    row.port_id,
+                    row.departure_date,
+                    row.ship_name,
+                ) not in written:
+                    self.session.delete(row)
+        return created, updated
+
     def _departures_from_detail(
         self,
         html: str,
@@ -320,6 +351,10 @@ class MarixLine(BaseScraper):
                 self._log.warning("detail_port_not_in_stops", url=url, port=name)
                 continue
             classes = single.get("class", [])
+            if is_extra and _SKIPPED_PORT_CLASS in classes:
+                # 臨時便が寄らない港には行を作らない。時刻も使わない（research R3。
+                # 寄らない港には定期便の時刻や別の日付が残っている）
+                continue
             if _SKIPPED_PORT_CLASS in classes:
                 # 便全体が欠航・運休のときは抜港ではなく便のステータス（FR-005）
                 status = (
@@ -358,7 +393,10 @@ class MarixLine(BaseScraper):
         for stop in stops[:-1]:
             info = by_port.get(stop.port_id)
             if info is None:
-                self._log.warning("detail_stop_missing", url=url, port_id=stop.port_id)
+                if not is_extra:  # 臨時便では寄らない港を by_port に入れない
+                    self._log.warning(
+                        "detail_stop_missing", url=url, port_id=stop.port_id
+                    )
                 continue
             departure_at = info["departure_at"]
             departure_date = (

@@ -106,21 +106,21 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 
 ### 寄らない港（research R3）
 
-- [ ] T010 [US3] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）:
+- [X] T010 [US3] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）:
   - (a) T008 と同じ 9/6 の一覧で、クイーンコーラルクロスの名瀬・亀徳・和泊・与論・本部の行が0行（`skipped` の行も無い）
   - (b) 9/27 の臨時便（`extra_up_naze_20260927.html`。上りの欄・`temporary alert`・info2 は「2026年9月27日 那覇港発 2026年9月27日 鹿児島新港 向け」にして、方向は今の判定で決まるようにする。名瀬発は US4 で確かめる）を今日 2026-09-27 で読む → 8/25 の行（2026・2027 とも）が0行。那覇・本部・与論・和泊・亀徳の行が0行
   - (c) (a) で、定期便（プラス）の和泊・与論の `skipped` は今までどおりある（定期便の `no_status` は変えない）
-- [ ] T011 [US3] `marix_line.py` の `_departures_from_detail()` で、`voyage_status == OperationStatusEnum.extra` のときは `no_status` の港を `by_port` に入れない（時刻も読まない）。寄港順の港が `by_port` に無いときの `detail_stop_missing` の警告は、臨時便では出さない（research R3）。引数は増やさない（PR #89 レビュー）。`make test-scraper`・`make lint-scraper`
+- [X] T011 [US3] `marix_line.py` の `_departures_from_detail()` で、`voyage_status == OperationStatusEnum.extra` のときは `no_status` の港を `by_port` に入れない（時刻も読まない）。寄港順の港が `by_port` に無いときの `detail_stop_missing` の警告は、臨時便では出さない（research R3）。引数は増やさない（PR #89 レビュー）。`make test-scraper`・`make lint-scraper`
 
 ### 後始末（research R7）
 
-- [ ] T012 [US3] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）。全部 `db_session.autoflush = False` にして `_run_departures()` を2回:
+- [X] T012 [US3] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）。全部 `db_session.autoflush = False` にして `_run_departures()` を2回:
   - (a) US3-3：1回目は 9/6 の臨時便の詳細ページの名瀬を `single temporary alert`（入港 9/6 20:00・出港 20:50）に書き換えて読む → 名瀬・クロスの `extra` の行ができる。2回目は元の `extra_down_20260906.html`（名瀬は `no_status`）→ 名瀬・クロスの行が消える。鹿児島の行は残る
   - (b) 1回目は元の 9/6 の臨時便、2回目は鹿児島の出港を「09月07日 09:00」に書き換えて読む → 9/6 の鹿児島・クロスの行が消え、9/7 の行ができる
   - (c) 1回目は一覧の臨時便のクラスを `route alert`・詳細ページ 500（種類 `unknown`。予備ルートの行が5港にできる）、2回目は `temporary alert`・詳細ページあり → 船名なしで `source_url = EXTRA_DOWN_0906` の行が全部消え、鹿児島・クロスの `extra` の行だけになる
   - (d) 2回目に臨時便の詳細ページが 500 → 1回目の行は全部残る（読めなかった回は消さない）
   - (e) 1回目に定期便（プラス）の行もある状態で (a) を流す → プラスの行は変わらない（`source_url` が違うので消えない）
-- [ ] T013 [US3] `marix_line.py` に `_upsert_departures(self, records)` を作る（Base を上書き）。`created, updated = super()._upsert_departures(records)` → `self.session.flush()` → `self._read_extra_urls` の URL ごとに、`DepartureStatus.source_url == url` の行のうち、`records` の中で `extra_voyage` かつ `source_url == url` の行のキー `(route_id, port_id, departure_date, ship_name)` に無い行を消す（`session.delete()`）。戻り値は Base のまま（research R7）。`parse_departures()` を通らずに呼ばれたとき（`_read_extra_urls` が無い）は何もしない。`make test-scraper`・`make lint-scraper`
+- [X] T013 [US3] `marix_line.py` に `_upsert_departures(self, records)` を作る（Base を上書き）。`created, updated = super()._upsert_departures(records)` → `self.session.flush()` → `self._read_extra_urls` の URL ごとに、`DepartureStatus.source_url == url` の行のうち、`records` の中で `extra_voyage` かつ `source_url == url` の行のキー `(route_id, port_id, departure_date, ship_name)` に無い行を消す（`session.delete()`）。戻り値は Base のまま（research R7）。`parse_departures()` を通らずに呼ばれたとき（`_read_extra_urls` が無い）は何もしない。`make test-scraper`・`make lint-scraper`
 
 **Checkpoint**: T010・T012 が通る・既存テストが全部通る → コミット
 
