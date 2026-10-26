@@ -736,7 +736,8 @@ class MarueFerry(BaseScraper):
                 status, detail = self._extra_status(voyage, records)
                 recorded = self._recorded_search_keys_of(voyage, today, last)
                 self._warn_extra_arrival_changed(voyage)
-                for stop in voyage.stops[:-1]:
+                skips = self._extra_skips_after(voyage)
+                for stop, skips_after in zip(voyage.stops[:-1], skips):
                     departure_at = stop.departure_at
                     key = (
                         voyage.route_id,
@@ -776,10 +777,25 @@ class MarueFerry(BaseScraper):
                             "scheduled_arrival_at": voyage.stops[-1].arrival_at,
                             "operated_by_company_id": None,
                             "source_url": self._ships[ship_name].detail_url,
+                            "skips_ports_after": skips_after,
                             "freeze_after_departure": True,
                         }
                     )
         return result
+
+    def _extra_skips_after(self, voyage: ExtraVoyage) -> list[bool]:
+        """終点以外の港ごとに、その港を出たあと終点までに臨時便が寄らない港があるか（16-extra-skip-flag R2）。
+
+        寄らない港は、航路の寄港順にあって【臨時便】の並びに無い港。並びは寄港順に読んでいる（_build_extra_voyage）。
+        便検索とぶつかって行を作らない港も並びにあるので寄港に数える。
+        """
+        order = [s.port_id for s in self._get_stops().get(voyage.route_id, [])]
+        called = {s.port_id for s in voyage.stops}
+        last = order.index(voyage.stops[-1].port_id)
+        return [
+            any(p not in called for p in order[order.index(stop.port_id) + 1 : last])
+            for stop in voyage.stops[:-1]
+        ]
 
     def _warn_extra_arrival_changed(self, voyage: ExtraVoyage) -> None:
         """終点の入港時刻が変わると、同じ臨時便が別の便（scheduled_arrival_at 違い）として2組に分かれる（R6 の既知の取りこぼし）。"""

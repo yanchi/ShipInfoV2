@@ -18,7 +18,13 @@ import structlog
 from sqlalchemy import select
 
 from scraper.db.models import DepartureStatus, OperationStatusEnum, Route
-from scraper.scrapers.marue_ferry import KAGOSHIMA_URL, SEARCH_URL, MarueFerry
+from scraper.scrapers.marue_ferry import (
+    KAGOSHIMA_URL,
+    SEARCH_URL,
+    ExtraStop,
+    ExtraVoyage,
+    MarueFerry,
+)
 from tests.conftest import read_fixture, setup_port_master
 
 NOW = datetime(2026, 10, 1, 12, 0)
@@ -3292,6 +3298,63 @@ def test_no_extra_rows_for_ports_the_extra_voyage_skips(db_session, marue_with_p
         for r in extra_rows(departures)
         if r["route_id"] == down.id and r["port_id"] in skipped_ports
     ]
+
+
+@resp_mock.activate
+def test_extra_rows_flag_ports_skipped_after_them(db_session, marue_with_ports):
+    """16 の SC-001：下りは鹿児島・名瀬のあとに亀徳・和泊・与論を抜く。本部のあとは終点だけ。上りは全港に寄る。"""
+    company, ports = marue_with_ports
+    down, up = routes_of(db_session, company)
+
+    _, _, departures, _ = run_1026(db_session, company.id, down_1025_rows())
+
+    got = {
+        (r["route_id"], r["port_id"]): r["skips_ports_after"]
+        for r in extra_rows(departures)
+    }
+    assert got[(down.id, ports["鹿児島"].id)] is True
+    assert got[(down.id, ports["名瀬"].id)] is True
+    assert got[(down.id, ports["本部"].id)] is False
+    assert not any(v for (route_id, _), v in got.items() if route_id == up.id)
+    # 便検索の行は臨時便の行ではないのでフラグを持たない
+    assert not any(
+        r.get("skips_ports_after")
+        for r in departures
+        if r not in extra_rows(departures)
+    )
+
+
+def test_extra_skips_after_counts_port_just_before_terminus(
+    db_session, marue_with_ports
+):
+    """16 の SC-002：終点の1個前（上りの名瀬）を抜く臨時便は、どの港のあとにも抜港がある。"""
+    company, ports = marue_with_ports
+    _, up = routes_of(db_session, company)
+    scraper = MarueFerry(db_session, company.id)
+    at = datetime(2026, 10, 28, 5, 0)
+
+    def voyage(*names):
+        stops = [
+            ExtraStop(ports[n].id, None if i == 0 else at, at)
+            for i, n in enumerate(names)
+        ]
+        stops[-1] = ExtraStop(ports[names[-1]].id, at, None)
+        return ExtraVoyage("フェリー波之上", up.id, tuple(stops), None)
+
+    assert (
+        scraper._extra_skips_after(
+            voyage("那覇", "本部", "与論", "和泊", "亀徳", "鹿児島")
+        )
+        == [True] * 5
+    )
+    assert (
+        scraper._extra_skips_after(
+            voyage("那覇", "本部", "与論", "和泊", "亀徳", "名瀬", "鹿児島")
+        )
+        == [False] * 6
+    )
+    # 終点の手前で終わる便：最後の港より後の港は数えない
+    assert scraper._extra_skips_after(voyage("与論", "亀徳", "名瀬")) == [True, False]
 
 
 @resp_mock.activate

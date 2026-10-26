@@ -2601,3 +2601,63 @@ def test_voyage_kind_without_url_is_regular_without_warning(
     with structlog.testing.capture_logs() as logs:
         assert scraper._voyage_kind(block, None) == "regular"
     assert "voyage_kind_not_fetched" not in {log["event"] for log in logs}
+
+
+# ---------------------------------------------------------------------------
+# 臨時便の抜港のフラグ（16-extra-skip-flag research R3）
+# ---------------------------------------------------------------------------
+
+
+@resp_mock.activate
+def test_extra_rows_flag_ports_skipped_after_them(db_session, marix_line_company):
+    """9/6：鹿児島のあと名瀬〜本部（no_status）を抜いて那覇へ。定期便の行はフラグを持たない。"""
+    records, ports, _, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([_DOWN_0906, _EXTRA_DOWN_0906], []),
+        _PAGES_0906,
+        date(2026, 9, 6),
+    )
+    down, _ = _routes(db_session, marix_line_company)
+
+    (kagoshima,) = _rows_for(records, ports, down, "鹿児島", CROSS)
+    assert kagoshima["skips_ports_after"] is True
+    assert not any(
+        r["skips_ports_after"] for r in _rows_for(records, ports, down, ship=PLUS)
+    )
+
+
+@resp_mock.activate
+def test_extra_row_flag_on_0907_upstream(db_session, marix_line_company):
+    """9/7：那覇のあと本部〜亀徳を抜く。名瀬のあとは終点だけ。定期便（欠航）の行はフラグを持たない。"""
+    records, ports, _, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_0907(extra_first=True),
+        _PAGES_0907,
+        date(2026, 9, 7),
+    )
+    _, up = _routes(db_session, marix_line_company)
+
+    (naha,) = _rows_for(records, ports, up, "那覇", CROSS)
+    (naze,) = _rows_for(records, ports, up, "名瀬", CROSS)
+    assert naha["skips_ports_after"] is True
+    assert naze["skips_ports_after"] is False
+    (motobu,) = _rows_for(records, ports, up, "本部", CROSS)
+    assert motobu["skips_ports_after"] is False
+
+
+@resp_mock.activate
+def test_extra_row_flag_ignores_ports_before_first_call(db_session, marix_line_company):
+    """9/27：名瀬発。名瀬より前の no_status（那覇〜亀徳）は抜港に数えない。"""
+    records, ports, _, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([], [_EXTRA_UP_0927]),
+        {EXTRA_UP_0927: "extra_up_naze_20260927.html"},
+        date(2026, 9, 27),
+    )
+    _, up = _routes(db_session, marix_line_company)
+
+    (naze,) = _rows_for(records, ports, up, "名瀬")
+    assert naze["skips_ports_after"] is False

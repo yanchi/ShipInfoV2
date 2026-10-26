@@ -23,11 +23,11 @@
 **Goal**: 両スクレイパーが臨時便の行に `skips_ports_after` を書く（FR-001〜FR-005）
 **Independent Test**: スクレイパーのテストで、10/27 下り・終点の1個前を抜く上り・9/6・9/7・9/27 の行のフラグが data-model.md の例どおり
 
-- [ ] T007 [US1] scraper/scraper/scrapers/marue_ferry.py：臨時便の港ごとに「寄港順でその港より後・終点より前に、【臨時便】の並びに無い港があるか」を求め、`_extra_records()` の行に `skips_ports_after` を詰める（research R2）
-- [ ] T008 [US1] scraper/tests/test_marue_ferry.py：10/27 波之上（鹿児島・名瀬 True、本部 False）／終点の1個前の名瀬を抜く上り（全行 True）／全港に寄る臨時便（False）／便検索とぶつかった港は抜港にしない／便検索の行は False
-- [ ] T009 [US1] scraper/scraper/scrapers/marix_line.py：`_parse_detail_departures()` で臨時便の `no_status` の港を集め、寄る港の最後の位置までのあいだで行ごとに `skips_ports_after` を詰める。定期便・予備ルートの行は False（research R3）
-- [ ] T010 [US1] scraper/tests/test_marix_line.py：9/6（鹿児島 True）／9/7（那覇 True・名瀬 False）／9/27（名瀬 False）／定期便の行は False
-- [ ] T011 [US1] `make test-scraper`・`make lint-scraper` を通してコミット
+- [X] T007 [US1] scraper/scraper/scrapers/marue_ferry.py：臨時便の港ごとに「寄港順でその港より後・終点より前に、【臨時便】の並びに無い港があるか」を求め、`_extra_records()` の行に `skips_ports_after` を詰める（research R2）
+- [X] T008 [US1] scraper/tests/test_marue_ferry.py：10/27 波之上（鹿児島・名瀬 True、本部 False）／終点の1個前の名瀬を抜く上り（全行 True）／全港に寄る臨時便（False）／便検索とぶつかった港は抜港にしない／便検索の行は False
+- [X] T009 [US1] scraper/scraper/scrapers/marix_line.py：`_parse_detail_departures()` で臨時便の `no_status` の港を集め、寄る港の最後の位置までのあいだで行ごとに `skips_ports_after` を詰める。定期便・予備ルートの行は False（research R3）
+- [X] T010 [US1] scraper/tests/test_marix_line.py：9/6（鹿児島 True）／9/7（那覇 True・名瀬 False）／9/27（名瀬 False）／定期便の行は False
+- [X] T011 [US1] `make test-scraper`・`make lint-scraper` を通してコミット
 
 ## Phase 4: User Story 2 - 抜港の判断をスクレイパーの1か所にまとめる（P2）
 
