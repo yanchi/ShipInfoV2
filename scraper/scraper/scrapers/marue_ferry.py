@@ -2,15 +2,18 @@
 MarueFerry (マルエーフェリー) scraper.
 
 処理の流れ（specs/4-departure-port-status research R3・R8・R9・R10）:
-  1. 便検索: POST https://www.aline-ferry.com/search/result.php
+  1. 船ステータス: GET https://www.aline-ferry.com/kagoshima/
+     a > div.route-head > div.ferry-name / div.tag-list span / div.situation-excerpt、a[href] が船別詳細ページ
+     便検索より先に読む（抜粋の便の行から、2日先以降で検索する日付を決めるため）
+  2. 便検索: POST https://www.aline-ferry.com/search/result.php
      startDate=YYYY年MM月DD日, startPort=<出発港コード>, endPort=<到着港コード>
      ※ startDate は必ず「YYYY年MM月DD日」形式で送る。ISO 形式（YYYY-MM-DD）だと日付に関係なく
        常に「※下記参照 / マリックスライン㈱」が返る（以前の不具合の原因）
      - 方向 × 終点以外の寄港地 × 日付（今日〜MARUE_SEARCH_DAYS_AHEAD 日先）で検索する
-     - 今日・明日は毎回、2日先以降は検索キーごとに MARUE_FAR_SEARCH_INTERVAL_HOURS たったら検索する
+     - 今日・明日は毎回、2日先以降は検索キーごとに MARUE_FAR_SEARCH_INTERVAL_HOURS たったら検索する。
+       ただし抜粋に便の行がある日付と、前回に船名つきで重い状態（欠航・運休・条件付）を付けた日付は、
+       間隔に関係なく毎回検索する（公式の発表をすぐ反映し、行が消えたらすぐ運航予定に戻すため）
      - 検索の間に MARUE_SEARCH_DELAY_SECONDS 待つ
-  2. 船ステータス: GET https://www.aline-ferry.com/kagoshima/
-     a > div.route-head > div.ferry-name / div.tag-list span / div.situation-excerpt、a[href] が船別詳細ページ
   3. 船別詳細ページ: 各船の a[href] を GET（港別情報の抽出に使う）
 
 検索結果（table.s-result tbody tr）:
@@ -29,15 +32,22 @@ MarueFerry (マルエーフェリー) scraper.
     検索結果ごとに行を作る
     - 0件 → no_service
     - 他社運航 → no_service + operated_by_company_id（マリックスライン）
-    - マルエーの船 → 便を (船名, 航路, 下船日時) で特定し、船ごとに「まだ着いていない一番早い便」の行に
-      船ステータス（＋港別情報）を入れる。それより後の便は status=None（運航予定）
+    - マルエーの船 → 便を (船名, 航路, 下船日時) で特定し、船ごとに「まだ着いていない一番早い便」（今の便）の行に
+      船ステータス（＋港別情報）を入れる。それより後の便は、抜粋にその便の行があればその状態を全港に入れ
+      （港別情報は使わない）、無ければ status=None（運航予定）
     港別情報（FR-006、utils/port_notice.py）:
     - 船ステータスが欠航・運休・便なし → 全港そのまま
     - 抜粋と船別詳細ページの本文から、言及された港を 抜港（寄港いたしません等）→ skipped、港変更・条件付 → delayed にする
+    - 「臨時便運航」は operating として読む（運休・条件付などの語があればそちらが先）
     - 船ブロックのタグは全部読む（一番重いものが船のステータス。条件付・スケジュール変更かどうかは別に持つ）
     - タグは船の全便ぶんをまとめたもの（「■10月20日(火)那覇発上り便…条件付き運航」「■10月21日(水)鹿児島新港発
       下り便…欠航」のように便ごとの状態が抜粋に並ぶ）。抜粋に便が2つ以上あり、その便（始発港の出港日・上り/下り）の
       行があれば、船のステータスの代わりにその行の状態を使う（航路単位も同じ）。行が無ければ船のステータスのまま（安全側）
+    - 便と行の照合は出港日の一致が先。途中の港から書いた行（「名瀬発下り便」）だけ、出港日〜下船日の範囲でも合わせる
+    - 抜粋に便の行があるのに今の便に合う行が無いとき（公式は変更のある便に行を書く）:
+      出港前なら operating（港別情報は当てない）。ただしタグのほうが行より重い・条件付の行が無いなど、
+      行の無い便の変更かもしれないときは船のタグのまま（voyage_tag_heavier_than_lines）。
+      出港済みなら、公式は過ぎた便の行を消すので、前回記録したその港のステータスに戻す
     - 船が条件付だけ（スケジュール変更・遅延のタグが無い）で港別情報がある → 言及の無い港は operating。
       港別情報が無い → 全港 delayed（port_notice_unmatched）。
       スケジュール変更・遅延のタグもある船は言及の無い港も船のステータスのまま（時刻が変わっているため）
@@ -46,7 +56,8 @@ MarueFerry (マルエーフェリー) scraper.
     - skipped は港の行だけ。航路単位（operation_statuses）には書かない
     すべて freeze_after_departure=True（出港済みの行は確定）、replace_scope=(route, port, date)
 
-raw_html_hash: 鹿児島航路ページの HTML ＋ 今日の始発港2つの検索結果を正規化した文字列
+raw_html_hash: 鹿児島航路ページの HTML ＋ 今日の始発港2つの検索結果を正規化した文字列 ＋ 航路ごとの「今日の始発港の便が出港済みか」
+  （出港時刻をまたぐと、同じ HTML でも航路単位の判定が変わるため）
 valid_date: 常に date.today()
 """
 
@@ -87,6 +98,9 @@ _SEVERITY = {
     OperationStatusEnum.operating: 1,
 }
 
+# 同じ船・同じ航路で下船日時の差がこれ未満なら同じ便とみなす（1往復に2日以上かかるので、同じ航路を1日に2回走ることはない）
+_SAME_VOYAGE = timedelta(hours=24)
+
 # 条件付（delayed）として読むタグ・便の行の語。「寄港地変更」は「港変更」を含まない（寄・港・地・変・更）
 _CONDITIONAL_WORDS = ("条件付", "港変更", "寄港地変更", "抜港")
 
@@ -111,6 +125,8 @@ class VoyageStatus:
     status: OperationStatusEnum
     conditional: bool
     schedule_changed: bool
+    # 途中の港から書いた行（「■10月22日(木)名瀬発下り便…」）か。この行だけ出港日〜到着日の範囲で照合する（R7）
+    from_midway: bool = False
 
 
 @dataclass(frozen=True)
@@ -127,6 +143,27 @@ class ShipInfo:
     schedule_changed: bool = False
     # 抜粋の便ごとの状態（書き方が違って読めなければ空）
     voyages: tuple[VoyageStatus, ...] = ()
+    # 今の便に合う行が無く、出港前なので通常運航とみなした（FR-011）。港別情報は当てない
+    assumed_operating: bool = False
+    # 今の便に合う行が無く、出港済みなので前回記録したステータスに戻す（R7）。港別情報は当てない
+    use_recorded: bool = False
+    # use_recorded のうち、タグのほうが行より重い（行の無い便の変更かもしれない）。
+    # まだ出港していない港は記録でなくタグ＋港別情報で決める
+    tag_over_recorded: bool = False
+
+
+@dataclass(frozen=True)
+class RecordedVoyage:
+    """前回までに記録した、ある便の行（departure_statuses）。"""
+
+    # (port_id, 出港日) → (status, status_detail)。status が NULL の行（運航予定）は入れない
+    ports: dict[tuple[int, date], tuple[OperationStatusEnum, str | None]]
+    # 記録した出港時刻（始発港の検索が失敗した回でも出港済みか分かるように）
+    departures: tuple[datetime, ...]
+    # skipped・unknown を除いた、一番重いステータス
+    worst: OperationStatusEnum | None
+    # worst を取った行の status_detail（今の抜粋は他の便の話なので使わない）
+    worst_detail: str | None = None
 
 
 class MarueFerry(BaseScraper):
@@ -143,11 +180,21 @@ class MarueFerry(BaseScraper):
         self._valid_date = date.today()
         self._searches: dict[tuple[int, int, date], list[SearchRow] | None] = {}
         self._search_count = 0
+        self._recorded_cache: dict[tuple[str, int, datetime], RecordedVoyage] = {}
 
         routes = [r for r in self._load_routes() if r]
         self._stops = self._load_stops(routes)
+        self._resolver = PortResolver.from_session(self.session)
         codes = self._load_port_codes()
         now = datetime.now()
+
+        # 船ステータス（鹿児島航路ページ）。便の行から 2日先以降の検索キーを決めるので、便検索より先に読む
+        resp = self.http.get(KAGOSHIMA_URL, timeout=30)
+        resp.raise_for_status()
+        resp.encoding = resp.apparent_encoding
+        self._ships = self._parse_ships(resp.text)
+        self._voyage_cache: dict[tuple[str, int, date, datetime | None], ShipInfo] = {}
+        forced = self._voyage_search_keys(routes) | self._recorded_search_keys(routes)
 
         for offset in range(settings.marue_search_days_ahead + 1):
             d = self._valid_date + timedelta(days=offset)
@@ -160,7 +207,11 @@ class MarueFerry(BaseScraper):
                 end_code = codes.get(stops[-1].port_id)
                 for stop in stops[:-1]:
                     key = (route.id, stop.port_id, d)
-                    if offset >= 2 and not self._needs_far_search(key, now):
+                    if (
+                        offset >= 2
+                        and key not in forced
+                        and not self._needs_far_search(key, now)
+                    ):
                         continue
                     start_code = codes.get(stop.port_id)
                     if start_code is None or end_code is None:
@@ -169,13 +220,6 @@ class MarueFerry(BaseScraper):
                         )
                         continue
                     self._searches[key] = self._search(start_code, end_code, d)
-
-        # 船ステータス（鹿児島航路ページ）
-        resp = self.http.get(KAGOSHIMA_URL, timeout=30)
-        resp.raise_for_status()
-        resp.encoding = resp.apparent_encoding
-        self._ships = self._parse_ships(resp.text)
-        self._voyage_cache: dict[tuple[str, int, date], ShipInfo] = {}
 
         # 船別詳細ページ（港別情報の抽出用。失敗しても続ける）
         self._ship_details: dict[str, str | None] = {}
@@ -199,7 +243,78 @@ class MarueFerry(BaseScraper):
             + "\n<!-- searches: "
             + self._normalized_origin_searches(routes)
             + " -->"
+            # 同じ検索結果のまま出港時刻をまたいだら、航路単位（出港前後で判定が変わる）も更新する
+            + "\n<!-- departed: "
+            + self._origin_departed(routes, now)
+            + " -->"
         )
+
+    def _voyage_search_keys(self, routes: list[Route]) -> set[tuple[int, int, date]]:
+        """抜粋の便の行から決まる、2日先以降の検索キー（間隔に関係なく検索する。R5）。
+
+        途中の港から書いた行（from_midway）は始発の出港日が1日前のこともあるので、行の日付と前日の両方を
+        始発の出港日とみなす。始発港の行は行の日付だけ（前日の存在しない便は検索しない）。
+        """
+        directions = self._route_directions()
+        first = self._valid_date + timedelta(days=2)
+        last = self._valid_date + timedelta(days=settings.marue_search_days_ahead)
+        keys: set[tuple[int, int, date]] = set()
+        for ship in self._ships.values():
+            for voyage in ship.voyages:
+                route = next(
+                    (r for r in routes if directions.get(r.id) == voyage.direction),
+                    None,
+                )
+                stops = self._stops.get(route.id, []) if route else []
+                if route is None or len(stops) < 2:
+                    continue
+                starts = [voyage.departure_date]
+                if voyage.from_midway:
+                    starts.append(voyage.departure_date - timedelta(days=1))
+                for start in starts:
+                    for stop in stops[:-1]:
+                        d = start + timedelta(
+                            days=stop.day_offset - stops[0].day_offset
+                        )
+                        if first <= d <= last:
+                            keys.add((route.id, stop.port_id, d))
+        return keys
+
+    def _recorded_search_keys(self, routes: list[Route]) -> set[tuple[int, int, date]]:
+        """前回に状態を付けた 2日先以降のキーも、間隔に関係なく検索する（便の行が消えたとき。R5）。
+
+        取り消されたときに古いままだと困る重い状態だけ。ship_name が空の行（他社運航・0件）・skipped・NULL・
+        通常運航（operating）の行は含めない。含めると行が残るあいだ毎回検索になり、間隔がほぼ効かなくなる。
+        """
+        if not routes:
+            return set()
+        today = self._valid_date
+        rows = self.session.execute(
+            select(
+                DepartureStatus.route_id,
+                DepartureStatus.port_id,
+                DepartureStatus.departure_date,
+            )
+            .where(
+                DepartureStatus.route_id.in_([r.id for r in routes]),
+                DepartureStatus.ship_name != "",
+                DepartureStatus.status.in_(
+                    [
+                        s.value
+                        for s in (
+                            OperationStatusEnum.cancelled,
+                            OperationStatusEnum.suspended,
+                            OperationStatusEnum.delayed,
+                        )
+                    ]
+                ),
+                DepartureStatus.departure_date >= today + timedelta(days=2),
+                DepartureStatus.departure_date
+                <= today + timedelta(days=settings.marue_search_days_ahead),
+            )
+            .distinct()
+        ).all()
+        return {(r.route_id, r.port_id, r.departure_date) for r in rows}
 
     def _needs_far_search(self, key: tuple[int, int, date], now: datetime) -> bool:
         """2日先以降の検索キー：行が無いか、最後の確認から MARUE_FAR_SEARCH_INTERVAL_HOURS たっていれば検索する。"""
@@ -216,6 +331,22 @@ class MarueFerry(BaseScraper):
         return last_checked < now - timedelta(
             hours=settings.marue_far_search_interval_hours
         )
+
+    def _origin_departed(self, routes: list[Route], now: datetime) -> str:
+        """航路ごとの、今日の始発港の便が出港済みか（raw_html_hash に入れる）。"""
+        result = {}
+        for route in routes:
+            stops = self._stops.get(route.id, [])
+            rows = (
+                self._searches.get((route.id, stops[0].port_id, self._valid_date))
+                if stops
+                else None
+            )
+            first = next((r for r in rows or [] if not r.is_other_company), None)
+            result[str(route.id)] = bool(
+                first and first.departure_at and first.departure_at <= now
+            )
+        return json.dumps(result, sort_keys=True)
 
     def _normalized_origin_searches(self, routes: list[Route]) -> str:
         result = {}
@@ -367,7 +498,15 @@ class MarueFerry(BaseScraper):
                 "ship_not_found", ship=marue_rows[0].ship_name, route_id=route.id
             )
             return OperationStatusEnum.unknown, None, KAGOSHIMA_URL
-        ship = self._for_voyage(ship, route.id, valid_date)
+        original = ship
+        ship = self._for_voyage(ship, route.id, valid_date, marue_rows[0].arrival_at)
+        if ship.tag_over_recorded:
+            ship = original
+        elif ship.use_recorded and marue_rows[0].arrival_at is not None:
+            recorded = self._recorded_voyage(
+                ship.name, route.id, marue_rows[0].arrival_at
+            )
+            return ship.status, recorded.worst_detail, KAGOSHIMA_URL
         return ship.status, self._ship_detail_text(ship), KAGOSHIMA_URL
 
     def _worst_ship_status(
@@ -406,7 +545,7 @@ class MarueFerry(BaseScraper):
         ships = getattr(self, "_ships", {})
         marix_id = self._marix_company_id()
         now = datetime.now()
-        self._resolver = PortResolver.from_session(self.session)
+        self._get_resolver()
         self._notices: dict[str, list[PortNotice]] = {}
 
         # 船ごとに「まだ着いていない一番早い便」(route_id, arrival_at) を決める（research R9）
@@ -493,10 +632,12 @@ class MarueFerry(BaseScraper):
                     continue
                 if current_voyage.get(row.ship_name) == (route_id, row.arrival_at):
                     status, detail = self._current_voyage_status(
-                        row.ship_name, ships, route_id, port_id
+                        row.ship_name, ships, route_id, port_id, d, row.departure_at
                     )
                 else:
-                    status, detail = None, None  # 運航予定（FR-021）
+                    status, detail = self._future_voyage_status(
+                        row.ship_name, ships, route_id, row
+                    )
                 records.append(
                     {
                         **base,
@@ -548,11 +689,26 @@ class MarueFerry(BaseScraper):
         ship = getattr(self, "_ships", {}).get(ship_name)
         if ship is not None:
             ship = self._for_current_voyage(ship)
-        if ship is None or ship.status in (
-            None,
-            OperationStatusEnum.cancelled,
-            OperationStatusEnum.suspended,
-            OperationStatusEnum.no_service,
+        if ship is not None and ship.use_recorded:
+            # 港別情報は見ない。航行中の抜港は、前回その港に付けた skipped をそのまま保つ
+            status, detail = self._recorded_voyage(
+                ship_name, route_id, cur[1]
+            ).ports.get((port_id, d), (None, None))
+            if status == OperationStatusEnum.skipped and detail:
+                return detail
+            if not ship.tag_over_recorded:
+                return None  # 港別情報は見ない
+            ship = self._ships[ship_name]  # タグのほうが重い。タグ＋港別情報で決める
+        if (
+            ship is None
+            or ship.assumed_operating
+            or ship.status
+            in (
+                None,
+                OperationStatusEnum.cancelled,
+                OperationStatusEnum.suspended,
+                OperationStatusEnum.no_service,
+            )
         ):
             return None
         notice = next(
@@ -565,13 +721,7 @@ class MarueFerry(BaseScraper):
         )
         if notice is None:
             return None
-        stops = {s.port_id: s for s in self._stops.get(route_id, [])}
-        if port_id not in stops:
-            return None
-        end_offset = max(stops.values(), key=lambda s: s.stop_order).day_offset
-        departure_date = cur[1].date() - timedelta(
-            days=end_offset - stops[port_id].day_offset
-        )
+        departure_date = self._departure_date(route_id, cur[1], port_id)
         return notice.sentence if departure_date == d else None
 
     def _recorded_voyages(
@@ -606,14 +756,13 @@ class MarueFerry(BaseScraper):
             .order_by(func.max(DepartureStatus.checked_at).desc())
         ).all()
 
-        same_voyage = timedelta(hours=24)
         accepted = list(searched)
         result: list[tuple[str, int, datetime]] = []
         for r in rows:
             if any(
                 ship == r.ship_name
                 and route_id == r.route_id
-                and abs(arrival - r.scheduled_arrival_at) < same_voyage
+                and abs(arrival - r.scheduled_arrival_at) < _SAME_VOYAGE
                 for ship, route_id, arrival in accepted
             ):
                 continue
@@ -622,8 +771,36 @@ class MarueFerry(BaseScraper):
             result.append(voyage)
         return result
 
+    def _future_voyage_status(
+        self, ship_name: str, ships: dict[str, ShipInfo], route_id: int, row: SearchRow
+    ) -> tuple[OperationStatusEnum | None, str | None]:
+        """今の便より後の便の行：抜粋にその便の行があればその状態（全港同じ）、無ければ運航予定。
+
+        港別情報は使わない（FR-004。どの便の話か書いていないことが多い）。
+        """
+        ship = ships.get(ship_name)
+        if ship is None or not ship.voyages or row.arrival_at is None:
+            return None, None
+        origin_date = self._departure_date(route_id, row.arrival_at)
+        if origin_date is None:
+            return None, None
+        line = self._voyage_line(ship, route_id, origin_date, row.arrival_at.date())
+        if line is None:
+            return None, None
+        if len(ship.voyages) >= 2:
+            ship = replace(ship, status=line.status)
+        if ship.status is None:
+            return None, None
+        return ship.status, self._ship_detail_text(ship)
+
     def _current_voyage_status(
-        self, ship_name: str, ships: dict[str, ShipInfo], route_id: int, port_id: int
+        self,
+        ship_name: str,
+        ships: dict[str, ShipInfo],
+        route_id: int,
+        port_id: int,
+        d: date,
+        departure_at: datetime | None,
     ) -> tuple[OperationStatusEnum, str | None]:
         """今の便の行のステータス：船ステータス（船ブロックに無ければ unknown）に港別情報を重ねる（FR-006）。"""
         ship = ships.get(ship_name)
@@ -633,7 +810,23 @@ class MarueFerry(BaseScraper):
             )
             return OperationStatusEnum.unknown, None
 
+        original = ship
         ship = self._for_current_voyage(ship)
+        if (
+            ship.use_recorded
+            and ship.tag_over_recorded
+            and (departure_at is None or departure_at > datetime.now())
+        ):
+            ship = original  # まだ出港していない港は、タグのほうが重いのでタグ＋港別情報で決める
+        if ship.use_recorded:
+            # 港別情報は見ない。前回その港に付けたステータスのまま（無ければその便で一番重いもの）
+            arrival_at = self._current_voyage[ship_name][1]
+            recorded = self._recorded_voyage(ship_name, route_id, arrival_at)
+            if (port_id, d) in recorded.ports:
+                return recorded.ports[(port_id, d)]
+            return ship.status, recorded.worst_detail
+        if ship.assumed_operating:
+            return OperationStatusEnum.operating, None
         if ship.status in (
             OperationStatusEnum.cancelled,
             OperationStatusEnum.suspended,
@@ -678,58 +871,223 @@ class MarueFerry(BaseScraper):
         if cur is None:
             return ship
         route_id, arrival_at = cur
-        stops = getattr(self, "_stops", {}).get(route_id, [])
-        if not stops:
+        origin_date = self._departure_date(route_id, arrival_at)
+        if origin_date is None:
             return ship
-        origin_date = arrival_at.date() - timedelta(
-            days=stops[-1].day_offset - stops[0].day_offset
-        )
-        return self._for_voyage(ship, route_id, origin_date)
+        return self._for_voyage(ship, route_id, origin_date, arrival_at)
 
-    def _for_voyage(self, ship: ShipInfo, route_id: int, origin_date: date) -> ShipInfo:
-        """抜粋にその便（始発港の出港日・方向）の行があれば、その行の状態にした ShipInfo。
+    def _departure_date(
+        self, route_id: int, arrival_at: datetime, port_id: int | None = None
+    ) -> date | None:
+        """下船日時の便が、port_id の港（省略すれば始発港）を出る日。
 
-        タグは全便ぶんなので、別の便の「欠航」が付いていることがある。行が無ければ船のまま（安全側）。
-        行が1つだけならタグはその便のものなので、タグのほうを使う（抜粋の文より確か）。
-        行の日付は始発港（鹿児島・那覇）の出港日とみなす。途中の港から出る便の行（「■10月22日(木)名瀬発
-        下り便…」）は下りだと1日ずれて合わないが、そのときも船のまま（安全側）。
-        港の行ごとに何度も呼ばれるので、結果は (船名, route_id, 出港日) でキャッシュする（警告も1回）。
+        出港日 ＝ 下船日 −（終点の day_offset − その港の day_offset）。航路や港が分からなければ None。
         """
-        if len(ship.voyages) < 2:
+        stops = self._get_stops().get(route_id, [])
+        start = (
+            stops[0]
+            if port_id is None and stops
+            else next((s for s in stops if s.port_id == port_id), None)
+        )
+        if start is None:
+            return None
+        return arrival_at.date() - timedelta(
+            days=stops[-1].day_offset - start.day_offset
+        )
+
+    def _for_voyage(
+        self,
+        ship: ShipInfo,
+        route_id: int,
+        origin_date: date,
+        arrival_at: datetime | None,
+    ) -> ShipInfo:
+        """今の便（始発港の出港日・方向・下船日時）の状態にした ShipInfo。
+
+        タグは全便ぶんなので、別の便の「欠航」が付いていることがある。
+        - 便の行が0、またはタグが読めない船 → 船のまま
+        - 行が合う → 行が1つだけならタグ（抜粋の文より確か）、2つ以上なら行の状態
+        - 行が1つ以上あるのに合わない（公式は変更のある便に行を書く。FR-011）
+          - 出港前 → 通常運航。ただし行の無い便の変更かもしれないとき（タグのほうが重い等）は船のまま
+          - 出港済み → 前回記録したステータス（公式は過ぎた便の行を消すので、行が無いのは根拠にならない）
+        港の行ごとに何度も呼ばれるので、結果は (船名, route_id, 出港日, 下船日時) でキャッシュする（警告も1回）。
+        """
+        if ship.status is None or not ship.voyages:
             return ship
         if not hasattr(self, "_voyage_cache"):
             self._voyage_cache = {}
-        key = (ship.name, route_id, origin_date)
+        key = (ship.name, route_id, origin_date, arrival_at)
         if key not in self._voyage_cache:
-            self._voyage_cache[key] = self._match_voyage(ship, route_id, origin_date)
+            self._voyage_cache[key] = self._match_voyage(
+                ship, route_id, origin_date, arrival_at
+            )
         return self._voyage_cache[key]
 
-    def _match_voyage(
-        self, ship: ShipInfo, route_id: int, origin_date: date
-    ) -> ShipInfo:
+    def _voyage_line(
+        self, ship: ShipInfo, route_id: int, origin_date: date, arrival_date: date
+    ) -> VoyageStatus | None:
+        """その便（始発港の出港日〜下船日・方向）に合う抜粋の行。無ければ None。
+
+        1. 出港日が同じ行を優先する
+        2. 無ければ、途中の港から書いた行だけ、出港日〜下船日の範囲で合わせる（R1・R7）
+        """
         direction = self._route_directions().get(route_id)
-        voyage = next(
+        same_direction = [v for v in ship.voyages if v.direction == direction]
+        exact = next(
+            (v for v in same_direction if v.departure_date == origin_date), None
+        )
+        if exact is not None:
+            return exact
+        return next(
             (
                 v
-                for v in ship.voyages
-                if v.departure_date == origin_date and v.direction == direction
+                for v in same_direction
+                if v.from_midway and origin_date <= v.departure_date <= arrival_date
             ),
             None,
         )
-        if voyage is None:
+
+    def _match_voyage(
+        self,
+        ship: ShipInfo,
+        route_id: int,
+        origin_date: date,
+        arrival_at: datetime | None,
+    ) -> ShipInfo:
+        arrival_date = arrival_at.date() if arrival_at else origin_date
+        voyage = self._voyage_line(ship, route_id, origin_date, arrival_date)
+        if voyage is not None:
+            if len(ship.voyages) < 2:
+                return ship
+            return replace(
+                ship,
+                status=voyage.status,
+                conditional=voyage.conditional,
+                schedule_changed=voyage.schedule_changed,
+            )
+
+        def warn(assumed: str) -> None:
             self._log.warning(
                 "voyage_not_in_excerpt",
                 ship=ship.name,
                 route_id=route_id,
                 date=str(origin_date),
+                assumed=assumed,
             )
+
+        worst_line = max(_SEVERITY.get(v.status, 0) for v in ship.voyages)
+        tag_heavier = _SEVERITY.get(ship.status, 0) > worst_line
+        conditional_missing = ship.conditional and not any(
+            v.conditional for v in ship.voyages
+        )
+        # 行の無い便の変更（欠航・条件付）がどこかにあり、今の便かもしれない
+        tag_unsafe = tag_heavier or conditional_missing
+        if tag_unsafe:
+            self._log.warning(
+                "voyage_tag_heavier_than_lines",
+                ship=ship.name,
+                route_id=route_id,
+                date=str(origin_date),
+                tag=ship.status.value,
+                heaviest_line=max(
+                    (v.status for v in ship.voyages),
+                    key=lambda st: _SEVERITY.get(st, 0),
+                ).value,
+                reason="tag_heavier" if tag_heavier else "conditional_missing",
+            )
+
+        if self._voyage_departed(ship.name, route_id, origin_date, arrival_at):
+            recorded = self._recorded_voyage(ship.name, route_id, arrival_at)
+            if recorded.worst is None:
+                warn("ship_status")
+                return ship
+            warn("recorded")
+            return replace(
+                ship,
+                status=recorded.worst,
+                use_recorded=True,
+                tag_over_recorded=tag_unsafe,
+            )
+
+        if tag_unsafe:
             return ship
+        warn("operating")
         return replace(
             ship,
-            status=voyage.status,
-            conditional=voyage.conditional,
-            schedule_changed=voyage.schedule_changed,
+            status=OperationStatusEnum.operating,
+            conditional=False,
+            schedule_changed=False,
+            assumed_operating=True,
         )
+
+    def _voyage_departed(
+        self,
+        ship_name: str,
+        route_id: int,
+        origin_date: date,
+        arrival_at: datetime | None,
+    ) -> bool:
+        """その便がもう出港したか（R7）。始発の出港日が今日より前、または一番早い乗船日時が今以前。"""
+        if arrival_at is None:
+            return False
+        if origin_date < getattr(self, "_valid_date", date.today()):
+            return True
+        times = [
+            row.departure_at
+            for (rid, _, _), rows in getattr(self, "_searches", {}).items()
+            if rid == route_id
+            for row in rows or []
+            if not row.is_other_company
+            and row.ship_name == ship_name
+            and row.arrival_at == arrival_at
+            and row.departure_at is not None
+        ]
+        times.extend(self._recorded_voyage(ship_name, route_id, arrival_at).departures)
+        return bool(times) and min(times) <= datetime.now()
+
+    def _recorded_voyage(
+        self, ship_name: str, route_id: int, arrival_at: datetime
+    ) -> RecordedVoyage:
+        """前回までに記録したその便の行。同じ船・同じ航路で下船日時の差が24時間未満なら同じ便（1回の実行で1度だけ引く）。"""
+        if not hasattr(self, "_recorded_cache"):
+            self._recorded_cache = {}
+        key = (ship_name, route_id, arrival_at)
+        if key not in self._recorded_cache:
+            rows = self.session.execute(
+                select(
+                    DepartureStatus.port_id,
+                    DepartureStatus.departure_date,
+                    DepartureStatus.status,
+                    DepartureStatus.status_detail,
+                    DepartureStatus.scheduled_departure_at,
+                ).where(
+                    DepartureStatus.ship_name == ship_name,
+                    DepartureStatus.route_id == route_id,
+                    DepartureStatus.scheduled_arrival_at > arrival_at - _SAME_VOYAGE,
+                    DepartureStatus.scheduled_arrival_at < arrival_at + _SAME_VOYAGE,
+                )
+            ).all()
+            ports = {
+                (r.port_id, r.departure_date): (
+                    OperationStatusEnum(r.status),
+                    r.status_detail,
+                )
+                for r in rows
+                if r.status is not None
+            }
+            known = [(st, detail) for st, detail in ports.values() if st in _SEVERITY]
+            heaviest = max(known, key=lambda x: _SEVERITY[x[0]]) if known else None
+            self._recorded_cache[key] = RecordedVoyage(
+                ports=ports,
+                departures=tuple(
+                    r.scheduled_departure_at
+                    for r in rows
+                    if r.scheduled_departure_at is not None
+                ),
+                worst=heaviest[0] if heaviest else None,
+                worst_detail=heaviest[1] if heaviest else None,
+            )
+        return self._recorded_cache[key]
 
     def _route_directions(self) -> dict[int, str]:
         if not hasattr(self, "_directions"):
@@ -822,9 +1180,42 @@ class MarueFerry(BaseScraper):
                     status,
                     conditional,
                     schedule_changed,
+                    from_midway=self._is_from_midway(
+                        m.group("place"), m.group("direction")
+                    ),
                 )
             )
         return tuple(voyages)
+
+    def _is_from_midway(self, place: str, direction: str) -> bool:
+        """日付と方向の間の文字列の出発港が、その方向の航路の途中の港か。"""
+        # 「発」があれば最後の「発」より前、無ければ方向の手前の全部。最後に出てくる港が出発港
+        # （「名瀬経由 那覇港発」のように先に別の港名があっても、発の港を取る）
+        head = place.rpartition("発")[0] if "発" in place else place
+        occurrences = self._get_resolver().find_occurrences(head)
+        if not occurrences:
+            return False
+        port = occurrences[-1][2]
+        route_id = next(
+            (
+                rid
+                for rid, label in self._route_directions().items()
+                if label == direction
+            ),
+            None,
+        )
+        stops = self._get_stops().get(route_id, [])
+        return any(s.port_id == port.id for s in stops[1:-1])
+
+    def _get_resolver(self) -> PortResolver:
+        if not hasattr(self, "_resolver"):
+            self._resolver = PortResolver.from_session(self.session)
+        return self._resolver
+
+    def _get_stops(self) -> dict[int, list[RouteStop]]:
+        if not hasattr(self, "_stops"):
+            self._stops = self._load_stops([r for r in self._load_routes() if r])
+        return self._stops
 
     def _load_routes(self) -> tuple:
         """(down_route, up_route) を返す。origin_port で判定。"""
@@ -888,6 +1279,10 @@ class MarueFerry(BaseScraper):
             return OperationStatusEnum.suspended
         if "通常" in text:
             return OperationStatusEnum.operating
+        # 臨時便は運休・条件付などの語が無いときだけ（先に当てると「臨時便運休」が運航になる）。
+        # 「臨時休航」「臨時欠便」のように休・欠を含む言い方も運航にはしない（読めない扱いで警告する）
+        if "臨時" in text and not any(w in text for w in ("休", "欠")):
+            return OperationStatusEnum.operating
         return None
 
 
@@ -895,7 +1290,7 @@ class MarueFerry(BaseScraper):
 # 「10/5(月)鹿児島新港18:00発／下り便…スケジュール変更・条件付運航」。次の行の日付の手前まで
 _VOYAGE_LINE = re.compile(
     r"(?P<month>\d{1,2})(?:月|/)(?P<day>\d{1,2})日?\s*[(（][^)）]*[)）]"
-    r"[^…■]*?(?P<direction>上り|下り)便?\s*(?:…|\.{3})+\s*"
+    r"(?P<place>[^…■]*?)(?P<direction>上り|下り)便?\s*(?:…|\.{3})+\s*"
     r"(?P<status>.+?)(?=■|\d{1,2}(?:月|/)\d{1,2}日?\s*[(（]|$)",
     re.S,
 )

@@ -15,7 +15,7 @@ DB のスキーマは変えない。`departure_statuses`・`operation_statuses` 
 | status | OperationStatusEnum | — | 「臨時便運航」は operating（R4） |
 | conditional | bool | — | |
 | schedule_changed | bool | — | |
-| from_midway | bool | **追加** | 最後の「発」より前を `PortResolver.resolve()` で引いた港が、行の方向の航路の途中の港（`route_stops` の始発・終点以外）か。True の行だけ範囲で照合する（R7） |
+| from_midway | bool | **追加** | 最後の「発」より前（「発」が無ければ方向の手前の全部）に最後に出てくる港（`PortResolver.find_occurrences()`）が、行の方向の航路の途中の港（`route_stops` の始発・終点以外）か。True の行だけ範囲で照合する（R7） |
 
 ### 便と行の照合（R1・R7）
 
@@ -37,7 +37,8 @@ _voyage_line(ship, route_id, origin_date, arrival_date) -> VoyageStatus | None
 | 今の便 | 2以上 | 合う | 行の状態 ＋ 港別情報（今まで） | 今まで |
 | 今の便・出港前 | 1以上 | 合わない・タグ ≦ 行の一番重いもの・（タグに条件付があれば条件付の行あり） | **operating**（FR-011）。`assumed_operating=True` で港別情報を当てない | なし |
 | 今の便・出港前 | 1以上 | 合わない・タグ ＞ 行の一番重いもの、またはタグに条件付があるのに条件付の行なし | 船のタグ＋`voyage_tag_heavier_than_lines` | 今まで |
-| 今の便・出港済み | 1以上 | 合わない | **前回記録したその港の行のステータス**（無ければその便で一番重いもの、それも無ければ船のタグ）。`use_recorded=True` で港別情報を当てない | 前回の行の詳細（無ければ今まで） |
+| 今の便・出港済み | 1以上 | 合わない | **前回記録したその港の行のステータス**（無ければその便で一番重いもの、それも無ければ船のタグ）。`use_recorded=True` で港別情報を当てない | 前回の行の詳細（今の抜粋は他の便の話なので使わない） |
+| 今の便・出港済み | 1以上 | 合わない・安全装置に当たる（上の2行のタグが重い／条件付の行なし） | まだ出港していない港は**船のタグ**＋港別情報、出港済みの港は前回の記録（`tag_over_recorded=True`）。航路単位は船のタグ | 今まで／前回の行の詳細 |
 | 先の便 | 0 | — | None（運航予定。今まで） | なし |
 | 先の便 | 1 | 合う | **船のタグ**（全港。港別情報なし） | 抜粋（operating ならなし） |
 | 先の便 | 2以上 | 合う | **行の状態**（全港。港別情報なし） | 抜粋（operating ならなし） |
@@ -68,6 +69,7 @@ recorded_voyage_status(voyage) =
     無ければ None
 ```
 
+- 航行中に抜港している港：前回の行が `skipped` なら、検索結果が0件でも `skipped`（時刻なし）の行を保つ
 - 港の行（`parse_departures()`）：`recorded_port_status` → 無ければ `recorded_voyage_status`（詳細は抜粋）→ 無ければ船のタグ
 - 航路単位（`_route_status()`）：`recorded_voyage_status` → 無ければ船のタグ
 - `use_recorded` のときは、前回の行が無い港（`ship.status` と抜粋に戻る道）も含めて、港別情報を一切見ない。`_skipped_on_current_voyage()` も抜港の行を作らない（4回目の analyze M4）
@@ -78,7 +80,7 @@ recorded_voyage_status(voyage) =
 ```
 for ship in ships, v in ship.voyages:
     route = 方向が v.direction の航路
-    for start in (v.departure_date, v.departure_date - 1日):   # 途中の港から書いた行のぶん
+    starts = [v.departure_date] + ([v.departure_date - 1日] if v.from_midway else [])   # 途中の港から書いた行だけ前日も
         for stop in stops[:-1]:
             d = start + (stop.day_offset - stops[0].day_offset)
             if today + 2日 <= d <= today + MARUE_SEARCH_DAYS_AHEAD:
@@ -91,6 +93,6 @@ DB の行による追加（行が消えたとき。R5）:
 forced |= {(r.route_id, r.port_id, r.departure_date)
            for r in departure_statuses
            if r.route_id in マルエーの航路 and r.ship_name != ""
-           and r.status in (cancelled, suspended, delayed, operating)
+           and r.status in (cancelled, suspended, delayed)
            and today + 2日 <= r.departure_date <= today + MARUE_SEARCH_DAYS_AHEAD}
 ```
