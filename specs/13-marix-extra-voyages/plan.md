@@ -123,7 +123,7 @@ app/tests/...                                      # PortBoardDay・StatusContro
 
 ### Phase C：同じキーの優先（US1・FR-005〜FR-007）
 
-- `_extra_rows_kept()`、`_resolve_extra_conflicts()`（R4・R5）
+- `_extra_rows_kept()`・`_extra_first_departures()`、`_resolve_extra_conflicts()`（R4・R5）
 - テスト（`db_session.autoflush = False`）
   - SC-001：9/7 の一覧を2通りの並び順で読んで、那覇（07:00）・名瀬（21:20）のクロスが `extra`。本部・与論・和泊・亀徳のクロスは `cancelled`
   - US1-4：臨時便が一覧にあり詳細ページが取れない回、定期便（欠航）が上書きしない

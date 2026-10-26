@@ -157,10 +157,12 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
   - (c) US1-6：2回目は今 06:30（未出港）、臨時便を一覧から外す → 那覇・名瀬のクロスは `cancelled`（`source_url = UP_0907`）
   - (d) 2回目は今 06:30、臨時便の詳細ページの那覇・名瀬の日付を「09月08日」に書き換える → 9/7 の那覇・名瀬のクロスは `cancelled`（`source_url = UP_0907`）に戻り、9/8 に `extra` の行がある（R5・R7。flush が無いと 9/7 の行が消えるので、T007 の確認にもなる）
   - (e) 2回目は今 06:30、定期便を全部 `normal` に書き換え、臨時便を一覧から外す → 那覇のクロスは `operating`（定期便が走るときはいつでも定期便）
+  - (f) 日をまたぐ臨時便（PR #89 レビュー）：1回目の臨時便の詳細ページの那覇を「09月06日」23:00 発に書き換える（名瀬は 9/7 21:20 のまま）。2回目は今日 2026-09-07・今 08:00、臨時便を一覧から外す（一覧の便の始発日は 9/7 だけ）→ 名瀬のクロスは `extra` のまま（始発港の 9/6 23:00 で出港済み）。範囲の中だけで取ると名瀬 21:20 で「未出港」になり `cancelled` に戻るので、これで落ちることを確かめる
 - [ ] T017 [US1] `marix_line.py` を直す（research R5）:
-  - `_extra_rows_kept(self, route_ids: list[int], since: date) -> dict[tuple, tuple[str, datetime | None]]`：`status = 'extra'` で `departure_date >= since` の行の、キー → (`source_url`, `scheduled_departure_at`)。`parse_departures()` の頭で1回だけ呼ぶ。`since` は一覧の便の始発日（`_parse_date()`）のいちばん前、一覧に便が無ければ今日
+  - `_extra_rows_kept(self, route_ids: list[int], since: date) -> dict[tuple, str]`：`status = 'extra'` で `departure_date >= since` の行の、キー → `source_url`。`parse_departures()` の頭で1回だけ呼ぶ。`since` は一覧の便の始発日（`_parse_date()`）のいちばん前、一覧に便が無ければ今日
+  - `_extra_first_departures(self, route_ids: list[int], urls: set[str]) -> dict[str, datetime | None]`：`status = 'extra'` で `source_url IN urls` の行を `GROUP BY source_url` して `MIN(scheduled_departure_at)`。出港日の範囲で絞らない（日をまたぐ便の始発港の行を拾うため。research R5）。`urls` は `_extra_rows_kept()` の値。空なら DB を読まない
   - `list_urls`：今回の一覧の便の URL 全部
-  - `_resolve_extra_conflicts()` で、臨時便の行が無いキーの定期便の行（状態が `cancelled`・`suspended`・`skipped`・`unknown`）について、`kept` にそのキーがあり、次のどちらかなら定期便の行を落とす：① `source_url` が `list_urls` にあって `read_extra_urls` に無い、② その `source_url` の `kept` の行の `scheduled_departure_at` のいちばん早いもの（始発港の出港）が今（`datetime.now()`）以前。②は港の行ごとに見ない（`kept` から URL ごとのいちばん早い出港予定を先に作る）
+  - `_resolve_extra_conflicts()` で、臨時便の行が無いキーの定期便の行（状態が `cancelled`・`suspended`・`skipped`・`unknown`）について、`kept` にそのキーがあり、次のどちらかなら定期便の行を落とす：① `source_url` が `list_urls` にあって `read_extra_urls` に無い、② その `source_url` の `_extra_first_departures()` の値（始発港の出港）が今（`datetime.now()`）以前。②は港の行ごとに見ない
   - `make test-scraper`・`make lint-scraper`
 
 ### 予備ルート（research R6・FR-015）

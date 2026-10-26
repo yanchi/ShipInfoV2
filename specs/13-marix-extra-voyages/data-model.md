@@ -62,7 +62,8 @@ DB のスキーマ（列・キー）は変えない。マイグレーション�
 | `_voyage_kind(block, detail_html) -> "extra" \| "regular" \| "unknown"` | R1 の表 |
 | `_parse_direction(info2_text, block) -> str \| None` | R2 の順（始発港 → 一覧の欄 → 行き先） |
 | `_departures_from_detail(...)` | 引数は今のまま。`voyage_status == extra` なら `no_status` の港は作らない（R3） |
-| `_extra_rows_kept(route_ids, since) -> dict[key, tuple[str, datetime \| None]]` | DB の `extra` の行。キー → (`source_url`, `scheduled_departure_at`)。`parse_departures()` の頭で1回（R5） |
+| `_extra_rows_kept(route_ids, since) -> dict[key, str]` | DB の `extra` の行。キー → `source_url`。`parse_departures()` の頭で1回（R5） |
+| `_extra_first_departures(route_ids, urls) -> dict[str, datetime \| None]` | `source_url` ごとの `extra` の行の `MIN(scheduled_departure_at)`。出港日の範囲なし（始発港が前の日でも拾う）。`parse_departures()` の頭で1回（R5） |
 | `_resolve_extra_conflicts(records, kept, list_urls, read_extra_urls) -> list[dict]` | R4・R5。`list_urls` は今回の一覧の便の URL、`read_extra_urls` はこの回に詳細ページを読めた臨時便の URL |
 | `_upsert_departures(records)`（Base を上書き） | Base の処理の後、flush して R7 の後始末 |
 
