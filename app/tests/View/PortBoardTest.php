@@ -212,9 +212,27 @@ class PortBoardTest extends TestCase
             3 => [$cancelled('12:00')],
             4 => [$cancelled('14:00')],
             5 => [$this->extra('クロス', '21:20', '09:00', arrivalDay: '2026-10-28')],
-        ]]);
+        ]], RouteDirectionEnum::Up);
 
-        $this->assertTrue($board->extraSkipsPortsOf(1, RouteDirectionEnum::Down));
+        $this->assertTrue($board->extraSkipsPortsOf(1, RouteDirectionEnum::Up));
+        // 向きが違えば見ない
+        $this->assertFalse($board->extraSkipsPortsOf(1, RouteDirectionEnum::Down));
+    }
+
+    /** 上りで全港に寄る臨時便は抜港なし。あいだの港が同じ船の運航予定・通常運航でも寄港に数える */
+    public function testExtraDoesNotSkipPortsOnUpRoute(): void
+    {
+        $at    = new \DateTimeImmutable('2026-10-27 12:00');
+        $board = $this->extraBoard([[
+            0 => [$this->extra('クロス', '07:00', '09:00', arrivalDay: '2026-10-28')],
+            1 => [$this->extra('クロス', '08:00', '09:00', arrivalDay: '2026-10-28')],
+            2 => [new PortBoardEntry(DepartureDisplayStateEnum::Scheduled, shipName: 'クロス', departureAt: $at, companyId: 1)],
+            3 => [new PortBoardEntry(DepartureDisplayStateEnum::Status, OperationStatusEnum::Operating, shipName: 'クロス', departureAt: $at, companyId: 1)],
+            4 => [$this->extra('クロス', '14:00', '09:00', arrivalDay: '2026-10-28')],
+            5 => [$this->extra('クロス', '21:20', '09:00', arrivalDay: '2026-10-28')],
+        ]], RouteDirectionEnum::Up);
+
+        $this->assertFalse($board->extraSkipsPortsOf(1, RouteDirectionEnum::Up));
     }
 
     /** US2-2：名瀬だけの臨時便は、最初と最後が同じなので抜港なし */
@@ -391,12 +409,12 @@ class PortBoardTest extends TestCase
     // ------------------------------------------------------------------
 
     /**
-     * 日ごとに「港の添字 => エントリー」を渡して、6港の下りのボードを組む（今日 = 2026-10-27）。
+     * 日ごとに「港の添字 => エントリー」を渡して、6港の$direction のボードを組む（今日 = 2026-10-27）。
      * 渡さない港の行はエントリーなし（臨時便は寄らない港の行を作らない）。
      *
      * @param list<array<int, list<PortBoardEntry>>> $days
      */
-    private function extraBoard(array $days): PortBoard
+    private function extraBoard(array $days, RouteDirectionEnum $direction = RouteDirectionEnum::Down): PortBoard
     {
         $result = [];
         foreach ($days as $i => $entriesByPort) {
@@ -406,7 +424,7 @@ class PortBoardTest extends TestCase
             }
             $result[] = new PortBoardDay(
                 (new \DateTimeImmutable('2026-10-27'))->modify("+{$i} days"),
-                [$this->direction(RouteDirectionEnum::Down, $rows)],
+                [$this->direction($direction, $rows)],
             );
         }
 
