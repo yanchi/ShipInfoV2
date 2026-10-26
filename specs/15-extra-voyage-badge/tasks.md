@@ -133,11 +133,11 @@
 
 ## Phase 5: Polish & 文書
 
-- [ ] T017 [P] `specs/12-marue-extra-voyages/contracts/ui-status.md` の「出るところ」の「定期便の通常運航と臨時便が混ざっても『スケジュール変更』にしない」と、「トップの会社カード（FR-016）」の「航路のバッジ・注意書きは変えない」の後ろに、「→ 15-extra-voyage-badge で変更（[contracts/ui-status.md](../../15-extra-voyage-badge/contracts/ui-status.md)）」を足す
-- [ ] T018 [P] `specs/12-marue-extra-voyages/contracts/notification-mail.md` の状況の行の「通常運航（臨時便あり）」の後ろに、「→ 15-extra-voyage-badge で『スケジュール変更（臨時便あり）』に変更。臨時便とそれ以外が混ざる日は『スケジュール変更（途中の港に変更あり）』（[contracts/notification-mail.md](../../15-extra-voyage-badge/contracts/notification-mail.md)）」を足す
-- [ ] T019 [P] `specs/13-marix-extra-voyages/contracts/ui-status.md` の「航路単位が便なしでない日」の節に、「臨時便がある日の通常運航・運航予定は 15-extra-voyage-badge で『▲ スケジュール変更』に変更」を足す
-- [ ] T020 quickstart.md の手順でローカルのトップを開き、バッジ・「・抜港あり」・臨時便の無い航路が変わらないことを見る。`make notify-dry-run` で状況の文言を見る
-- [ ] T021 `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` が全部通る。会社詳細・港別ページ・異常の要約・凡例のテスト（`StatusControllerTest` の `testPorts*`・`testCompany*`・`testIndexAlertSummary*`）の期待を変えていないこと（FR-009）
+- [X] T017 [P] `specs/12-marue-extra-voyages/contracts/ui-status.md` の「出るところ」の「定期便の通常運航と臨時便が混ざっても『スケジュール変更』にしない」と、「トップの会社カード（FR-016）」の「航路のバッジ・注意書きは変えない」の後ろに、「→ 15-extra-voyage-badge で変更（[contracts/ui-status.md](../../15-extra-voyage-badge/contracts/ui-status.md)）」を足す
+- [X] T018 [P] `specs/12-marue-extra-voyages/contracts/notification-mail.md` の状況の行の「通常運航（臨時便あり）」の後ろに、「→ 15-extra-voyage-badge で『スケジュール変更（臨時便あり）』に変更。臨時便とそれ以外が混ざる日は『スケジュール変更（途中の港に変更あり）』（[contracts/notification-mail.md](../../15-extra-voyage-badge/contracts/notification-mail.md)）」を足す
+- [X] T019 [P] `specs/13-marix-extra-voyages/contracts/ui-status.md` の「航路単位が便なしでない日」の節に、「臨時便がある日の通常運航・運航予定は 15-extra-voyage-badge で『▲ スケジュール変更』に変更」を足す
+- [X] T020 quickstart.md の手順でローカルのトップを開き、バッジ・「・抜港あり」・臨時便の無い航路が変わらないことを見る。`make notify-dry-run` で状況の文言を見る
+- [X] T021 `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` が全部通る。会社詳細・港別ページ・異常の要約・凡例のテスト（`StatusControllerTest` の `testPorts*`・`testCompany*`・`testIndexAlertSummary*`）の期待を変えていないこと（FR-009）
 
 **Checkpoint**: コミット
 

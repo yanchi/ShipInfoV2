@@ -8,7 +8,7 @@
 |---|---|
 | 対象の港の行 | `OperationStatusEnum::irregularCases()` に `extra` が入る → `findIrregularBetween()` が臨時便の行も返す。臨時便の行しか無い回も送る |
 | 港の行の状態のラベル | `port.status.label()` が「臨時便」 |
-| 状況（`IrregularService::statusText()`） | 航路×日付が通常運航以外でなく、港の行が全部 Extra のとき：航路が通常運航なら「通常運航（臨時便あり）」、それ以外（便なし・行なし）は「臨時便あり」。港の行に Extra 以外も混ざるときは今までどおり「〜（途中の港に変更あり）」。航路×日付が欠航などのときは今までどおりその状態 |
+| 状況（`IrregularService::statusText()`） | 航路×日付が通常運航以外でなく、港の行が全部 Extra のとき：航路が通常運航なら「通常運航（臨時便あり）」（→ 15-extra-voyage-badge で「スケジュール変更（臨時便あり）」に変更。臨時便とそれ以外が混ざる日は「スケジュール変更（途中の港に変更あり）」。[contracts/notification-mail.md](../../15-extra-voyage-badge/contracts/notification-mail.md)）、それ以外（便なし・行なし）は「臨時便あり」。港の行に Extra 以外も混ざるときは今までどおり「〜（途中の港に変更あり）」。航路×日付が欠航などのときは今までどおりその状態 |
 
 ## 例（保存版の 10/28 上り・マルエー）
 

@@ -19,7 +19,7 @@
 
 臨時便は港の行だけ。会社カード・会社詳細の航路単位のバッジには出ない。
 
-途中の港だけを出る日（航路単位が便なし）の航路のバッジ（`midwayDisplay()`）は、Extra の entry を除いて今までどおり決める。Extra しか無いときだけ「◆ 臨時便」。定期便の通常運航と臨時便が混ざっても「スケジュール変更」にしない（臨時便は下の1行で伝える）。
+途中の港だけを出る日（航路単位が便なし）の航路のバッジ（`midwayDisplay()`）は、Extra の entry を除いて今までどおり決める。Extra しか無いときだけ「◆ 臨時便」。定期便の通常運航と臨時便が混ざっても「スケジュール変更」にしない（臨時便は下の1行で伝える）。→ 15-extra-voyage-badge で変更（[contracts/ui-status.md](../../15-extra-voyage-badge/contracts/ui-status.md)）。
 
 臨時便以外の行が無い日（始発港の行も見る）のバッジは [specs/13-marix-extra-voyages/contracts/ui-status.md](../../13-marix-extra-voyages/contracts/ui-status.md)。
 
@@ -50,7 +50,7 @@
 
 - 港・時刻：今日その方向の Extra の便のうち、出港時刻がいちばん早いもの（出港済みでも出す）
 - 会社詳細ページ（`app_status_company`）へのリンクにする。クラスは `route-extra`（文字は臨時便のバッジと同じ青）
-- 航路のバッジ・注意書きは変えない
+- 航路のバッジ・注意書きは変えない → 15-extra-voyage-badge で変更（[contracts/ui-status.md](../../15-extra-voyage-badge/contracts/ui-status.md)）
 
 ## 詳細テキスト
 
