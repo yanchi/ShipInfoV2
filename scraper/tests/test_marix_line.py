@@ -2006,3 +2006,77 @@ def test_regular_fallback_rows_removed_once_extra_wins(db_session, marix_line_co
     assert [
         (r[0], r[2], r[3]) for r in _db_rows(db_session) if r[0] in ("那覇", "名瀬")
     ] == [("名瀬", "extra", CROSS), ("那覇", "extra", CROSS)]
+
+
+# ---------------------------------------------------------------------------
+# US4: 途中の港から出る臨時便の方向（research R2）
+# ---------------------------------------------------------------------------
+
+_INFO2_NAZE_0927 = "2026年9月27日 名瀬港発 2026年9月27日 鹿児島新港 向け"
+_DAY_0927 = date(2026, 9, 27)
+
+
+@resp_mock.activate
+def test_naze_departure_extra_voyage_direction_from_column(
+    db_session, marix_line_company
+):
+    """上りの欄の「名瀬港発 鹿児島新港向け」：上りの名瀬（9/27 05:50）が extra。鹿児島の行は無い。"""
+    records, ports, logs, _ = _departures(
+        db_session,
+        marix_line_company,
+        _list_html([], [("temporary alert", EXTRA_UP_0927, _INFO2_NAZE_0927)]),
+        {EXTRA_UP_0927: "extra_up_naze_20260927.html"},
+        _DAY_0927,
+    )
+    _, up = _routes(db_session, marix_line_company)
+
+    rows = _rows_for(records, ports, up)
+    assert [(r["port_id"], r["status"]) for r in rows] == [
+        (ports["名瀬"].id, OperationStatusEnum.extra)
+    ]
+    assert rows[0]["scheduled_departure_at"] == datetime(2026, 9, 27, 5, 50)
+    assert "direction_unknown" not in {log["event"] for log in logs}
+
+
+def _bare_cover_list(info2: str) -> str:
+    """欄（down/up_stream_services）の無い一覧。"""
+    return (
+        "<html><body>"
+        + _list_cover("temporary alert", EXTRA_UP_0927, info2)
+        + "</body></html>"
+    )
+
+
+@resp_mock.activate
+def test_direction_from_destination_when_no_column(db_session, marix_line_company):
+    """欄が無くても、行き先「鹿児島新港 向け」で上りとわかる。結果は欄があるときと同じ。"""
+    records, ports, _, _ = _departures(
+        db_session,
+        marix_line_company,
+        _bare_cover_list(_INFO2_NAZE_0927),
+        {EXTRA_UP_0927: "extra_up_naze_20260927.html"},
+        _DAY_0927,
+    )
+    _, up = _routes(db_session, marix_line_company)
+
+    assert [(r["port_id"], r["status"]) for r in _rows_for(records, ports, up)] == [
+        (ports["名瀬"].id, OperationStatusEnum.extra)
+    ]
+
+
+@resp_mock.activate
+def test_direction_unknown_without_column_or_destination(
+    db_session, marix_line_company
+):
+    """欄も始発港も行き先も無ければ、direction_unknown を出して読み飛ばす（今のまま）。"""
+    records, _, _, scraper = _departures(
+        db_session,
+        marix_line_company,
+        _bare_cover_list("2026年9月27日 名瀬港発"),
+        {EXTRA_UP_0927: "extra_up_naze_20260927.html"},
+        _DAY_0927,
+    )
+    assert records == []
+    with structlog.testing.capture_logs() as logs:
+        scraper.parse(scraper._list_html)
+    assert "direction_unknown" in {log["event"] for log in logs}

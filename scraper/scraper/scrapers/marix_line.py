@@ -157,7 +157,7 @@ class MarixLine(BaseScraper):
             if valid_date is None:
                 continue
 
-            direction = self._parse_direction(info2_text)
+            direction = self._parse_direction(info2_text, block)
             if direction == "down":
                 route = down_route
             elif direction == "up":
@@ -263,7 +263,7 @@ class MarixLine(BaseScraper):
                 continue
             info2_text = info2.get_text(separator=" ", strip=True)
             start_date = self._parse_date(info2_text)
-            direction = self._parse_direction(info2_text)
+            direction = self._parse_direction(info2_text, block)
             route = {"down": down_route, "up": up_route}.get(direction or "")
             if start_date is None or route is None or not stops.get(route.id):
                 self._log.warning("departure_block_skipped", info2=info2_text[:60])
@@ -787,11 +787,28 @@ class MarixLine(BaseScraper):
             return OperationStatusEnum.cancelled
         return None
 
-    def _parse_direction(self, info2_text: str) -> str | None:
-        """'2026年3月7日 鹿児島新港発...' から出発港を判定。"""
+    def _parse_direction(self, info2_text: str, block: Tag | None = None) -> str | None:
+        """方向を決める。出発港 → 一覧の欄 → 行き先の順（research R2）。
+
+        '2026年3月7日 鹿児島新港発...' は下り、'那覇港発...' は上り（今までどおり）。
+        名瀬発の臨時便（'名瀬港発 鹿児島新港 向け'）は出発港で決まらないので、一覧の欄
+        （div.down_stream_services・div.up_stream_services）か、行き先（'那覇... 向け' → 下り、
+        '鹿児島... 向け' → 上り）で決める。
+        """
         if re.search(r"鹿児島\S*発", info2_text):
             return "down"
         if re.search(r"那覇\S*発", info2_text):
+            return "up"
+        if block is not None:
+            for parent in block.parents:
+                classes = parent.get("class", []) if isinstance(parent, Tag) else []
+                if "down_stream_services" in classes:
+                    return "down"
+                if "up_stream_services" in classes:
+                    return "up"
+        if re.search(r"那覇\S*\s*向け", info2_text):
+            return "down"
+        if re.search(r"鹿児島\S*\s*向け", info2_text):
             return "up"
         return None
 

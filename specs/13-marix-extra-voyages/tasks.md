@@ -181,23 +181,23 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 
 ### 方向（research R2）
 
-- [ ] T019 [P] [US4] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）:
+- [X] T019 [P] [US4] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）:
   - (a) 上りの欄に `temporary alert`・`EXTRA_UP_0927`・info2「2026年9月27日 名瀬港発 2026年9月27日 鹿児島新港 向け」、今日 2026-09-27 → 上りの航路に名瀬・クロス・9/27 05:50 の `extra` の行。鹿児島の行は無い。`direction_unknown` が出ない
   - (b) 同じ便を、欄の無い一覧（`<html><body>` の直下に `div.status_single_cover`）に置く → 行き先「鹿児島新港 向け」で上り。結果は (a) と同じ
   - (c) 欄も無く、info2 が「2026年9月27日 名瀬港発」だけ → `direction_unknown` を出して読み飛ばす（今のまま）
   - (d) 既存の `HTML_NORMAL_DOWN_DELAYED_UP` などの結果が変わらない（既存テストがそのまま通ることで確かめる）
-- [ ] T020 [US4] `marix_line.py` の `_parse_direction(self, info2_text: str, block: Tag | None = None) -> str | None` を直す（research R2）：今の始発港 → `block` の祖先の `div.down_stream_services`（下り）・`div.up_stream_services`（上り）→ 行き先（`那覇\S*\s*向け` → 下り、`鹿児島\S*\s*向け` → 上り）の順。`parse()`・`parse_departures()` から `block` を渡す。`make test-scraper`・`make lint-scraper`
+- [X] T020 [US4] `marix_line.py` の `_parse_direction(self, info2_text: str, block: Tag | None = None) -> str | None` を直す（research R2）：今の始発港 → `block` の祖先の `div.down_stream_services`（下り）・`div.up_stream_services`（上り）→ 行き先（`那覇\S*\s*向け` → 下り、`鹿児島\S*\s*向け` → 上り）の順。`parse()`・`parse_departures()` から `block` を渡す。`make test-scraper`・`make lint-scraper`
 
 ### トップのバッジ（research R9、contracts/ui-status.md）
 
-- [ ] T021 [P] [US4] テストを足す（実装の前に落ちることを確かめる）:
+- [X] T021 [P] [US4] テストを足す（実装の前に落ちることを確かめる）:
   - `app/tests/View/PortBoardDayTest.php`：`hasRegularDeparturesOf()` が、始発港の行も含めて Extra 以外の出発の entry があれば true、Extra だけ・何も無ければ false、ほかの会社・方向は見ない
   - `app/tests/Controller/StatusControllerTest.php`。既存の `testIndexCardMidwayExtraOnlyShowsExtraBadge()` と同じ道具（`createPortBoardData()`・`updateTestDeparture()`・`setRouteStatus()`・`findCard()`）を使う:
     - (a) `testIndexCardOriginExtraOnlyShowsExtraBadge`：航路が `NoService`、今日の便が始発港の Extra だけ（`createPortBoardData()` の後、途中の港の行を消す）→ バッジが「◆ 臨時便」、`.route-extra` が「◆ 臨時便 〇〇 HH:MM発」、「便なし」が出ない（SC-007）
     - (b) `testIndexCardOriginExtraWithOriginRegularKeepsNoService`：航路が `NoService`、始発港に Extra と、状態が不明の定期便の行（船名なし）→ 今までどおり「— 便なし」（PR #89 レビュー）
     - (c) `testIndexCardOriginExtraWithMidwayRegularKeepsRegularBadge`：始発港が Extra、途中の港に定期便の通常運航 → 今までどおり定期便のバッジ（通常運航）
     - (d) 航路が欠航で始発港が Extra → バッジは欠航のまま（既存の `testIndexCardShowsExtraDepartureUnderRouteBadge` と同じ結果を確かめる）
-- [ ] T022 [US4] `app/src/View/PortBoardDay.php` に `hasRegularDeparturesOf(int $companyId, RouteDirectionEnum $direction): bool` を足す（全部の行のうち、その会社・方向で `isDeparture()` かつ状態が Extra でない entry があるか）。`app/src/Controller/StatusController.php` の `routesDepartingMidway()` で、`!$today->hasRegularDeparturesOf(...)` かつ `$today->firstExtraDepartureOf(...) !== null` なら `['kind' => 'badge', 'state' => null, 'status' => OperationStatusEnum::Extra]`、それ以外は今までどおり `midwayDisplay()`。メソッドの docblock に「臨時便以外の行が無く、臨時便があれば「臨時便」（13-marix-extra-voyages FR-014）」を足す。`make test-php`・`make phpstan`・`make cs-php`
+- [X] T022 [US4] `app/src/View/PortBoardDay.php` に `hasRegularDeparturesOf(int $companyId, RouteDirectionEnum $direction): bool` を足す（全部の行のうち、その会社・方向で `isDeparture()` かつ状態が Extra でない entry があるか）。`app/src/Controller/StatusController.php` の `routesDepartingMidway()` で、`!$today->hasRegularDeparturesOf(...)` かつ `$today->firstExtraDepartureOf(...) !== null` なら `['kind' => 'badge', 'state' => null, 'status' => OperationStatusEnum::Extra]`、それ以外は今までどおり `midwayDisplay()`。メソッドの docblock に「臨時便以外の行が無く、臨時便があれば「臨時便」（13-marix-extra-voyages FR-014）」を足す。`make test-php`・`make phpstan`・`make cs-php`
 
 **Checkpoint**: T019・T021 が通る・既存テストが全部通る → コミット
 

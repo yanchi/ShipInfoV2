@@ -309,6 +309,63 @@ class StatusControllerTest extends WebTestCase
         $this->assertSame('◆ 臨時便 名瀬 05:50発', trim($card->filter('.route-extra')->text()));
     }
 
+    /** 航路が便なしで、今日の便が始発港の臨時便だけなら、バッジは「臨時便」（13-marix-extra-voyages FR-014・SC-007） */
+    public function testIndexCardOriginExtraOnlyShowsExtraBadge(): void
+    {
+        $this->createPortBoardData();
+        $this->deleteTestDepartures(0);
+        $this->addTodayDeparture('鹿児島', '臨時丸', OperationStatusEnum::Extra, '10:00');
+        $this->setRouteStatus(OperationStatusEnum::NoService);
+
+        $card = $this->findCard($this->client->request('GET', '/'), '港別テスト運航会社');
+
+        $this->assertStringContainsString('◆ 臨時便', $card->filter('.status-badge')->text());
+        $this->assertSame('◆ 臨時便 鹿児島 10:00発', trim($card->filter('.route-extra')->text()));
+        $this->assertStringNotContainsString('便なし', $card->text());
+    }
+
+    /** 始発港に臨時便と状態が不明の定期便があれば、「便なし」のまま（臨時便のバッジで隠さない。PR #89 レビュー） */
+    public function testIndexCardOriginExtraWithOriginRegularKeepsNoService(): void
+    {
+        $this->createPortBoardData();
+        $this->deleteTestDepartures(0);
+        $this->addTodayDeparture('鹿児島', '臨時丸', OperationStatusEnum::Extra, '10:00');
+        $this->addTodayDeparture('鹿児島', '', OperationStatusEnum::Unknown, '18:00');
+        $this->setRouteStatus(OperationStatusEnum::NoService);
+
+        $card = $this->findCard($this->client->request('GET', '/'), '港別テスト運航会社');
+
+        $this->assertCount(0, $card->filter('.status-badge'));
+        $this->assertStringContainsString('便なし', $card->filter('.status-none')->text());
+    }
+
+    /** 始発港が臨時便でも、途中の港に定期便の通常運航があれば、今までどおり定期便のバッジ */
+    public function testIndexCardOriginExtraWithMidwayRegularKeepsRegularBadge(): void
+    {
+        $this->createPortBoardData();
+        $this->addTodayDeparture('鹿児島', '臨時丸', OperationStatusEnum::Extra, '10:00');
+        $this->setRouteStatus(OperationStatusEnum::NoService);
+
+        $card = $this->findCard($this->client->request('GET', '/'), '港別テスト運航会社');
+
+        $this->assertStringContainsString('✓ 通常運航', $card->filter('.status-badge')->text());
+        $this->assertSame('◆ 臨時便 鹿児島 10:00発', trim($card->filter('.route-extra')->text()));
+    }
+
+    /** 航路が欠航なら、始発港が臨時便でもバッジは欠航のまま */
+    public function testIndexCardOriginExtraKeepsCancelledBadge(): void
+    {
+        $this->createPortBoardData();
+        $this->deleteTestDepartures(0);
+        $this->addTodayDeparture('鹿児島', '臨時丸', OperationStatusEnum::Extra, '10:00');
+        $this->setRouteStatus(OperationStatusEnum::Cancelled);
+
+        $card = $this->findCard($this->client->request('GET', '/'), '港別テスト運航会社');
+
+        $this->assertStringContainsString('✗ 欠航', $card->filter('.status-badge')->text());
+        $this->assertSame('◆ 臨時便 鹿児島 10:00発', trim($card->filter('.route-extra')->text()));
+    }
+
     /** 定期便の通常運航と臨時便が混ざっても、航路のバッジは「スケジュール変更」にならない（PR #87 レビュー） */
     public function testIndexCardMidwayRegularPlusExtraKeepsRegularBadge(): void
     {
@@ -1192,6 +1249,16 @@ class StatusControllerTest extends WebTestCase
         $this->entityManager()
             ->createQuery("UPDATE App\\Entity\\DepartureStatus d SET d.{$field} = :value WHERE d.departureDate = :date AND d.shipName = :ship")
             ->setParameter('value', $value)
+            ->setParameter('date', (new \DateTime('today'))->modify("+{$daysAhead} days"))
+            ->setParameter('ship', '港別テスト丸')
+            ->execute();
+    }
+
+    /** createPortBoardData() が作った運航会社の、$daysAhead 日後の港別の行を消す（途中の港の行を無くして始発港だけにする）。 */
+    private function deleteTestDepartures(int $daysAhead): void
+    {
+        $this->entityManager()
+            ->createQuery('DELETE App\\Entity\\DepartureStatus d WHERE d.departureDate = :date AND d.shipName = :ship')
             ->setParameter('date', (new \DateTime('today'))->modify("+{$daysAhead} days"))
             ->setParameter('ship', '港別テスト丸')
             ->execute();
