@@ -30,6 +30,7 @@ CSS class → status mapping (div.status_single_cover・詳細ページの div.s
     route alert         → delayed（航行経路変更。運航はする）
     cancel alert        → cancelled（欠航）
     alert だけ          → cancelled（2026-03 時点の一覧の欠航）
+    temporary           → extra（臨時便。港の行だけ。航路単位には書かない）
     no_status           → skipped（詳細ページの港のみ。「―」寄港しません＝抜港。便が欠航・運休ならそちら。
                           2025-10〜2026-10 の1年分では、航行経路変更の便にだけ出ていた）
     ※ skipped は港の行（departure_statuses）だけ。航路単位（operation_statuses）には書かない
@@ -85,7 +86,12 @@ _STATUS_BY_CLASS = {
     "conditional": OperationStatusEnum.delayed,  # 条件付運航
     "route": OperationStatusEnum.delayed,  # 航行経路変更（運航はする。寄らない港は no_status）
     "cancel": OperationStatusEnum.cancelled,
+    # 臨時便（港の行だけ。航路単位には書かない。research R1・R8）
+    "temporary": OperationStatusEnum.extra,
 }
+# 臨時便の見分け方（research R1）。見出しは「【臨時便】」「【臨時便運航】」「【臨時便・航行経路変更】」
+_EXTRA_CLASS = "temporary"
+_EXTRA_HEADING = "【臨時便"
 # ステータスを表さないクラス（alert は条件付・経路変更・欠航のどれにも付く）
 _LAYOUT_CLASSES = {
     "status_single_cover",
@@ -480,6 +486,33 @@ class MarixLine(BaseScraper):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _voyage_kind(self, block: Tag, detail_html: str | None) -> str:
+        """一覧の便の種類："extra"（臨時便）・"regular"（定期便）・"unknown"（分からない）。
+
+        一覧のクラスは実物が未確認なので、詳細ページの見出し・港のクラスでも見分ける（research R1）。
+        詳細ページが取れなかった便（fetch() で取りに行って None）は、定期便と決めずに unknown にする。
+        """
+        if _EXTRA_CLASS in block.get("class", []):
+            return "extra"
+        if detail_html:
+            soup = BeautifulSoup(detail_html, "lxml")
+            h1 = soup.select_one("h1.heading1")
+            if h1 is not None and _EXTRA_HEADING in h1.get_text():
+                return "extra"
+            if any(
+                _EXTRA_CLASS in single.get("class", [])
+                for single in soup.select("div.service > div.single")
+            ):
+                return "extra"
+            return "regular"
+        pages = getattr(self, "_detail_pages", None)
+        link = block.select_one("a.status_single[href]")
+        if pages is not None and link is not None:
+            url = urljoin(SOURCE_URL, link["href"])
+            if url in pages and pages[url] is None:
+                return "unknown"
+        return "regular"
 
     def _load_routes(self) -> tuple:
         """(down_route, up_route) を返す。origin_port で判定。"""

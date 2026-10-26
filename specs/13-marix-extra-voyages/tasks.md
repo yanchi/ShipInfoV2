@@ -36,9 +36,9 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 
 ## Phase 1: Setup
 
-- [ ] T001 `make up` → `make test-scraper`・`make test-php` が全部通ることを確認してから始める
-- [ ] T002 [P] `specs/13-marix-extra-voyages/samples/` の6本を `scraper/tests/fixtures/marix/` に、quickstart.md の表の名前でコピーする（service6727 → `extra_down_20260906.html`、downstream20260906 → `down_route_change_20260906.html`、service6731 → `extra_up_20260907.html`、upstream20260907 → `up_cancel_20260907.html`、service6819 → `extra_up_naze_20260927.html`、service6664 → `extra_down_20260827.html`）
-- [ ] T003 `scraper/tests/test_marix_line.py` に、テスト用の道具を足す:
+- [X] T001 `make up` → `make test-scraper`・`make test-php` が全部通ることを確認してから始める
+- [X] T002 [P] `specs/13-marix-extra-voyages/samples/` の6本を `scraper/tests/fixtures/marix/` に、quickstart.md の表の名前でコピーする（service6727 → `extra_down_20260906.html`、downstream20260906 → `down_route_change_20260906.html`、service6731 → `extra_up_20260907.html`、upstream20260907 → `up_cancel_20260907.html`、service6819 → `extra_up_naze_20260927.html`、service6664 → `extra_down_20260827.html`）
+- [X] T003 `scraper/tests/test_marix_line.py` に、テスト用の道具を足す:
   - `_list_html(down: list[tuple[str, str, str]], up: list[tuple[str, str, str]]) -> str`：一覧の HTML を組み立てる。要素は（便のクラス、詳細ページの URL、info2 の文）。今の `fixtures/marix/list.html` と同じ形で、`div.service_list > div.down_stream_services` と `div.up_stream_services` の中に `div.status_single_cover {cls} > a.status_single {cls}[href] > div.info1 p.exp ＋ div.info2` を並べる
   - `_mock_extra_pages(list_html, pages: dict[str, str | int])`：一覧と、URL → fixture 名（または 500 などのステータス）を `resp_mock` に登録する
   - URL の定数：`EXTRA_DOWN_0906 = "https://marixline.com/service/service6727/"`、`DOWN_0906`・`EXTRA_UP_0907`・`UP_0907`・`EXTRA_UP_0927`・`EXTRA_DOWN_0827` も同じく
@@ -54,20 +54,20 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 
 ### 便の種類（research R1）
 
-- [ ] T004 `scraper/tests/test_marix_line.py` に `_voyage_kind()` のテストを足す（実装の前に落ちることを確かめる）。`fetch()` を通した `MarixLine` で呼ぶ:
+- [X] T004 `scraper/tests/test_marix_line.py` に `_voyage_kind()` のテストを足す（実装の前に落ちることを確かめる）。`fetch()` を通した `MarixLine` で呼ぶ:
   - (a) 一覧の便のクラスが `temporary alert` → `"extra"`（詳細ページが 500 でも）
   - (b) 一覧の便のクラスが `route alert` で、詳細ページが `extra_down_20260906.html`（見出しに【臨時便・航行経路変更】）→ `"extra"`
   - (c) 見出しの【臨時便…】を消して、港の `temporary` だけ残した `extra_up_20260907.html` → `"extra"`
   - (d) `down_route_change_20260906.html`・`up_cancel_20260907.html`・既存の `downstream.html`・`upstream_conditional.html` → `"regular"`
   - (e) 一覧の便のクラスが `route alert` で、詳細ページが 500 → `"unknown"`（PR #89 レビュー）
   - (f) `fetch()` を通さずに（`_detail_pages` が無い）呼ぶ → `"regular"`
-- [ ] T005 `scraper/scraper/scrapers/marix_line.py` に `_voyage_kind(self, block: Tag, detail_html: str | None) -> str` を作る（research R1 の表）。詳細ページが取れなかったかは `getattr(self, "_detail_pages", None)` に URL があって値が None かで決める。見出しの文字はモジュールの定数 `_EXTRA_HEADING = "【臨時便"`、クラスは `_EXTRA_CLASS = "temporary"` にする。`_STATUS_BY_CLASS` に `"temporary": OperationStatusEnum.extra` を足し、上のコメント（CSS class → status mapping）に `temporary → extra（港の行だけ。航路単位には書かない）` を足す。`make test-scraper`・`make lint-scraper`
+- [X] T005 `scraper/scraper/scrapers/marix_line.py` に `_voyage_kind(self, block: Tag, detail_html: str | None) -> str` を作る（research R1 の表）。詳細ページが取れなかったかは `getattr(self, "_detail_pages", None)` に URL があって値が None かで決める。見出しの文字はモジュールの定数 `_EXTRA_HEADING = "【臨時便"`、クラスは `_EXTRA_CLASS = "temporary"` にする。`_STATUS_BY_CLASS` に `"temporary": OperationStatusEnum.extra` を足し、上のコメント（CSS class → status mapping）に `temporary → extra（港の行だけ。航路単位には書かない）` を足す。`make test-scraper`・`make lint-scraper`
 
 ### Base の flush（research R10）
 
-- [ ] T006 `scraper/tests/test_base_departures.py` にテストを足す（実装の前に落ちることを確かめる）。`db_session.autoflush = False` にして:
+- [X] T006 `scraper/tests/test_base_departures.py` にテストを足す（実装の前に落ちることを確かめる）。`db_session.autoflush = False` にして:
   - 行 A（キー K、`source_url = U1`）を DB に書いて commit → 同じキー K で `source_url = U2` の行と、`replace_source = (route, port, U1)` の別の行（キー K'）を同じ回に `_upsert_departures()` → K の行が残る（`source_url = U2`）
-- [ ] T007 `scraper/scraper/scrapers/base.py` の `_upsert_departures()` で、行の書き込みのループの後、ルール5（`replace_scope`）の前に `self.session.flush()` を入れる。docstring のルール5・6の前に「消す前に flush する（本番の SessionLocal は autoflush=False。同じ回に上書きした行を、古い source_url で消さないため）」を足す。`make test-scraper`・`make lint-scraper`
+- [X] T007 `scraper/scraper/scrapers/base.py` の `_upsert_departures()` で、行の書き込みのループの後、ルール5（`replace_scope`）の前に `self.session.flush()` を入れる。docstring のルール5・6の前に「消す前に flush する（本番の SessionLocal は autoflush=False。同じ回に上書きした行を、古い source_url で消さないため）」を足す。`make test-scraper`・`make lint-scraper`
 
 **Checkpoint**: 既存テストが全部通る（結果は変わらない）＋ T004・T006 が通る → コミット
 

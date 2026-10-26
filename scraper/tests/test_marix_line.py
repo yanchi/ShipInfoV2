@@ -8,6 +8,7 @@ DBは SQLite in-memory を使用（conftest.py の db_session / marix_line_compa
 
 import re
 
+import pytest
 import responses as resp_mock
 from datetime import date
 from unittest.mock import patch, MagicMock
@@ -1059,3 +1060,193 @@ def test_shifted_voyage_keeps_other_voyage_detail_row(db_session, marix_line_com
         (date(2026, 10, 2), "クイーンコーラルクロス"),
         (date(2026, 10, 2), "クイーンコーラルプラス"),
     ]
+
+
+# ---------------------------------------------------------------------------
+# 臨時便（13-marix-extra-voyages）のテスト用の道具
+# 公式の保存版（2026-08〜09）の詳細ページを fixture にする。一覧の HTML は実物が未確認なので、
+# 今の list.html と同じ形で組み立てる（research R1）
+# ---------------------------------------------------------------------------
+
+EXTRA_DOWN_0906 = "https://marixline.com/service/service6727/"
+DOWN_0906 = "https://marixline.com/service/downstream20260906/"
+EXTRA_UP_0907 = "https://marixline.com/service/service6731/"
+UP_0907 = "https://marixline.com/service/upstream20260907/"
+EXTRA_UP_0927 = "https://marixline.com/service/service6819/"
+EXTRA_DOWN_0827 = "https://marixline.com/service/service6664/"
+
+
+def _make_datetime_mock(now: datetime):
+    """datetime.now() を now に固定しつつ datetime() コンストラクタも通すモックを作成。"""
+    mock = MagicMock(wraps=datetime)
+    mock.now.return_value = now
+    return mock
+
+
+def _list_cover(cls: str, url: str, info2: str) -> str:
+    if "temporary" in cls:
+        exp = "臨時便運航"
+    elif "cancel" in cls or cls.split() == ["alert"]:
+        exp = "欠航"
+    elif "route" in cls:
+        exp = "航行経路変更"
+    else:
+        exp = "通常運航"
+    return (
+        f'<div class="status_single_cover {cls}">'
+        f'<a class="status_single {cls}" href="{url}">'
+        f'<div class="info1"><p class="exp">{exp}</p></div>'
+        f'<div class="info2">{info2}</div>'
+        "</a></div>"
+    )
+
+
+def _list_html(down: list[tuple[str, str, str]], up: list[tuple[str, str, str]]) -> str:
+    """一覧の HTML。要素は（便のクラス、詳細ページの URL、info2 の文）。"""
+    return (
+        '<html><body><div class="service_list">'
+        '<div class="down_stream_services">'
+        + "".join(_list_cover(*v) for v in down)
+        + '</div><div class="up_stream_services">'
+        + "".join(_list_cover(*v) for v in up)
+        + "</div></div></body></html>"
+    )
+
+
+def _mock_extra_pages(list_html: str, pages: dict[str, "str | int"]) -> None:
+    """一覧と、URL → fixture 名（または HTML 本文）／ステータスコードを登録する。"""
+    resp_mock.add(resp_mock.GET, SOURCE_URL, body=list_html, status=200)
+    for url, page in pages.items():
+        if isinstance(page, int):
+            resp_mock.add(resp_mock.GET, url, body="error", status=page)
+        elif page.endswith(".html") and "\n" not in page:
+            resp_mock.add(resp_mock.GET, url, body=read_fixture(f"marix/{page}"))
+        else:
+            resp_mock.add(resp_mock.GET, url, body=page)
+
+
+# ---------------------------------------------------------------------------
+# 便の種類（research R1）
+# ---------------------------------------------------------------------------
+
+_INFO2_DOWN_0906 = "2026年9月6日 鹿児島新港発 2026年9月7日 那覇港 向け"
+_INFO2_UP_0907 = "2026年9月7日 那覇港発 2026年9月8日 鹿児島新港 向け"
+
+
+def _kind_of(db_session, company, cls, url, page, info2, *, fetch=True):
+    """一覧に便を1つ置いて fetch() し、その便の種類を返す。"""
+    from bs4 import BeautifulSoup
+
+    setup_port_master(db_session, company)
+    _mock_extra_pages(
+        _list_html([(cls, url, info2)], [])
+        if "鹿児島新港発" in info2
+        else _list_html([], [(cls, url, info2)]),
+        {url: page},
+    )
+    scraper = MarixLine(db_session, company.id)
+    if fetch:
+        scraper.fetch()
+        html = scraper._list_html
+    else:
+        html = _list_html([(cls, url, info2)], [])
+    block = BeautifulSoup(html, "lxml").select_one("div.status_single_cover")
+    detail = scraper._detail_pages.get(url) if fetch else None
+    return scraper._voyage_kind(block, detail)
+
+
+@resp_mock.activate
+def test_voyage_kind_list_temporary_class_is_extra(db_session, marix_line_company):
+    """一覧の便のクラスが temporary なら、詳細ページが取れなくても臨時便。"""
+    kind = _kind_of(
+        db_session,
+        marix_line_company,
+        "temporary alert",
+        EXTRA_DOWN_0906,
+        500,
+        _INFO2_DOWN_0906,
+    )
+    assert kind == "extra"
+
+
+@resp_mock.activate
+def test_voyage_kind_extra_by_detail_heading(db_session, marix_line_company):
+    """一覧のクラスが route alert でも、詳細ページの見出し【臨時便…】で臨時便とわかる。"""
+    kind = _kind_of(
+        db_session,
+        marix_line_company,
+        "route alert",
+        EXTRA_DOWN_0906,
+        "extra_down_20260906.html",
+        _INFO2_DOWN_0906,
+    )
+    assert kind == "extra"
+
+
+@resp_mock.activate
+def test_voyage_kind_extra_by_detail_port_class(db_session, marix_line_company):
+    """見出しの【臨時便…】が無くても、港の temporary で臨時便とわかる。"""
+    html = read_fixture("marix/extra_up_20260907.html").replace("【臨時便運航】", "")
+    assert "【臨時便" not in html and "temporary" in html
+    kind = _kind_of(
+        db_session,
+        marix_line_company,
+        "route alert",
+        EXTRA_UP_0907,
+        html,
+        _INFO2_UP_0907,
+    )
+    assert kind == "extra"
+
+
+@pytest.mark.parametrize(
+    "cls,url,page,info2",
+    [
+        ("route alert", DOWN_0906, "down_route_change_20260906.html", _INFO2_DOWN_0906),
+        ("cancel alert", UP_0907, "up_cancel_20260907.html", _INFO2_UP_0907),
+        (
+            "normal",
+            "https://marixline.com/service/downstream20260930/",
+            "downstream.html",
+            "2026年9月30日 鹿児島新港発 2026年10月1日 那覇港 向け",
+        ),
+        (
+            "conditional alert",
+            "https://marixline.com/service/upstream20260930/",
+            "upstream_conditional.html",
+            "2026年9月30日 那覇港発 2026年10月1日 鹿児島新港 向け",
+        ),
+    ],
+)
+@resp_mock.activate
+def test_voyage_kind_regular(db_session, marix_line_company, cls, url, page, info2):
+    assert _kind_of(db_session, marix_line_company, cls, url, page, info2) == "regular"
+
+
+@resp_mock.activate
+def test_voyage_kind_unknown_when_detail_missing(db_session, marix_line_company):
+    """詳細ページが取れず、一覧に temporary も無い便は「分からない」。"""
+    kind = _kind_of(
+        db_session,
+        marix_line_company,
+        "route alert",
+        EXTRA_DOWN_0906,
+        500,
+        _INFO2_DOWN_0906,
+    )
+    assert kind == "unknown"
+
+
+@resp_mock.activate
+def test_voyage_kind_regular_without_fetch(db_session, marix_line_company):
+    """fetch() を通さない呼び方（既存のテスト）では、今までどおり定期便。"""
+    kind = _kind_of(
+        db_session,
+        marix_line_company,
+        "route alert",
+        EXTRA_DOWN_0906,
+        500,
+        _INFO2_DOWN_0906,
+        fetch=False,
+    )
+    assert kind == "regular"
