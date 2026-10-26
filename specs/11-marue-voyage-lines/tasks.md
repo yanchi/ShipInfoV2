@@ -30,9 +30,14 @@
 ## Phase 1: Setup
 
 - [ ] T001 `make up` → `make test-scraper` が全部通ることを確認してから始める
-- [ ] T002 [P] `specs/11-marue-voyage-lines/samples/kagoshima_2026-10-26.html` を `scraper/tests/fixtures/marue/kagoshima_20261026.html` に、`specs/11-marue-voyage-lines/samples/naminoue_detail_2026-10-26.html` を `scraper/tests/fixtures/marue/ship_detail_naminoue_20261026.html` にコピーする（中身は変えない。`samples/` は証跡として残す）
+- [ ] T002 [P] `specs/11-marue-voyage-lines/samples/` の3つを `scraper/tests/fixtures/marue/` にコピーする：`kagoshima_2026-10-26.html` → `kagoshima_20261026.html`、`naminoue_detail_2026-10-26.html` → `ship_detail_naminoue_20261026.html`、`akebono_detail_2026-10-26.html` → `ship_detail_akebono_20261026.html`（中身は変えない。`samples/` は証跡として残す）
+- [ ] T002a `scraper/tests/test_marue_ferry.py` に 2026-10-26 用のヘルパーを足す（`run_1020()` と同じ作り）：
+  - 定数 `NOW_1026 = datetime(2026, 10, 26, 10, 50)`、`AKEBONO_17809 = "https://www.aline-ferry.com/status/route-kagoshima/ferry-akebono/17809/"`、`NAMINOUE_25492 = "https://www.aline-ferry.com/status/route-kagoshima/ferry-naminoue/25492/"`
+  - `run_1026(db_session, company_id, searches, *, now=NOW_1026, kagoshima=None)`：`mock_search(searches)`、鹿児島航路ページ（既定は `kagoshima_20261026.html`）、上の2つの詳細ページ（それぞれの `ship_detail_*_20261026.html`）をモックして、`fixed_now(now)` の中で `fetch` → `parse` → `parse_departures` する。戻り値は `(scraper, records, departures, logs)`
+  - 検索結果を作るヘルパー：`down_1025_rows()`（波之上、10/26 の名瀬 05:50・亀徳 09:40・和泊 12:00・与論 14:10・本部 17:10、下船 2026-10-26 19:00。本番の DB と同じ）、`up_1027_rows()`（波之上、10/27 の那覇 07:00・本部 09:20・与論 12:10・和泊 14:40・亀徳 17:00・名瀬 21:20、下船 2026-10-28 08:30）
+  - 詳細ページの URL のモックが漏れていないこと（`ship_detail_fetch_failed` が出ない）をヘルパーの中で assert する
 
-**Checkpoint**: 既存テストが全部通る。fixture が2つ増えている → コミット
+**Checkpoint**: 既存テストが全部通る。fixture が3つとヘルパーが増えている → コミット
 
 ---
 
@@ -42,7 +47,7 @@
 
 - [ ] T003 `scraper/scraper/scrapers/marue_ferry.py` の `VoyageStatus` に `from_origin: bool` を足す。`_VOYAGE_LINE` で日付と方向の間の文字列を名前付きグループ（`place`）で取り、`_parse_voyages()` で「鹿児島」「那覇」を含めば True にする（research R7・data-model）
 - [ ] T004 `scraper/scraper/scrapers/marue_ferry.py` に `_voyage_line(ship, route_id, origin_date, arrival_date) -> VoyageStatus | None` を作る。1. 方向が同じで `departure_date == origin_date` の最初の行、2. 無ければ方向が同じで `not from_origin` かつ `origin_date <= departure_date <= arrival_date` の最初の行、3. None（research R1・R7）。`_match_voyage()` の行探しをこれに置き換え、`_for_voyage()` に `arrival_date` を足す。呼び出し元（`_for_current_voyage()` は今の便の下船日、`_route_status()` は今日の始発港の検索結果の1行目の下船日）も直す。キャッシュのキーに `arrival_date` を足す。合わないときの挙動（船のタグ＋`voyage_not_in_excerpt`）はまだ変えない
-- [ ] T005 `scraper/tests/test_marue_ferry.py` にテストを足す：(a) 2026-10-26 の fixture で、波之上の「鹿児島新港発」「那覇港発」の行が `from_origin=True`。「■10月22日（木）名瀬発下り便…」を差し込んだ行は False、(b) `_voyage_line()` が出港日の一致を範囲より優先する、(c) 始発港の行は範囲では合わない、(d) 途中の港の行は範囲（出港日〜到着日）で合う
+- [ ] T005 `scraper/tests/test_marue_ferry.py` にテストを足す：(a) `run_1026()`（または `kagoshima_20261026.html` を `_parse_ships()`）で、波之上の「鹿児島新港発」「那覇港発」の行が `from_origin=True`。「■10月22日（木）名瀬発下り便…」を差し込んだ行は False、(b) `_voyage_line()` が出港日の一致を範囲より優先する、(c) 始発港の行は範囲では合わない、(d) 途中の港の行は範囲（出港日〜到着日）で合う
 
 **Checkpoint**: 既存テストが全部通る（結果は変わらない）＋ T005 が通る → コミット
 
@@ -52,12 +57,12 @@
 
 **Goal**: 抜粋に便の行がある先の便に、その状態を全港に出す（FR-001〜004）。2日先以降もすぐ反映する（FR-010）。
 
-**Independent Test**: 2026-10-26 の fixture と、10/27 那覇発上りの検索結果（`search_html()` で作る。波之上、乗船 07:00〜21:20、下船 2026-10-28 08:30）を読ませる。10/27 の那覇〜名瀬の6港が全部 `cancelled` になり、10/26 の和泊・与論・本部（今の便）は今までどおり `cancelled`。
+**Independent Test**: `run_1026()` に `down_1025_rows()` と `up_1027_rows()` を渡す。10/27 の那覇〜名瀬の6港が全部 `cancelled` になり、10/26 の和泊・与論・本部（今の便）は今までどおり `cancelled`。
 
 ### Tests（先に書いて落ちることを確かめる）
 
-- [ ] T006 [P] [US1] `scraper/tests/test_marue_ferry.py` に SC-001 のテスト `test_future_voyage_gets_voyage_line_status`：上の Independent Test。10/27 の行の `status_detail` に「10月27日（火）那覇港発上り便…欠航」が入る
-- [ ] T007 [P] [US1] `scraper/tests/test_marue_ferry.py` にテストを足す：(a) 先の便の行が「条件付」→ 全港 `delayed`。船の港別情報（抜粋・詳細ページの「寄港いたしません」）があっても `skipped`・`operating` にならない（FR-004）、(b) 抜粋に行の無い先の便は `status is None`・`status_detail is None`（SC-004。既存の `test_later_voyage_of_same_ship_is_scheduled` もそのまま通る）、(c) 便の行が1つだけで先の便に合う → 船のタグのステータス、(d) 先の便の行が「臨時便運航」→ `operating`・`status_detail is None`（US2 の後で通る。`xfail` にせず、US2 の Phase まで落ちたままでいい）
+- [ ] T006 [P] [US1] `scraper/tests/test_marue_ferry.py` に SC-001 のテスト `test_future_voyage_gets_voyage_line_status`：上の Independent Test（`run_1026()`）。10/27 の行の `status_detail` に「10月27日（火）那覇港発上り便…欠航」が入る
+- [ ] T007 [P] [US1] `scraper/tests/test_marue_ferry.py` にテストを足す：(a) `run_1026()` の鹿児島航路ページの 10/27 の行を「条件付運航」に差し替え → 全港 `delayed`。詳細ページ（`ship_detail_naminoue_20261026.html`）の「亀徳港…和泊港…与論港には寄港いたしません」が読まれていても `skipped`・`operating` にならない（FR-004）、(b) 抜粋に行の無い先の便は `status is None`・`status_detail is None`（SC-004。既存の `test_later_voyage_of_same_ship_is_scheduled` もそのまま通る）、(c) 便の行が1つだけで先の便に合う → 船のタグのステータス、(d) 先の便の行が「臨時便運航」→ `operating`・`status_detail is None`（US2 の後で通る。`xfail` にせず、US2 の Phase まで落ちたままでいい）
 
 ### Implementation
 
@@ -76,7 +81,7 @@
 
 **Goal**: 「臨時便運航」を operating として読む（FR-005・FR-006）。
 
-**Independent Test**: 2026-10-26 の fixture を `_parse_ships()` に読ませて、警告0件・波之上の便の行3つ・船のステータスは `cancelled`。
+**Independent Test**: `kagoshima_20261026.html` を `_parse_ships()` に読ませて、警告0件・波之上の便の行3つ・船のステータスは `cancelled`。
 
 - [ ] T011 [P] [US2] `scraper/tests/test_marue_ferry.py` に SC-002 のテスト：上の Independent Test。行は `(10/27, 上り, cancelled)`・`(10/26, 下り, operating)`・`(10/28, 上り, operating)` の順。`unknown_status_text`・`unknown_voyage_status` のログが0件
 - [ ] T012 [US2] `scraper/scraper/scrapers/marue_ferry.py` の `_parse_status_text()` で、「欠航」の判定の後に `"臨時" in text` → `OperationStatusEnum.operating` を足す（research R4）
@@ -89,12 +94,12 @@
 
 **Goal**: 便の行が読めて、出港前の今の便に合わなければ operating（FR-011）。出港済みの今の便は船のタグのまま。
 
-**Independent Test**: 2026-10-26 の fixture で `fixed_now(datetime(2026, 10, 28, 12, 0))` にし、10/29 鹿児島発下り（波之上、乗船 18:00、下船 2026-10-30 19:00）だけを検索結果に出す。10/29 便の行は `operating`。
+**Independent Test**: `run_1026(..., now=datetime(2026, 10, 28, 12, 0))` に、10/29 鹿児島発下り（波之上、乗船 18:00、下船 2026-10-30 19:00）だけの検索結果を渡す。10/29 便の行は `operating`。
 
 ### Tests
 
 - [ ] T013 [P] [US3] `scraper/tests/test_marue_ferry.py` の `test_voyage_not_in_excerpt_keeps_ship_status` を `test_voyage_not_in_excerpt_is_operating` に変え、期待値を `operating` にする（research R2）。`voyage_not_in_excerpt` の警告が1回で、`assumed="operating"` が付くことも確かめる
-- [ ] T014 [P] [US3] `scraper/tests/test_marue_ferry.py` にテストを足す：(a) SC-006（上の Independent Test）、(b) 便の行が1つだけ（10/27 上り欠航）で 10/29 便 → `operating`、(c) 2026-10-26 10:50 の fixture で、今の便（10/25 鹿児島発、出港済み、10/26 19:00 着）の 10/26 和泊・与論・本部の行は `cancelled` のまま（10/26 鹿児島新港発の臨時便の行に当たらない）、(d) 抜粋に便の行が0（`kagoshima_html(nami=("欠航", "台風のため欠航"))`）→ 今の便は船のタグ、(e) 「■10月22日（木）名瀬発下り便…欠航」があり、今の便が 10/21 鹿児島発（出港前の時刻にする）→ `cancelled`、(f) 航路単位：今日の始発港の便が出港前で、行が読めて合わない → `operating`
+- [ ] T014 [P] [US3] `scraper/tests/test_marue_ferry.py` にテストを足す：(a) SC-006（上の Independent Test）、(b) 便の行が1つだけ（10/27 上り欠航）で 10/29 便 → `operating`、(c) `run_1026()` に `down_1025_rows()` を渡し、今の便（10/25 鹿児島発、出港済み、10/26 19:00 着）の 10/26 和泊・与論・本部の行は `cancelled` のまま（10/26 鹿児島新港発の臨時便の行に当たらない）、(d) 抜粋に便の行が0（`kagoshima_html(naminoue=("欠航", "台風のため欠航いたします。"))`。古い `kagoshima.html` が元なので `run_1026()` は使わず、既存の `mock_kagoshima()` と `TODAY_SEARCHES` で書く）→ 今の便は船のタグ（`cancelled`）、(e) 「■10月22日（木）名瀬発下り便…欠航」があり、今の便が 10/21 鹿児島発（出港前の時刻にする）→ `cancelled`、(f) 航路単位：今日の始発港の便が出港前で、行が読めて合わない → `operating`
 
 ### Implementation
 
@@ -128,7 +133,7 @@ Phase 1 → Phase 2 → Phase 3 (US1) → Phase 4 (US2) → Phase 5 (US3) → Ph
 
 ## Parallel
 
-- Phase 1：T002 は T001 と並べられる
+- Phase 1：T002 は T001 と並べられる。T002a は T002 の後
 - Phase 3：T006・T007・T009（テスト、同じファイルだが別の関数）は並べて書ける。実装の T008・T010 は順番に
 - Phase 6：T017・T018 は並べられる
 
