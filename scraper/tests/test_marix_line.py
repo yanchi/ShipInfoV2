@@ -1151,8 +1151,7 @@ def _kind_of(db_session, company, cls, url, page, info2, *, fetch=True):
     else:
         html = _list_html([(cls, url, info2)], [])
     block = BeautifulSoup(html, "lxml").select_one("div.status_single_cover")
-    detail = scraper._detail_pages.get(url) if fetch else None
-    return scraper._voyage_kind(block, detail)
+    return scraper._voyage_kind(block, url)
 
 
 @resp_mock.activate
@@ -1318,7 +1317,8 @@ def test_extra_voyage_writes_extra_row_at_stop(db_session, marix_line_company):
     assert row["scheduled_arrival_at"] == datetime(2026, 9, 7, 5, 0)
     assert row["source_url"] == EXTRA_DOWN_0906
     assert row["extra_voyage"] is True
-    assert "replace_source" not in row or row["replace_source"] is None
+    # 臨時便は航路・港を決めない（寄らなくなった港・方向が変わった前の航路の行もルール6で消す）
+    assert row["replace_source"] == (None, None, EXTRA_DOWN_0906)
     # 臨時便の詳細ページの見出しの文が詳細に入る
     assert (
         "臨時便で時間を変更し、航行経路を「鹿児島 → 那覇」に変更して運航します"
@@ -2485,3 +2485,119 @@ def test_vanished_extra_without_times_is_kept_when_date_is_today(
         datetime(2026, 9, 7, 6, 30),
     )
     assert _up_cross(db_session) == kept
+
+
+# ---------------------------------------------------------------------------
+# PR #93 レビュー
+# ---------------------------------------------------------------------------
+
+
+def _naze_extra_list(down: bool) -> str:
+    voyage = ("temporary alert", EXTRA_UP_0927, _INFO2_NAZE_0927)
+    return _list_html([voyage], []) if down else _list_html([], [voyage])
+
+
+def _rows_of_url(db_session, url):
+    return [
+        (r.route_id, r.status)
+        for r in db_session.query(DepartureStatus).filter_by(source_url=url)
+    ]
+
+
+@resp_mock.activate
+def test_extra_voyage_rows_move_when_direction_changes(db_session, marix_line_company):
+    """臨時便の方向が前の回と変わったら、前の航路の行は消える（ルール6は航路で絞らない）。"""
+    db_session.autoflush = False
+    pages = {EXTRA_UP_0927: "extra_up_naze_20260927.html"}
+    down, up = _routes(db_session, marix_line_company)
+    _run_extra(db_session, marix_line_company, _naze_extra_list(True), pages, _DAY_0927)
+    assert set(_rows_of_url(db_session, EXTRA_UP_0927)) == {(down.id, "extra")}
+
+    _run_extra(
+        db_session, marix_line_company, _naze_extra_list(False), pages, _DAY_0927
+    )
+    assert _rows_of_url(db_session, EXTRA_UP_0927) == [(up.id, "extra")]
+
+
+def _copy_row(db_session, row, **kw):
+    values = {c.name: getattr(row, c.name) for c in DepartureStatus.__table__.columns}
+    values.pop("id")
+    values.update(kw)
+    db_session.add(DepartureStatus(**values))
+    db_session.commit()
+
+
+@resp_mock.activate
+def test_vanished_extra_rows_removed_on_both_routes(db_session, marix_line_company):
+    """取りやめた臨時便の extra の行は、下り・上りのどちらにあっても消える。"""
+    db_session.autoflush = False
+    pages = {EXTRA_UP_0927: "extra_up_naze_20260927.html"}
+    _run_extra(
+        db_session, marix_line_company, _naze_extra_list(False), pages, _DAY_0927
+    )
+    down, up = _routes(db_session, marix_line_company)
+    (row,) = db_session.query(DepartureStatus).filter_by(source_url=EXTRA_UP_0927)
+    _copy_row(db_session, row, route_id=down.id)
+
+    _run_extra(db_session, marix_line_company, _list_html([], []), {}, _DAY_0927)
+    assert _rows_of_url(db_session, EXTRA_UP_0927) == []
+
+
+@resp_mock.activate
+def test_vanished_extra_keeps_rows_of_other_statuses(db_session, marix_line_company):
+    """取りやめで消すのは extra の行だけ。出港済みかを見ていない予備ルートの行などは残す。"""
+    db_session.autoflush = False
+    pages = {EXTRA_UP_0927: "extra_up_naze_20260927.html"}
+    _run_extra(
+        db_session, marix_line_company, _naze_extra_list(False), pages, _DAY_0927
+    )
+    _, up = _routes(db_session, marix_line_company)
+    (row,) = db_session.query(DepartureStatus).filter_by(source_url=EXTRA_UP_0927)
+    naha = db_session.query(Port).filter_by(name="那覇").one()
+    _copy_row(
+        db_session,
+        row,
+        port_id=naha.id,
+        ship_name="",
+        status="operating",
+        scheduled_departure_at=None,
+    )
+
+    _run_extra(db_session, marix_line_company, _list_html([], []), {}, _DAY_0927)
+    assert _rows_of_url(db_session, EXTRA_UP_0927) == [(up.id, "operating")]
+
+
+@resp_mock.activate
+def test_voyage_kind_warns_when_url_was_not_fetched(db_session, marix_line_company):
+    """fetch() で取っていない URL は定期便として扱い、warning を出す。"""
+    from bs4 import BeautifulSoup
+
+    setup_port_master(db_session, marix_line_company)
+    _mock_extra_pages(_list_html([], []), {})
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    block = BeautifulSoup(
+        _list_html([("route alert", DOWN_0906, _INFO2_DOWN_0906)], []), "lxml"
+    ).select_one("div.status_single_cover")
+    with structlog.testing.capture_logs() as logs:
+        assert scraper._voyage_kind(block, DOWN_0906) == "regular"
+    assert "voyage_kind_not_fetched" in {log["event"] for log in logs}
+
+
+@resp_mock.activate
+def test_voyage_kind_without_url_is_regular_without_warning(
+    db_session, marix_line_company
+):
+    """リンクの無い便（url が None）は定期便。voyage_kind_not_fetched は出さない。"""
+    from bs4 import BeautifulSoup
+
+    setup_port_master(db_session, marix_line_company)
+    _mock_extra_pages(_list_html([], []), {})
+    scraper = MarixLine(db_session, marix_line_company.id)
+    scraper.fetch()
+    block = BeautifulSoup(
+        _list_html([("route alert", DOWN_0906, _INFO2_DOWN_0906)], []), "lxml"
+    ).select_one("div.status_single_cover")
+    with structlog.testing.capture_logs() as logs:
+        assert scraper._voyage_kind(block, None) == "regular"
+    assert "voyage_kind_not_fetched" not in {log["event"] for log in logs}
