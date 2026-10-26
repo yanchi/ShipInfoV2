@@ -270,6 +270,82 @@ class StatusControllerTest extends WebTestCase
         $this->assertStringContainsString('便検索に無い臨時の便', $crawler->filter('details.status-legend')->text());
     }
 
+    /** 今日その方向に臨時便があれば、会社カードの航路の下に「◆ 臨時便 鹿児島 16:00発」。航路のバッジは変えない（FR-016） */
+    public function testIndexCardShowsExtraDepartureUnderRouteBadge(): void
+    {
+        $this->createPortBoardData();
+        $this->setRouteStatus(OperationStatusEnum::Cancelled);
+        $this->addTodayDeparture('鹿児島', '臨時丸', OperationStatusEnum::Extra, '16:00');
+
+        $card = $this->findCard($this->client->request('GET', '/'), '港別テスト運航会社');
+
+        $this->assertStringContainsString('✗ 欠航', $card->text());
+        $extra = $card->filter('.route-extra');
+        $this->assertCount(1, $extra);
+        $this->assertSame('◆ 臨時便 鹿児島 16:00発', trim($extra->text()));
+        $this->assertMatchesRegularExpression('#^/company/\d+$#', $extra->attr('href'));
+    }
+
+    public function testIndexCardWithoutExtraHasNoExtraLine(): void
+    {
+        $this->createPortBoardData();
+        $this->setRouteStatus(OperationStatusEnum::Cancelled);
+
+        $card = $this->findCard($this->client->request('GET', '/'), '港別テスト運航会社');
+
+        $this->assertCount(0, $card->filter('.route-extra'));
+    }
+
+    /** 航路が便なしで途中の港が臨時便だけなら、バッジは「臨時便」。下に出港する港と時刻 */
+    public function testIndexCardMidwayExtraOnlyShowsExtraBadge(): void
+    {
+        $this->createPortBoardData();
+        $this->updateTestDeparture(0, 'status', OperationStatusEnum::Extra);
+        $this->setRouteStatus(OperationStatusEnum::NoService);
+
+        $card = $this->findCard($this->client->request('GET', '/'), '港別テスト運航会社');
+
+        $this->assertStringContainsString('◆ 臨時便', $card->filter('.status-badge')->text());
+        $this->assertSame('◆ 臨時便 名瀬 05:50発', trim($card->filter('.route-extra')->text()));
+    }
+
+    /** 定期便の通常運航と臨時便が混ざっても、航路のバッジは「スケジュール変更」にならない（PR #87 レビュー） */
+    public function testIndexCardMidwayRegularPlusExtraKeepsRegularBadge(): void
+    {
+        $this->createPortBoardData();
+        $this->addTodayDeparture('名瀬', '臨時丸', OperationStatusEnum::Extra, '13:00');
+        $this->setRouteStatus(OperationStatusEnum::NoService);
+
+        $card = $this->findCard($this->client->request('GET', '/'), '港別テスト運航会社');
+
+        $this->assertStringContainsString('✓ 通常運航', $card->text());
+        $this->assertStringNotContainsString('スケジュール変更', $card->text());
+        $this->assertSame('◆ 臨時便 名瀬 13:00発', trim($card->filter('.route-extra')->text()));
+    }
+
+    public function testIndexCardMidwayCancelledPlusExtraShowsCancelled(): void
+    {
+        $this->createPortBoardData(OperationStatusEnum::Cancelled);
+        $this->updateTestDeparture(0, 'status', OperationStatusEnum::Cancelled);
+        $this->addTodayDeparture('名瀬', '臨時丸', OperationStatusEnum::Extra, '13:00');
+        $this->setRouteStatus(OperationStatusEnum::NoService);
+
+        $card = $this->findCard($this->client->request('GET', '/'), '港別テスト運航会社');
+
+        $this->assertStringContainsString('✗ 欠航', $card->filter('.status-badge')->text());
+        $this->assertStringNotContainsString('スケジュール変更', $card->text());
+    }
+
+    /** トップの「欠航・条件付などの便」に臨時便が入る（FR-017） */
+    public function testIndexAlertSummaryIncludesExtra(): void
+    {
+        $this->createPortBoardData(OperationStatusEnum::Extra);
+
+        $crawler = $this->client->request('GET', '/');
+
+        $this->assertStringContainsString('◆ 臨時便', $crawler->filter('.alert-summary')->text());
+    }
+
     public function testStatusWarningOnIndexCardAndCompanySummary(): void
     {
         $companyId = $this->createCompanyWithRoute('注意書きテスト会社', OperationStatusEnum::Cancelled);
@@ -1119,6 +1195,36 @@ class StatusControllerTest extends WebTestCase
             ->setParameter('date', (new \DateTime('today'))->modify("+{$daysAhead} days"))
             ->setParameter('ship', '港別テスト丸')
             ->execute();
+    }
+
+    /** createPortBoardData() で作った運航会社の航路の、今日の航路単位ステータスを置く。 */
+    private function setRouteStatus(OperationStatusEnum $status): void
+    {
+        $em    = $this->entityManager();
+        $route = $em->getRepository(Route::class)->findOneBy(['name' => '港別テスト運航会社 下り']);
+        $this->assertNotNull($route);
+        $em->persist((new OperationStatus())
+            ->setRoute($route)
+            ->setStatus($status)
+            ->setValidDate(new \DateTime('today'))
+            ->setScrapedAt(new \DateTime())
+            ->setSourceUrl('https://example.invalid/test'));
+        $em->flush();
+        $em->clear();
+    }
+
+    /** createPortBoardData() の運航会社の下り航路に、今日の港別の行を足す。 */
+    private function addTodayDeparture(string $portName, string $ship, OperationStatusEnum $status, string $time): void
+    {
+        $em    = $this->entityManager();
+        $route = $em->getRepository(Route::class)->findOneBy(['name' => '港別テスト運航会社 下り']);
+        $port  = $em->getRepository(Port::class)->findOneBy(['name' => $portName]);
+        $this->assertNotNull($route);
+        $this->assertNotNull($port);
+        $at = (new \DateTime('today'))->setTime((int) substr($time, 0, 2), (int) substr($time, 3, 2));
+        $em->persist($this->makeDeparture($route, $port, new \DateTime('today'), $ship, $status, $at));
+        $em->flush();
+        $em->clear();
     }
 
     /** 港別ステータスの確認時刻を書き換える。$companyName が null なら全部 */

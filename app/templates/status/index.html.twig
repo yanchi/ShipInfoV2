@@ -87,6 +87,11 @@
                                     {% elseif midway.kind == 'badge' %}
                                         {{ include('status/_status_warning.html.twig', {status: midway.status}) }}
                                     {% endif %}
+                                    {# 今日その方向に臨時便がある航路は、バッジ・注意書きの下に1行（12-marue-extra-voyages FR-016） #}
+                                    {% set extra = routesWithExtra[route.id] ?? null %}
+                                    {% if extra is not null %}
+                                        <div><a href="{{ path('app_status_company', {id: company.id}) }}" class="route-extra small text-decoration-none">◆ 臨時便 {{ extra.portName }} {{ extra.departureAt|date('H:i') }}発</a></div>
+                                    {% endif %}
                                 </li>
                             {% else %}
                                 <li class="list-group-item text-muted">航路情報がありません。</li>

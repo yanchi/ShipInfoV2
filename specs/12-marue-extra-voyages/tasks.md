@@ -182,17 +182,17 @@
 
 **Independent Test**: 今日の下りに Extra の港の行（鹿児島 16:00）があり、航路単位は欠航の状態でトップを開くと、下りの行に「✗ 欠航」と「◆ 臨時便 鹿児島 16:00発」が両方出る。
 
-- [ ] T027 [P] [US5] `app/tests/View/PortBoardTest.php` にテストを足す：`firstExtraDepartureOf(companyId, direction)` が出港時刻のいちばん早い Extra の便（港名・時刻）を返す。Extra が無ければ null、ほかの会社・ほかの方向・Extra 以外は見ない、出港済みでも返す
-- [ ] T028 [P] [US5] `app/src/View/PortBoardExtraDeparture.php` を作る（`final readonly`、`string $portName`・`\DateTimeInterface $departureAt`）。`app/src/View/PortBoardDay.php` に `firstExtraDepartureOf()` を作る（行の `port` から港名を取る）
-- [ ] T029 [US5] `app/src/Controller/StatusController.php` の `index()` で、`$fullBoard->days[0]`（今日）から航路ごとに `firstExtraDepartureOf(companyId, route->getDirection())` を求めて `routesWithExtra`（`[routeId => PortBoardExtraDeparture]`）をテンプレートに渡す。`app/templates/status/index.html.twig` の航路の `<li>` の最後（注意書きの後）に `<a href="{{ path('app_status_company', {id: company.id}) }}" class="route-extra small text-decoration-none">◆ 臨時便 {{ extra.portName }} {{ extra.departureAt|date('H:i') }}発</a>` を出す（contracts/ui-status.md）。同じファイルの `midwayDisplay()` は、Extra の entry を除いて今までどおり決め、除いた後に何も残らなければ `['kind' => 'badge', 'state' => null, 'status' => OperationStatusEnum::Extra]` を返す（research R9）
-- [ ] T030 [US5] `app/tests/Controller/StatusControllerTest.php` にテストを足す
+- [X] T027 [P] [US5] `app/tests/View/PortBoardTest.php` にテストを足す：`firstExtraDepartureOf(companyId, direction)` が出港時刻のいちばん早い Extra の便（港名・時刻）を返す。Extra が無ければ null、ほかの会社・ほかの方向・Extra 以外は見ない、出港済みでも返す
+- [X] T028 [P] [US5] `app/src/View/PortBoardExtraDeparture.php` を作る（`final readonly`、`string $portName`・`\DateTimeInterface $departureAt`）。`app/src/View/PortBoardDay.php` に `firstExtraDepartureOf()` を作る（行の `port` から港名を取る）
+- [X] T029 [US5] `app/src/Controller/StatusController.php` の `index()` で、`$fullBoard->days[0]`（今日）から航路ごとに `firstExtraDepartureOf(companyId, route->getDirection())` を求めて `routesWithExtra`（`[routeId => PortBoardExtraDeparture]`）をテンプレートに渡す。`app/templates/status/index.html.twig` の航路の `<li>` の最後（注意書きの後）に `<a href="{{ path('app_status_company', {id: company.id}) }}" class="route-extra small text-decoration-none">◆ 臨時便 {{ extra.portName }} {{ extra.departureAt|date('H:i') }}発</a>` を出す（contracts/ui-status.md）。同じファイルの `midwayDisplay()` は、Extra の entry を除いて今までどおり決め、除いた後に何も残らなければ `['kind' => 'badge', 'state' => null, 'status' => OperationStatusEnum::Extra]` を返す（research R9）
+- [X] T030 [US5] `app/tests/Controller/StatusControllerTest.php` にテストを足す
   - (a) 航路単位が欠航・今日の下りに Extra の行（鹿児島 16:00）→ トップの下りに「欠航」と「◆ 臨時便 鹿児島 16:00発」が両方出る
   - (b) Extra の行が無い方向には出ない
   - (c) 航路単位が便なしで、途中の港の Extra だけ（名瀬 03:50・本部 12:00）→ 航路のバッジが「臨時便」、下に「◆ 臨時便 名瀬 03:50発」
   - (d) トップの「欠航・条件付などの便」に臨時便の行が入る（FR-017）
   - (e) 航路単位が便なしで、途中の港が「定期便の通常運航（名瀬）＋臨時便（本部）」→ 航路のバッジは「通常運航」のまま（「スケジュール変更」にならない）、下に「◆ 臨時便 本部 HH:MM発」。PR #87 レビュー
   - (f) 途中の港が「定期便の欠航＋臨時便」→ 航路のバッジは「欠航」（Extra を除いて今までどおり）
-- [ ] T031 [US5] `make test-php`・`make phpstan`・`make cs-php`・`make lint-php`
+- [X] T031 [US5] `make test-php`・`make phpstan`・`make cs-php`・`make lint-php`
 
 **Checkpoint**: T027〜T030 が通る → コミット
 

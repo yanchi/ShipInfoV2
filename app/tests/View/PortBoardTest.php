@@ -57,6 +57,35 @@ class PortBoardTest extends TestCase
         $this->assertNull((new PortBoard([]))->lastCheckedAt());
     }
 
+    public function testFirstExtraDepartureOfPicksEarliestExtraOfCompanyAndDirection(): void
+    {
+        $extra = static fn (int $companyId, string $departure, \App\Enum\OperationStatusEnum $status = \App\Enum\OperationStatusEnum::Extra): PortBoardEntry => new PortBoardEntry(
+            DepartureDisplayStateEnum::Status,
+            $status,
+            departureAt: new \DateTimeImmutable($departure),
+            companyId: $companyId,
+        );
+        $day = new PortBoardDay(new \DateTimeImmutable('2026-10-26'), [
+            $this->direction(RouteDirectionEnum::Down, [
+                $this->row(1, [$extra(1, '2026-10-26 16:00'), $extra(2, '2026-10-26 01:00')]),
+                $this->row(3, [$extra(1, '2026-10-26 03:50'), $extra(1, '2026-10-26 00:30', \App\Enum\OperationStatusEnum::Operating)]),
+            ]),
+            $this->direction(RouteDirectionEnum::Up, [
+                $this->row(7, [$extra(1, '2026-10-26 05:00')]),
+            ]),
+        ]);
+
+        // 出港時刻がいちばん早い Extra（出港済みでも）。ほかの会社・Extra 以外は見ない
+        $down = $day->firstExtraDepartureOf(1, RouteDirectionEnum::Down);
+        $this->assertNotNull($down);
+        $this->assertSame('港3', $down->portName);
+        $this->assertSame('03:50', $down->departureAt->format('H:i'));
+        $this->assertSame('港7', $day->firstExtraDepartureOf(1, RouteDirectionEnum::Up)?->portName);
+        $this->assertSame('港1', $day->firstExtraDepartureOf(2, RouteDirectionEnum::Down)?->portName);
+        $this->assertNull($day->firstExtraDepartureOf(2, RouteDirectionEnum::Up));
+        $this->assertNull($day->firstExtraDepartureOf(9, RouteDirectionEnum::Down));
+    }
+
     public function testFilterByPortKeepsThatPortInEachDirection(): void
     {
         $board = $this->sampleBoard()->filter(new PortFilter(5));
