@@ -158,6 +158,8 @@ class RecordedVoyage:
     departures: tuple[datetime, ...]
     # skipped・unknown を除いた、一番重いステータス
     worst: OperationStatusEnum | None
+    # worst を取った行の status_detail（今の抜粋は他の便の話なので使わない）
+    worst_detail: str | None = None
 
 
 class MarueFerry(BaseScraper):
@@ -475,6 +477,11 @@ class MarueFerry(BaseScraper):
         ship = self._for_voyage(ship, route.id, valid_date, marue_rows[0].arrival_at)
         if ship.tag_over_recorded:
             ship = original
+        elif ship.use_recorded and marue_rows[0].arrival_at is not None:
+            recorded = self._recorded_voyage(
+                ship.name, route.id, marue_rows[0].arrival_at
+            )
+            return ship.status, recorded.worst_detail, KAGOSHIMA_URL
         return ship.status, self._ship_detail_text(ship), KAGOSHIMA_URL
 
     def _worst_ship_status(
@@ -801,7 +808,7 @@ class MarueFerry(BaseScraper):
             recorded = self._recorded_voyage(ship_name, route_id, arrival_at)
             if (port_id, d) in recorded.ports:
                 return recorded.ports[(port_id, d)]
-            return ship.status, self._ship_detail_text(ship)
+            return ship.status, recorded.worst_detail
         if ship.assumed_operating:
             return OperationStatusEnum.operating, None
         if ship.status in (
@@ -1037,7 +1044,8 @@ class MarueFerry(BaseScraper):
                 for r in rows
                 if r.status is not None
             }
-            known = [st for st, _ in ports.values() if st in _SEVERITY]
+            known = [(st, detail) for st, detail in ports.values() if st in _SEVERITY]
+            heaviest = max(known, key=lambda x: _SEVERITY[x[0]]) if known else None
             self._recorded_cache[key] = RecordedVoyage(
                 ports=ports,
                 departures=tuple(
@@ -1045,7 +1053,8 @@ class MarueFerry(BaseScraper):
                     for r in rows
                     if r.scheduled_departure_at is not None
                 ),
-                worst=(max(known, key=lambda st: _SEVERITY[st]) if known else None),
+                worst=heaviest[0] if heaviest else None,
+                worst_detail=heaviest[1] if heaviest else None,
             )
         return self._recorded_cache[key]
 

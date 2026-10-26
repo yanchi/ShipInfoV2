@@ -2423,16 +2423,28 @@ def test_route_status_departed_uses_recorded_status(db_session, marue_with_ports
     """L5：航路単位も、出港済みで行が合わなければ記録のステータス。"""
     company, ports = marue_with_ports
     down, _ = routes_of(db_session, company)
-    record_down_1029(db_session, down, ports, "鹿児島", date(2026, 10, 29), "delayed")
+    record_down_1029(
+        db_session,
+        down,
+        ports,
+        "鹿児島",
+        date(2026, 10, 29),
+        "delayed",
+        "鹿児島新港の出港が遅れます。",
+    )
 
-    _, records, _, _ = run_1026(
+    _, records, departures, _ = run_1026(
         db_session, company.id, down_1029_rows(), now=NOW_1029_EVE
     )
 
-    assert (
-        next(r for r in records if r["route_id"] == down.id)["status"]
-        == OperationStatusEnum.delayed
-    )
+    record = next(r for r in records if r["route_id"] == down.id)
+    assert record["status"] == OperationStatusEnum.delayed
+    # 詳細は記録した行のもの。今の抜粋（他の便の「■10月27日…欠航」）は出さない
+    assert record["status_detail"] == "鹿児島新港の出港が遅れます。"
+    # 記録の無い港も、一番重い行のステータスと詳細
+    row = find(departures, down, ports["名瀬"], date(2026, 10, 30))
+    assert row["status"] == OperationStatusEnum.delayed
+    assert row["status_detail"] == "鹿児島新港の出港が遅れます。"
 
 
 @resp_mock.activate
