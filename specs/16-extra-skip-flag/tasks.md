@@ -11,12 +11,12 @@
 
 ## Phase 2: Foundational（列とスクレイパーの土台。plan Phase A）
 
-- [ ] T001 マイグレーション `skips_ports_after TINYINT(1) DEFAULT 0 NOT NULL` を app/migrations/Version20261027000000.php に足す（down は DROP）
-- [ ] T002 [P] `skipsPortsAfter`（bool、既定 false）と getter/setter を app/src/Entity/DepartureStatus.php に足す
-- [ ] T003 [P] `skips_ports_after = Column(Boolean, nullable=False, default=False)` を scraper/scraper/db/models.py の DepartureStatus に足す
-- [ ] T004 scraper/scraper/scrapers/base.py：`_departure_hash()` は `skips_ports_after` が True のときだけ payload に足す。`_upsert_departures()` の INSERT・UPDATE で `skips_ports_after` を書く
-- [ ] T005 scraper/tests/test_base_upsert.py：False の行のハッシュが列を足す前と同じ／True で書かれる／False → True で内容が更新される
-- [ ] T006 `make migrate`・`make check-schema`・`make test-scraper` を通してコミット
+- [X] T001 マイグレーション `skips_ports_after TINYINT(1) DEFAULT 0 NOT NULL` を app/migrations/Version20261027000000.php に足す（down は DROP）
+- [X] T002 [P] `skipsPortsAfter`（bool、既定 false）と getter/setter を app/src/Entity/DepartureStatus.php に足す
+- [X] T003 [P] `skips_ports_after = Column(Boolean, nullable=False, default=False)` を scraper/scraper/db/models.py の DepartureStatus に足す
+- [X] T004 scraper/scraper/scrapers/base.py：`_departure_hash()` は `skips_ports_after` が True のときだけ payload に足す。`_upsert_departures()` の INSERT・UPDATE で `skips_ports_after` を書く
+- [X] T005 scraper/tests/test_base_upsert.py：False の行のハッシュが列を足す前と同じ／True で書かれる／False → True で内容が更新される
+- [X] T006 `make migrate`・`make check-schema`・`make test-scraper` を通してコミット
 
 ## Phase 3: User Story 1 - 臨時便の抜港を取りこぼさずに知らせる（P1）🎯 MVP
 

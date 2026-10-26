@@ -73,6 +73,7 @@ class BaseScraper(ABC):
             - scheduled_departure_at / scheduled_arrival_at: datetime
             - operated_by_company_id: int（他社が運航している no_service 行）
             - source_url: str
+            - skips_ports_after: bool（臨時便の行：この港を出たあと、運航の最後の港までに抜港がある。既定 False）
             - freeze_after_departure: bool（出港済みの行を更新・作成しない）
             - replace_scope: (route_id, port_id, departure_date)（このキーで今回に無い船の行を消す）
             - replace_source: (route_id, port_id, source_url)（同じ便の行のうち、今回書かなかった日付・船の行を消す。
@@ -181,7 +182,11 @@ class BaseScraper(ABC):
 
     @staticmethod
     def _departure_hash(rec: dict) -> str:
-        """status・status_detail・ship_name・各日時・operated_by の SHA-256。"""
+        """status・status_detail・ship_name・各日時・operated_by（・skips_ports_after）の SHA-256。
+
+        skips_ports_after は True のときだけ足す。列を足す前の行（False）のハッシュを変えず、
+        最初の回に全部の行を書き直さないため（16-extra-skip-flag research R4）。
+        """
 
         def norm(v):
             if isinstance(v, enum.Enum):
@@ -200,6 +205,8 @@ class BaseScraper(ABC):
             norm(rec.get("scheduled_arrival_at")),
             rec.get("operated_by_company_id"),
         ]
+        if rec.get("skips_ports_after"):
+            payload.append(True)
         return hashlib.sha256(
             json.dumps(payload, ensure_ascii=False).encode()
         ).hexdigest()
@@ -282,6 +289,7 @@ class BaseScraper(ABC):
                 existing.scheduled_departure_at = rec.get("scheduled_departure_at")
                 existing.scheduled_arrival_at = rec.get("scheduled_arrival_at")
                 existing.operated_by_company_id = rec.get("operated_by_company_id")
+                existing.skips_ports_after = bool(rec.get("skips_ports_after"))
                 existing.source_url = rec.get("source_url")
                 existing.content_hash = content_hash
                 existing.scraped_at = now
@@ -302,6 +310,7 @@ class BaseScraper(ABC):
                         scheduled_departure_at=dep_at,
                         scheduled_arrival_at=rec.get("scheduled_arrival_at"),
                         operated_by_company_id=rec.get("operated_by_company_id"),
+                        skips_ports_after=bool(rec.get("skips_ports_after")),
                         source_url=rec.get("source_url"),
                         content_hash=content_hash,
                         scraped_at=now,
