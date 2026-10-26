@@ -24,7 +24,7 @@
 **Testing**: pytest（2026-10-26 の保存版を fixture にする）
 **Target Platform**: Docker Compose（本番はさくら VPS の `compose.prod.yml`）
 **Project Type**: スクレイパー
-**Performance Goals**: 便の行が無い日付の検索回数は変えない。便の行がある日付と、前回状態を付けた日付（DB の行で船名があり、欠航・運休・条件付・通常運航のどれか。T016b）だけ、2日先以降の検索が1回の実行で十数回まで増える
+**Performance Goals**: 便の行が無い日付の検索回数は変えない。便の行がある日付と、前回状態を付けた日付（DB の行で船名があり、欠航・運休・条件付のどれか。T016b）だけ、2日先以降の検索が1回の実行で十数回まで増える
 **Constraints**:
 - `BaseScraper.fetch()` / `parse()` / `parse_departures()` のシグネチャは変えない
 - `raw_html_hash` に使う文字列は、航路ごとの「今日の始発港の便が出港済みか」を末尾に足す以外は変えない（出港時刻をまたぐと航路単位の判定が変わるため）

@@ -11,7 +11,7 @@ MarueFerry (マルエーフェリー) scraper.
        常に「※下記参照 / マリックスライン㈱」が返る（以前の不具合の原因）
      - 方向 × 終点以外の寄港地 × 日付（今日〜MARUE_SEARCH_DAYS_AHEAD 日先）で検索する
      - 今日・明日は毎回、2日先以降は検索キーごとに MARUE_FAR_SEARCH_INTERVAL_HOURS たったら検索する。
-       ただし抜粋に便の行がある日付と、前回に船名つきで状態（欠航・運休・条件付・通常運航）を付けた日付は、
+       ただし抜粋に便の行がある日付と、前回に船名つきで重い状態（欠航・運休・条件付）を付けた日付は、
        間隔に関係なく毎回検索する（公式の発表をすぐ反映し、行が消えたらすぐ運航予定に戻すため）
      - 検索の間に MARUE_SEARCH_DELAY_SECONDS 待つ
   3. 船別詳細ページ: 各船の a[href] を GET（港別情報の抽出に使う）
@@ -280,7 +280,8 @@ class MarueFerry(BaseScraper):
     def _recorded_search_keys(self, routes: list[Route]) -> set[tuple[int, int, date]]:
         """前回に状態を付けた 2日先以降のキーも、間隔に関係なく検索する（便の行が消えたとき。R5）。
 
-        ship_name が空の行（他社運航・0件）と skipped・NULL の行は含めない。含めると間隔がほぼ効かなくなる。
+        取り消されたときに古いままだと困る重い状態だけ。ship_name が空の行（他社運航・0件）・skipped・NULL・
+        通常運航（operating）の行は含めない。含めると行が残るあいだ毎回検索になり、間隔がほぼ効かなくなる。
         """
         if not routes:
             return set()
@@ -301,7 +302,6 @@ class MarueFerry(BaseScraper):
                             OperationStatusEnum.cancelled,
                             OperationStatusEnum.suspended,
                             OperationStatusEnum.delayed,
-                            OperationStatusEnum.operating,
                         )
                     ]
                 ),

@@ -2541,30 +2541,27 @@ def test_vanished_voyage_line_is_searched_and_reset_to_scheduled(
     db_session, marue_with_ports
 ):
     """SC-005 の後半：便の行が消えた日付は、確認済みでも検索して運航予定に戻す。
-    ship_name が空の行・skipped の行しかないキーは、今までどおり間隔で飛ばす。"""
+    ship_name が空の行・skipped・operating の行しかないキーは、今までどおり間隔で飛ばす。"""
     company, ports = marue_with_ports
     down, up = routes_of(db_session, company)
     checked = NOW_1026 - timedelta(hours=1)
+    # 船名つきの行：欠航は強制検索、skipped・operating は間隔どおり（飛ばす）
+    specials = {
+        (up.id, "那覇", date(2026, 10, 28)): "cancelled",
+        (up.id, "本部", date(2026, 10, 29)): "skipped",
+        (up.id, "与論", date(2026, 10, 28)): "operating",
+    }
     for route, names in ((down, DOWN_PORT_NAMES), (up, UP_PORTS)):
         for name in names:
             for d in (date(2026, 10, 28), date(2026, 10, 29)):
-                special = (route, name, d) in (
-                    (up, "那覇", date(2026, 10, 28)),
-                    (up, "本部", date(2026, 10, 29)),
-                )
+                special = specials.get((route.id, name, d))
                 db_session.add(
                     DepartureStatus(
                         route_id=route.id,
                         port_id=ports[name].id,
                         departure_date=d,
                         ship_name=NAMINOUE if special else "",
-                        status=(
-                            "cancelled"
-                            if d.day == 28 and special
-                            else "skipped"
-                            if special
-                            else "no_service"
-                        ),
+                        status=special or "no_service",
                         content_hash="x" * 64,
                         scraped_at=checked,
                         checked_at=checked,

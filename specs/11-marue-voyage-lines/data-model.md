@@ -93,6 +93,6 @@ DB の行による追加（行が消えたとき。R5）:
 forced |= {(r.route_id, r.port_id, r.departure_date)
            for r in departure_statuses
            if r.route_id in マルエーの航路 and r.ship_name != ""
-           and r.status in (cancelled, suspended, delayed, operating)
+           and r.status in (cancelled, suspended, delayed)
            and today + 2日 <= r.departure_date <= today + MARUE_SEARCH_DAYS_AHEAD}
 ```
