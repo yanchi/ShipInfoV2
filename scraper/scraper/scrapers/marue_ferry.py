@@ -718,6 +718,7 @@ class MarueFerry(BaseScraper):
             for voyage in parsed.voyages:
                 status, detail = self._extra_status(voyage, records)
                 recorded = self._recorded_search_keys_of(voyage, today, last)
+                self._warn_extra_arrival_changed(voyage)
                 for stop in voyage.stops[:-1]:
                     departure_at = stop.departure_at
                     key = (
@@ -750,6 +751,91 @@ class MarueFerry(BaseScraper):
                         }
                     )
         return result
+
+    def _warn_extra_arrival_changed(self, voyage: ExtraVoyage) -> None:
+        """終点の入港時刻が変わると、同じ臨時便が別の便（scheduled_arrival_at 違い）として2組に分かれる（R6 の既知の取りこぼし）。"""
+        arrival = voyage.stops[-1].arrival_at
+        before = self.session.execute(
+            select(func.min(DepartureStatus.scheduled_arrival_at)).where(
+                DepartureStatus.ship_name == voyage.ship_name,
+                DepartureStatus.route_id == voyage.route_id,
+                DepartureStatus.source_url == self._ships[voyage.ship_name].detail_url,
+                DepartureStatus.scheduled_arrival_at != arrival,
+                DepartureStatus.scheduled_arrival_at > arrival - _SAME_VOYAGE,
+                DepartureStatus.scheduled_arrival_at < arrival + _SAME_VOYAGE,
+            )
+        ).scalar()
+        if before is not None:
+            self._log.warning(
+                "extra_voyage_arrival_changed",
+                ship=voyage.ship_name,
+                route_id=voyage.route_id,
+                before=_iso(before),
+                after=_iso(arrival),
+            )
+
+    def _upsert_departures(self, records: list[dict]) -> tuple[int, int]:
+        """親の更新のあと、取りやめになった臨時便の行を消す（research R6）。"""
+        result = super()._upsert_departures(records)
+        self._delete_withdrawn_extra_rows(records)
+        return result
+
+    def _delete_withdrawn_extra_rows(self, records: list[dict]) -> None:
+        """告知から消えた臨時便の行を、始発港を出る前の便だけ消す（FR-008）。
+
+        対象は、この回に詳細ページを取れて読めない臨時便が無かった船だけ。便（船・航路・終点の入港時刻）ごとに、
+        始発港の行があり、その出港が今より後で、出港日が今日〜MARUE_SEARCH_DAYS_AHEAD 日先の範囲にある
+        今回書かなかったキーの行を消す。始発港の行が無い便は出港済みとみなして残す（消すより残すほうが安全）。
+        """
+        extra = getattr(self, "_extra_voyages", None) or {}
+        now = datetime.now()
+        today = getattr(self, "_valid_date", None) or date.today()
+        last = today + timedelta(days=settings.marue_search_days_ahead)
+        route_ids = [r.id for r in self._load_routes() if r]
+        origins = {
+            rid: stops[0].port_id for rid, stops in self._get_stops().items() if stops
+        }
+        written = {
+            (r["route_id"], r["port_id"], r["departure_date"], r["ship_name"])
+            for r in records
+        }
+        for ship_name, parsed in extra.items():
+            if parsed is None or not parsed.complete or not route_ids:
+                continue
+            rows = (
+                self.session.execute(
+                    select(DepartureStatus).where(
+                        DepartureStatus.ship_name == ship_name,
+                        DepartureStatus.route_id.in_(route_ids),
+                        DepartureStatus.source_url.is_not(None),
+                        DepartureStatus.source_url != SEARCH_URL,
+                        DepartureStatus.scheduled_arrival_at > now,
+                        DepartureStatus.scheduled_departure_at.is_not(None),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            voyages: dict[tuple[int, datetime], list[DepartureStatus]] = {}
+            for row in rows:
+                voyages.setdefault((row.route_id, row.scheduled_arrival_at), []).append(
+                    row
+                )
+            deleted = 0
+            for (route_id, _), group in voyages.items():
+                if not any(r.port_id == origins.get(route_id) for r in group):
+                    continue
+                if min(r.scheduled_departure_at for r in group) <= now:
+                    continue
+                for row in group:
+                    key = (row.route_id, row.port_id, row.departure_date, ship_name)
+                    if today <= row.departure_date <= last and key not in written:
+                        self.session.delete(row)
+                        deleted += 1
+            if deleted:
+                self._log.info(
+                    "extra_voyage_rows_deleted", ship=ship_name, count=deleted
+                )
 
     def _extra_status(
         self, voyage: ExtraVoyage, records: list[dict]

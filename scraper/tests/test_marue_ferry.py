@@ -1779,6 +1779,7 @@ def run_1026(
     now: datetime = NOW_1026,
     kagoshima: str | None = None,
     naminoue: str | None = None,
+    naminoue_status: int = 200,
 ):
     """保存版 2026-10-26 の鹿児島航路ページと詳細ページで fetch → parse → parse_departures する。"""
     mock_search(searches)
@@ -1796,13 +1797,15 @@ def run_1026(
         resp_mock.GET,
         NAMINOUE_25492,
         body=naminoue or read_fixture("marue/ship_detail_naminoue_20261026.html"),
+        status=naminoue_status,
     )
     scraper = MarueFerry(db_session, company_id)
     with structlog.testing.capture_logs() as logs, fixed_now(now):
         records = scraper.parse(scraper.fetch())
         departures = scraper.parse_departures()
     # 詳細ページのモック漏れがあると港別情報の確認が空振りになる
-    assert not [log for log in logs if log["event"] == "ship_detail_fetch_failed"]
+    if naminoue_status == 200:
+        assert not [log for log in logs if log["event"] == "ship_detail_fetch_failed"]
     return scraper, records, departures, logs
 
 
@@ -3318,3 +3321,284 @@ def test_extra_announcement_does_not_skip_regular_ports(db_session, marue_with_p
         ports[n].id for n in ("亀徳", "和泊", "与論")
     }
     assert OperationStatusEnum.skipped not in {r["status"] for r in regular}
+
+
+# ---------------------------------------------------------------------------
+# 臨時便の告知が変わったら追いかける（US3・FR-007・FR-008・FR-013）
+# ---------------------------------------------------------------------------
+
+NOW_1027 = datetime(2026, 10, 27, 10, 0)
+NOW_1028 = datetime(2026, 10, 28, 8, 0)
+DETAIL_UP_BLOCK = re.compile(
+    r"<p>【臨時便\(上り\)】</p>.*?<p>10月29日\(木\)鹿児島新港　07:30\(入港\)</p>", re.S
+)
+DETAIL_DOWN_BLOCK = re.compile(
+    r"<p>【臨時便\(下り\)】</p>.*?<p>10月27日\(火\)那覇港　13:50\(入港\)</p>", re.S
+)
+
+
+def detail_without(*blocks: re.Pattern) -> str:
+    html = naminoue_detail()
+    for block in blocks:
+        html, n = block.subn("", html, count=1)
+        assert n == 1
+    return html
+
+
+def extra_rows_in_db(db_session, route=None):
+    rows = (
+        db_session.execute(
+            select(DepartureStatus).where(DepartureStatus.source_url == NAMINOUE_25492)
+        )
+        .scalars()
+        .all()
+    )
+    return [r for r in rows if route is None or r.route_id == route.id]
+
+
+def seed_extra_rows(
+    db_session, company, *, naminoue=None, kagoshima=None, now=NOW_1026
+):
+    """臨時便の行を DB に入れる（保存版の詳細ページを読んで書く）。"""
+    scraper, _, departures, _ = run_1026(
+        db_session,
+        company.id,
+        down_1025_rows(),
+        now=now,
+        naminoue=naminoue,
+        kagoshima=kagoshima,
+    )
+    flush(scraper, db_session, departures, now)
+    resp_mock.reset()
+    return scraper
+
+
+def rerun(db_session, company, now, *, searches=None, **kw):
+    """DB に書いてある状態でもう一度スクレイプして、DB まで反映する。"""
+    scraper, _, departures, logs = run_1026(
+        db_session, company.id, searches or {}, now=now, **kw
+    )
+    with structlog.testing.capture_logs() as flush_logs:
+        flush(scraper, db_session, departures, now)
+    resp_mock.reset()
+    return scraper, departures, [*logs, *flush_logs]
+
+
+@resp_mock.activate
+def test_withdrawn_extra_voyage_is_deleted_before_it_leaves(
+    db_session, marue_with_ports
+):
+    """US3-1・US3-3：始発港を出る前に告知が消えたら消す。出たあとは残す。下りは出港済みなので3行とも残る。"""
+    company, _ = marue_with_ports
+    down, up = routes_of(db_session, company)
+    seed_extra_rows(db_session, company)
+    assert len(extra_rows_in_db(db_session)) == 9
+
+    _, _, logs = rerun(
+        db_session, company, NOW_1027, naminoue=detail_without(DETAIL_UP_BLOCK)
+    )
+
+    assert len(extra_rows_in_db(db_session, down)) == 3
+    assert extra_rows_in_db(db_session, up) == []
+    assert [log for log in logs if log["event"] == "extra_voyage_rows_deleted"]
+
+
+@resp_mock.activate
+def test_extra_voyage_is_kept_after_origin_departure(db_session, marue_with_ports):
+    company, _ = marue_with_ports
+    down, up = routes_of(db_session, company)
+    seed_extra_rows(db_session, company)
+
+    rerun(
+        db_session,
+        company,
+        NOW_1028,
+        naminoue=detail_without(DETAIL_UP_BLOCK, DETAIL_DOWN_BLOCK),
+    )
+
+    assert len(extra_rows_in_db(db_session, up)) == 6
+    assert len(extra_rows_in_db(db_session, down)) == 3
+
+
+@resp_mock.activate
+def test_failed_detail_fetch_deletes_nothing(db_session, marue_with_ports):
+    company, _ = marue_with_ports
+    seed_extra_rows(db_session, company)
+
+    rerun(db_session, company, NOW_1026, naminoue_status=404)
+
+    assert len(extra_rows_in_db(db_session)) == 9
+
+
+@resp_mock.activate
+def test_unreadable_extra_voyage_keeps_rows_and_still_writes_the_readable_one(
+    db_session, marue_with_ports
+):
+    """FR-007：上りだけ読めない → 何も消さない。下りは今までどおり書く。"""
+    company, _ = marue_with_ports
+    down, up = routes_of(db_session, company)
+    seed_extra_rows(db_session, company)
+    broken = naminoue_detail(("10月28日(水)那覇港", "10月28日(木)那覇港"))
+
+    _, departures, logs = rerun(db_session, company, NOW_1026, naminoue=broken)
+
+    assert len(extra_rows_in_db(db_session, up)) == 6
+    assert len(extra_rows_in_db(db_session, down)) == 3
+    assert [log for log in logs if log["event"] == "extra_voyage_unreadable"]
+    assert len([r for r in departures if r["source_url"] == NAMINOUE_25492]) == 3
+
+
+@resp_mock.activate
+def test_search_with_only_other_ships_keeps_extra_rows(db_session, marue_with_ports):
+    """US3-4：同じ港・日付の便検索にほかの船だけ出ても、臨時便の行は消えない。"""
+    company, ports = marue_with_ports
+    down, up = routes_of(db_session, company)
+    seed_extra_rows(db_session, company)
+    other = _voyage_searches(
+        "フェリーあけぼの",
+        {NAHA: "2026年10月28日 17:00"},
+        KAGOSHIMA,
+        "2026年10月28日",
+        "2026年10月29日 19:00",
+    )
+
+    rerun(db_session, company, NOW_1026, searches={**down_1025_rows(), **other})
+
+    assert len(extra_rows_in_db(db_session, up)) == 6
+
+
+@resp_mock.activate
+def test_changed_times_update_rows_not_yet_departed(db_session, marue_with_ports):
+    """US3-5：時刻が変われば更新する。出港済みの港の行は変えない。"""
+    company, ports = marue_with_ports
+    down, up = routes_of(db_session, company)
+    seed_extra_rows(db_session, company)
+
+    rerun(
+        db_session,
+        company,
+        NOW_1026,
+        naminoue=naminoue_detail(
+            ("18:30(入港)/19:20(出港)", "18:30(入港)/20:00(出港)")
+        ),
+    )
+    naze = next(
+        r for r in extra_rows_in_db(db_session, up) if r.port_id == ports["名瀬"].id
+    )
+    assert naze.scheduled_departure_at == datetime(2026, 10, 28, 20, 0)
+
+    rerun(
+        db_session,
+        company,
+        datetime(2026, 10, 28, 10, 30),
+        naminoue=naminoue_detail(
+            ("18:30(入港)/19:20(出港)", "18:30(入港)/20:00(出港)"),
+            ("07:00(入港)/07:20(出港)", "07:00(入港)/08:00(出港)"),
+        ),
+    )
+    motobu = next(
+        r for r in extra_rows_in_db(db_session, up) if r.port_id == ports["本部"].id
+    )
+    assert motobu.scheduled_departure_at == datetime(2026, 10, 28, 7, 20)
+
+
+@resp_mock.activate
+def test_port_removed_from_extra_voyage_deletes_only_that_row(
+    db_session, marue_with_ports
+):
+    company, ports = marue_with_ports
+    down, up = routes_of(db_session, company)
+    seed_extra_rows(db_session, company)
+    html = naminoue_detail(("<p>10月28日(水)与論港　09:50(入港)/10:10(出港)</p>", ""))
+
+    rerun(db_session, company, NOW_1026, naminoue=html)
+
+    assert ports["与論"].id not in {r.port_id for r in extra_rows_in_db(db_session, up)}
+    assert len(extra_rows_in_db(db_session, up)) == 5
+    assert len(extra_rows_in_db(db_session, down)) == 3
+
+
+@resp_mock.activate
+def test_excerpt_cancellation_turns_extra_rows_into_cancelled(
+    db_session, marue_with_ports
+):
+    """US3-2：抜粋の上りの行が「欠航」になったら、上りの6行が欠航になる。"""
+    company, _ = marue_with_ports
+    down, up = routes_of(db_session, company)
+    seed_extra_rows(db_session, company)
+
+    rerun(
+        db_session,
+        company,
+        NOW_1026,
+        kagoshima=kagoshima_1026(EXCERPT_1026.format(up28="欠航")),
+    )
+
+    ups = extra_rows_in_db(db_session, up)
+    assert len(ups) == 6 and {r.status for r in ups} == {"cancelled"}
+    assert {r.status for r in extra_rows_in_db(db_session, down)} == {"extra"}
+
+
+DEPARTED_YESTERDAY = (
+    (
+        "10月26日(月)鹿児島新港　　　　　16:00(出港)",
+        "10月26日(月)鹿児島新港　　　　　23:00(出港)",
+    ),
+    ("03:00(入港)/03:50(出港)", "14:00(入港)/15:00(出港)"),
+    ("11:30(入港)/12:00(出港)", "21:00(入港)/22:00(出港)"),
+    ("10月27日(火)那覇港　13:50(入港)", "10月28日(水)那覇港　05:00(入港)"),
+)
+
+
+@resp_mock.activate
+def test_voyage_that_left_yesterday_is_kept(db_session, marue_with_ports):
+    """始発港を前日に出た便は、始発港の行の出港日が範囲の外でも出港済みと分かって、残る。"""
+    company, _ = marue_with_ports
+    down, _ = routes_of(db_session, company)
+    seed_extra_rows(db_session, company, naminoue=naminoue_detail(*DEPARTED_YESTERDAY))
+    assert len(extra_rows_in_db(db_session, down)) == 3
+
+    rerun(db_session, company, NOW_1027, naminoue=detail_without(DETAIL_DOWN_BLOCK))
+
+    assert len(extra_rows_in_db(db_session, down)) == 3
+
+
+@resp_mock.activate
+def test_first_read_after_origin_departure_makes_only_remaining_ports(
+    db_session, marue_with_ports
+):
+    """Edge Cases：始発港を出たあとに初めて読んだら、出港済みの港の行は作らない。消えても残りは残す。"""
+    company, ports = marue_with_ports
+    down, _ = routes_of(db_session, company)
+    now = datetime(2026, 10, 27, 5, 0)
+
+    seed_extra_rows(db_session, company, now=now)
+    rows = extra_rows_in_db(db_session, down)
+    assert [r.port_id for r in rows] == [ports["本部"].id]
+
+    rerun(db_session, company, NOW_1027, naminoue=detail_without(DETAIL_DOWN_BLOCK))
+    assert [r.port_id for r in extra_rows_in_db(db_session, down)] == [ports["本部"].id]
+
+
+@resp_mock.activate
+def test_changed_final_arrival_warns(db_session, marue_with_ports):
+    """終点の入港時刻が変わると別の便に分かれる（既知の取りこぼし）。警告で気づけるようにする。"""
+    company, _ = marue_with_ports
+    seed_extra_rows(db_session, company)
+
+    _, _, logs = rerun(
+        db_session,
+        company,
+        NOW_1026,
+        naminoue=naminoue_detail(
+            (
+                "10月29日(木)鹿児島新港　07:30(入港)",
+                "10月29日(木)鹿児島新港　08:30(入港)",
+            )
+        ),
+    )
+
+    assert (
+        len([log for log in logs if log["event"] == "extra_voyage_arrival_changed"])
+        == 1
+    )

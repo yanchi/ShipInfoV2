@@ -147,7 +147,7 @@
 ### Tests（先に書く）
 
 - [X] T022 [P] [US3] `scraper/tests/test_base_departures.py` にテストを足す：`replace_scope` の行と同じ航路・港・日付に、別の `source_url` で別の船の行がある → 消えない。同じ `source_url` の別の船の行は今までどおり消える
-- [ ] T023 [US3] `scraper/tests/test_marue_ferry.py` にテストを足す。T012 の9行を DB に入れた状態から:
+- [X] T023 [US3] `scraper/tests/test_marue_ferry.py` にテストを足す。T012 の9行を DB に入れた状態から:
   - (a) 10/27 10:00 に、【臨時便(上り)】を消した詳細ページで実行 → 上りの6行が消える。下りは、名瀬（10/27 03:50）が出港済みでも始発（10/26 16:00）が出港済みなので3行とも残る
   - (b) 10/28 08:00 に、【臨時便(上り)】を消した詳細ページで実行 → 上りの6行が全部残る（那覇を 05:00 に出港済み。US3-3）
   - (c) 詳細ページの取得が失敗（404）→ 何も消えない
@@ -163,14 +163,14 @@
 ### Implementation
 
 - [X] T024 [US3] `scraper/scraper/scrapers/base.py` の `_upsert_departures()` のルール5で、scope のキーに `source_url` を足し、DELETE の条件に `DepartureStatus.source_url == source_url` を足す（research R6）。docstring のルール5も直す
-- [ ] T025 [US3] `scraper/scraper/scrapers/marue_ferry.py` で `_upsert_departures(records)` を上書きする（data-model「消し方」）
+- [X] T025 [US3] `scraper/scraper/scrapers/marue_ferry.py` で `_upsert_departures(records)` を上書きする（data-model「消し方」）
   - 親を呼んだあとに、`_extra_voyages` が None でない船の臨時便の行を読む（マルエーの航路・`scheduled_arrival_at > now`。**出港日では絞らない**）
   - 便（route_id, scheduled_arrival_at）ごとにまとめ、始発港（`_get_stops()[route_id][0]`）の行がある便で、`scheduled_departure_at` の最小が今より後の便だけ、出港日が今日〜`MARUE_SEARCH_DAYS_AHEAD` 日先で今回書かなかったキーの行を消す
   - 対象の船は `_extra_voyages` が None でなく `complete` が True の船だけ
   - 消した行の数を `extra_voyage_rows_deleted`（船・件数）でログに出す
   - 行を作るとき（T016 の中）、同じ船・航路で `scheduled_arrival_at` が違い、差が24時間未満の臨時便の行が DB にあれば `extra_voyage_arrival_changed`（船・航路・前と今の到着時刻）を出す（research R6 の既知の取りこぼし）。T023 に (l) として、名瀬の入港・終点の鹿児島の入港を書き換えたときにこの警告が1件出るテストを足す
   - 戻り値（created, updated）は親のまま
-- [ ] T026 [US3] `make test-scraper`・`make lint-scraper`
+- [X] T026 [US3] `make test-scraper`・`make lint-scraper`
 
 **Checkpoint**: T022〜T023 が通る → コミット
 
