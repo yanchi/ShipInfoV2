@@ -2,6 +2,8 @@
 
 [specs/5-ui-readability/contracts/ui-status.md](../../5-ui-readability/contracts/ui-status.md) に「抜港」の1行を足す。ほかの行は変えない（FR-012）。
 
+臨時便の1行は [specs/12-marue-extra-voyages/contracts/ui-status.md](../../12-marue-extra-voyages/contracts/ui-status.md)。
+
 | 状態 | 記号 | 文言 | 見た目 | 異常の要約に入るか | 出港済みにするか |
 |---|---|---|---|---|---|
 | 通常運航 | ✓ | 通常運航 | 緑の塗り | × | する |

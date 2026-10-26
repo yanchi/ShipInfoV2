@@ -14,7 +14,7 @@ MarueFerry (マルエーフェリー) scraper.
        ただし抜粋に便の行がある日付と、前回に船名つきで重い状態（欠航・運休・条件付）を付けた日付は、
        間隔に関係なく毎回検索する（公式の発表をすぐ反映し、行が消えたらすぐ運航予定に戻すため）
      - 検索の間に MARUE_SEARCH_DELAY_SECONDS 待つ
-  3. 船別詳細ページ: 各船の a[href] を GET（港別情報の抽出に使う）
+  3. 船別詳細ページ: 各船の a[href] を GET（港別情報と臨時便の抽出に使う）
 
 検索結果（table.s-result tbody tr）:
     <td>鹿児島航路</td><td>フェリーあけぼの</td><td>2026年10月4日 05:50</td><td>2026年10月4日 19:00</td>
@@ -56,6 +56,19 @@ MarueFerry (マルエーフェリー) scraper.
     - skipped は港の行だけ。航路単位（operation_statuses）には書かない
     すべて freeze_after_departure=True（出港済みの行は確定）、replace_scope=(route, port, date)
 
+臨時便（12-marue-extra-voyages）:
+    船の詳細ページの div.status-archive の【臨時便(上り/下り)】（次の【…】・《…》まで）を fetch() で読む（_parse_extra_voyages）
+    - 読めない臨時便（曜日違い・航路に無い港・順番違い・出港なし・終点の入港なし・時刻が戻る）は警告
+      extra_voyage_unreadable を出して作らず、その船はこの回の削除の対象から外す（ExtraParse.complete）
+    - 出港時刻のある港ごとに、状態 extra の行を作る（終点の行は作らない）。今日〜MARUE_SEARCH_DAYS_AHEAD 日先だけ。
+      抜粋に同じ臨時便の行（始発港から書いた・日付が始発港の出港日と同じ）が欠航・運休・条件付ならその状態と抜粋の文
+    - 臨時便の行の目印は source_url（船の詳細ページの URL）。状態では見分けない。便検索から作る行は SEARCH_URL。
+      定期便の今の便・出港済み・前回の記録・2日先以降の検索間隔は、DB を読むとき _SEARCH_ROWS で臨時便の行を除く
+    - 便検索の行と同じキー（航路・港・出港日・船）は便検索を優先して作らない。出港時刻が違えば便検索の行の詳細に
+      「臨時便 HH:MM発あり」を足す（extra_voyage_key_conflict）
+    - 臨時便の告知は港別情報に使わない（utils/port_notice.py の _detail_body が読み飛ばす）
+    - 告知から消えた臨時便の行は _upsert_departures() で消す。始発港の行があり、その出港が今より後の便だけ
+      （出港済みの便・始発港の行が無い便は残す）。replace_scope は付けない（便検索の整理で消えないように）
 raw_html_hash: 鹿児島航路ページの HTML ＋ 今日の始発港2つの検索結果を正規化した文字列 ＋ 航路ごとの「今日の始発港の便が出港済みか」
   （出港時刻をまたぐと、同じ HTML でも航路単位の判定が変わるため）
 valid_date: 常に date.today()

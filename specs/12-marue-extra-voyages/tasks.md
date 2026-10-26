@@ -213,11 +213,11 @@
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T035 [P] `scraper/scraper/scrapers/marue_ferry.py` 冒頭の docstring を書き足す。処理の流れの3（船別詳細ページ）に臨時便の読み取りを、港別に臨時便の行の作り方・消し方・`source_url` の目印・定期便の判定から除くことを書く
-- [ ] T036 [P] `specs/9-marue-port-skip/contracts/ui-status.md` の冒頭に「臨時便は specs/12-marue-extra-voyages/contracts/ui-status.md」と1行足す（凡例の一覧がどこにあるか追えるように）
-- [ ] T037 全部のチェックを流す：`make test-scraper`・`make lint-scraper`・`make test-php`・`make phpstan`・`make cs-php`・`make lint-php`・`make check-schema`・`make verify-prod`
-- [ ] T038 `make up` → `make scraper-run` → `/ports`・トップ・凡例を目で見る（臨時便が出ていない日は T030 のテストの画面で代える）。`make notify-dry-run` で本文が崩れないこと
-- [ ] T039 quickstart.md の本番の確認手順を、実装に合わせて直す（ログのイベント名・SQL）。`deploy/README.md` のロールバックの手順に「12-marue-extra-voyages 以降のイメージから戻すときは、先に `DELETE FROM departure_statuses WHERE status = 'extra'`」を足す（research R10）
+- [X] T035 [P] `scraper/scraper/scrapers/marue_ferry.py` 冒頭の docstring を書き足す。処理の流れの3（船別詳細ページ）に臨時便の読み取りを、港別に臨時便の行の作り方・消し方・`source_url` の目印・定期便の判定から除くことを書く
+- [X] T036 [P] `specs/9-marue-port-skip/contracts/ui-status.md` の冒頭に「臨時便は specs/12-marue-extra-voyages/contracts/ui-status.md」と1行足す（凡例の一覧がどこにあるか追えるように）
+- [X] T037 全部のチェックを流す：`make test-scraper`・`make lint-scraper`・`make test-php`・`make phpstan`・`make cs-php`・`make lint-php`・`make check-schema`・`make verify-prod`
+- [X] T038 `make up` → `make scraper-run` → `/ports`・トップ・凡例を目で見る（臨時便が出ていない日は T030 のテストの画面で代える）。`make notify-dry-run` で本文が崩れないこと
+- [X] T039 quickstart.md の本番の確認手順を、実装に合わせて直す（ログのイベント名・SQL）。`deploy/README.md` のロールバックの手順に「12-marue-extra-voyages 以降のイメージから戻すときは、先に `DELETE FROM departure_statuses WHERE status = 'extra'`」を足す（research R10）
 
 **Checkpoint**: 全部通る → コミット → PR
 
