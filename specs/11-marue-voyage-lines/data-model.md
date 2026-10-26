@@ -36,7 +36,7 @@ _voyage_line(ship, route_id, origin_date, arrival_date) -> VoyageStatus | None
 | 今の便 | 1 | 合う | 船のタグ（今まで） | 今まで |
 | 今の便 | 2以上 | 合う | 行の状態 ＋ 港別情報（今まで） | 今まで |
 | 今の便・出港前 | 1以上 | 合わない | **operating**（FR-011） | なし |
-| 今の便・出港済み | 1以上 | 合わない | **前回記録したその便のステータス**（無ければ船のタグ） | 今まで |
+| 今の便・出港済み | 1以上 | 合わない | **前回記録したその港の行のステータス**（無ければその便で一番重いもの、それも無ければ船のタグ） | 前回の行の詳細（無ければ今まで） |
 | 先の便 | 0 | — | None（運航予定。今まで） | なし |
 | 先の便 | 1 | 合う | **船のタグ**（全港。港別情報なし） | 抜粋（operating ならなし） |
 | 先の便 | 2以上 | 合う | **行の状態**（全港。港別情報なし） | 抜粋（operating ならなし） |
@@ -47,25 +47,29 @@ _voyage_line(ship, route_id, origin_date, arrival_date) -> VoyageStatus | None
 ### 出港済み（R7）
 
 ```
-departed(origin_date, rows_of_voyage, now) =
+departed(origin_date, voyage, now) =
     origin_date < today
-    or min(row.departure_at for row in rows_of_voyage if row.departure_at) <= now
+    or min(departure_at of rows_of_voyage ∪ recorded_rows_of_voyage) <= now
 ```
 
-`rows_of_voyage` は、この回の検索結果のうち、同じ船・同じ航路・同じ下船日時の行。
+- `rows_of_voyage`：この回の検索結果のうち、同じ船・同じ航路・同じ下船日時の行の乗船日時
+- `recorded_rows_of_voyage`：DB の `departure_statuses` のうち、同じ船・同じ航路で下船日時の差が24時間未満の行の `scheduled_departure_at`（始発港のキーの検索が失敗した回でも判定できるように。M3）
 
 ### 前回記録したその便のステータス（R7）
 
+DB は今の便ごとに1回だけ引き（`ship_name`・`route_id`・`scheduled_arrival_at` の差が24時間未満）、`(port_id, departure_date) → (status, status_detail)` と `scheduled_departure_at` を持っておく。
+
 ```
-recorded_voyage_status(ship_name, route_id, arrival_at) =
-    max(_SEVERITY, [r.status for r in departure_statuses
-                    if r.ship_name == ship_name and r.route_id == route_id
-                    and |r.scheduled_arrival_at − arrival_at| < 24h
-                    and r.status not in (None, skipped)])
-    無ければ None（→ 船のタグ）
+recorded_port_status(voyage, port_id, d) =
+    その便の (port_id, d) の行があり status が NULL でなければ (status, status_detail)   # 港ごとにそのまま
+recorded_voyage_status(voyage) =
+    max(_SEVERITY, [r.status for r in その便の行 if r.status not in (None, skipped, unknown)])
+    無ければ None
 ```
 
-「同じ便」の決まりは `_recorded_voyages()` と同じ。skipped は港ごとの値なので除く。一番重いものにするのは、港ごとに分かれていた便（条件付の港と通常運航の港）を安全側でまとめるため。港別情報は今までどおり上から重ねる。
+- 港の行（`parse_departures()`）：`recorded_port_status` → 無ければ `recorded_voyage_status`（詳細は抜粋）→ 無ければ船のタグ
+- 航路単位（`_route_status()`）：`recorded_voyage_status` → 無ければ船のタグ
+- 「同じ便」の決まりは `_recorded_voyages()` と同じ。港ごとにそのまま使うので、条件付の便で港ごとに分かれていた状態（言及の無い港は operating）が出港後も崩れない
 
 ### 2日先以降の検索を足すキー（R5）
 

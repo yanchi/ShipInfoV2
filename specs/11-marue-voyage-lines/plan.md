@@ -41,12 +41,12 @@
 |---|---|---|
 | I. スクレイパーは `BaseScraper` 継承・会社ごとに独立 | ✅ PASS | `MarueFerry` の中だけ。Base・`utils/` は変えない |
 | II. Twig + Controller、API なし、スクレイパーは DB に直接書く | ✅ PASS | Web アプリは変えない |
-| III. `raw_html_hash`・キーごとの最新状態・`scraper_logs` | ✅ PASS | 書き方は変えない。先の便の行に状態が入るだけ。`voyage_not_in_excerpt` に `assumed` を足して判断を追えるようにする |
+| III. `raw_html_hash`・キーごとの最新状態・`scraper_logs` | ✅ PASS | 書き方は変えない。先の便の行に状態が入るだけ。出港済みの今の便のために `departure_statuses` を読む（`_recorded_voyages()` と同じく読むだけ）。`voyage_not_in_excerpt` に `assumed` を足して判断を追えるようにする |
 | IV. Docker で完結 | ✅ PASS | マイグレーションなし。新しいライブラリなし |
 | V. フェーズごとにコミット | ✅ PASS | 下の Phase A〜C を tasks.md のグループにして、グループごとにコミットする |
 | 技術スタック（変更禁止） | ✅ PASS | 変更なし |
 
-**Phase 1 設計の後に再チェック**: 違反なし。FR-011 は「公式は変更のある便に行を書く」という前提に乗る。外れたときの影響は出港前の今の便だけで、出港済みの便は今までどおりタグに戻す（R7）。
+**Phase 1 設計の後に再チェック**: 違反なし。FR-011 は「公式は変更のある便に行を書く」という前提に乗る。外れたときの影響は出港前の今の便だけで、出港済みの便は前回記録したステータスに港ごとに戻す（R7）。
 
 ---
 
