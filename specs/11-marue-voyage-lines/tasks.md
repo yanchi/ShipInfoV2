@@ -118,10 +118,10 @@
 
 ## Phase 6: Polish
 
-- [ ] T017 [P] `scraper/scraper/scrapers/marue_ferry.py` の先頭の docstring と `_for_voyage()`・`_match_voyage()` の docstring を、この機能の決まりに合わせて書き直す（便の行の照合、先の便、出港前の今の便、臨時便運航、2日先以降の検索）
-- [ ] T018 [P] `specs/4-departure-port-status/spec.md` の FR-021 の「それより後の便の行は「運航予定」とする」を、「ただし抜粋にその便の行があれば、その状態とする（11-marue-voyage-lines）」に書き換える（FR-008）
-- [ ] T019 `make format-scraper` → `make lint-scraper` → `make test-scraper` が全部通る
-- [ ] T020 quickstart.md の「ローカルで動かす」を実行して、`/ports` で先の便の状態が出ることを見る
+- [X] T017 [P] `scraper/scraper/scrapers/marue_ferry.py` の先頭の docstring と `_for_voyage()`・`_match_voyage()` の docstring を、この機能の決まりに合わせて書き直す（便の行の照合、先の便、出港前の今の便、臨時便運航、2日先以降の検索）
+- [X] T018 [P] `specs/4-departure-port-status/spec.md` の FR-021 の「それより後の便の行は「運航予定」とする」を、「ただし抜粋にその便の行があれば、その状態とする（11-marue-voyage-lines）」に書き換える（FR-008）
+- [X] T019 `make format-scraper` → `make lint-scraper` → `make test-scraper` が全部通る
+- [X] T020 quickstart.md の「ローカルで動かす」を実行して、`/ports` で先の便の状態が出ることを見る
 
 **Checkpoint**: 全部通る → コミット
 

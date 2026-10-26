@@ -2,15 +2,18 @@
 MarueFerry (マルエーフェリー) scraper.
 
 処理の流れ（specs/4-departure-port-status research R3・R8・R9・R10）:
-  1. 便検索: POST https://www.aline-ferry.com/search/result.php
+  1. 船ステータス: GET https://www.aline-ferry.com/kagoshima/
+     a > div.route-head > div.ferry-name / div.tag-list span / div.situation-excerpt、a[href] が船別詳細ページ
+     便検索より先に読む（抜粋の便の行から、2日先以降で検索する日付を決めるため）
+  2. 便検索: POST https://www.aline-ferry.com/search/result.php
      startDate=YYYY年MM月DD日, startPort=<出発港コード>, endPort=<到着港コード>
      ※ startDate は必ず「YYYY年MM月DD日」形式で送る。ISO 形式（YYYY-MM-DD）だと日付に関係なく
        常に「※下記参照 / マリックスライン㈱」が返る（以前の不具合の原因）
      - 方向 × 終点以外の寄港地 × 日付（今日〜MARUE_SEARCH_DAYS_AHEAD 日先）で検索する
-     - 今日・明日は毎回、2日先以降は検索キーごとに MARUE_FAR_SEARCH_INTERVAL_HOURS たったら検索する
+     - 今日・明日は毎回、2日先以降は検索キーごとに MARUE_FAR_SEARCH_INTERVAL_HOURS たったら検索する。
+       ただし抜粋に便の行がある日付と、前回に船名つきで状態（欠航・運休・条件付・通常運航）を付けた日付は、
+       間隔に関係なく毎回検索する（公式の発表をすぐ反映し、行が消えたらすぐ運航予定に戻すため）
      - 検索の間に MARUE_SEARCH_DELAY_SECONDS 待つ
-  2. 船ステータス: GET https://www.aline-ferry.com/kagoshima/
-     a > div.route-head > div.ferry-name / div.tag-list span / div.situation-excerpt、a[href] が船別詳細ページ
   3. 船別詳細ページ: 各船の a[href] を GET（港別情報の抽出に使う）
 
 検索結果（table.s-result tbody tr）:
@@ -29,15 +32,22 @@ MarueFerry (マルエーフェリー) scraper.
     検索結果ごとに行を作る
     - 0件 → no_service
     - 他社運航 → no_service + operated_by_company_id（マリックスライン）
-    - マルエーの船 → 便を (船名, 航路, 下船日時) で特定し、船ごとに「まだ着いていない一番早い便」の行に
-      船ステータス（＋港別情報）を入れる。それより後の便は status=None（運航予定）
+    - マルエーの船 → 便を (船名, 航路, 下船日時) で特定し、船ごとに「まだ着いていない一番早い便」（今の便）の行に
+      船ステータス（＋港別情報）を入れる。それより後の便は、抜粋にその便の行があればその状態を全港に入れ
+      （港別情報は使わない）、無ければ status=None（運航予定）
     港別情報（FR-006、utils/port_notice.py）:
     - 船ステータスが欠航・運休・便なし → 全港そのまま
     - 抜粋と船別詳細ページの本文から、言及された港を 抜港（寄港いたしません等）→ skipped、港変更・条件付 → delayed にする
+    - 「臨時便運航」は operating として読む（運休・条件付などの語があればそちらが先）
     - 船ブロックのタグは全部読む（一番重いものが船のステータス。条件付・スケジュール変更かどうかは別に持つ）
     - タグは船の全便ぶんをまとめたもの（「■10月20日(火)那覇発上り便…条件付き運航」「■10月21日(水)鹿児島新港発
       下り便…欠航」のように便ごとの状態が抜粋に並ぶ）。抜粋に便が2つ以上あり、その便（始発港の出港日・上り/下り）の
       行があれば、船のステータスの代わりにその行の状態を使う（航路単位も同じ）。行が無ければ船のステータスのまま（安全側）
+    - 便と行の照合は出港日の一致が先。途中の港から書いた行（「名瀬発下り便」）だけ、出港日〜下船日の範囲でも合わせる
+    - 抜粋に便の行があるのに今の便に合う行が無いとき（公式は変更のある便に行を書く）:
+      出港前なら operating（港別情報は当てない）。ただしタグのほうが行より重い・条件付の行が無いなど、
+      行の無い便の変更かもしれないときは船のタグのまま（voyage_tag_heavier_than_lines）。
+      出港済みなら、公式は過ぎた便の行を消すので、前回記録したその港のステータスに戻す
     - 船が条件付だけ（スケジュール変更・遅延のタグが無い）で港別情報がある → 言及の無い港は operating。
       港別情報が無い → 全港 delayed（port_notice_unmatched）。
       スケジュール変更・遅延のタグもある船は言及の無い港も船のステータスのまま（時刻が変わっているため）
