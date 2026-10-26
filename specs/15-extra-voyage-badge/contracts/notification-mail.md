@@ -1,6 +1,8 @@
 # Contract: 通知メール（臨時便がある日の状況）
 
-[specs/12-marue-extra-voyages/contracts/notification-mail.md](../../12-marue-extra-voyages/contracts/notification-mail.md) の「状況」のうち、航路×日付が通常運航で港の行に臨時便があるものを変える（サイトのバッジと同じ条件）。テンプレート・件名・送る条件・港の行は変えない。
+[specs/12-marue-extra-voyages/contracts/notification-mail.md](../../12-marue-extra-voyages/contracts/notification-mail.md) の「状況」のうち、航路×日付が通常運航で港の行に臨時便があるものを変える。
+
+サイトのバッジと条件はそろえない。航路×日付が便なし・行なしで、途中の港の定期便が通常運航・運航予定、臨時便もある日は、サイトは「▲ スケジュール変更」、メールは下の表のとおり「臨時便あり」など。メールに載るのは通常以外の港の行だけで、途中の港の定期便の状態は分からないため。どちらも「通常運航」とは書かない（research R4）。テンプレート・件名・送る条件・港の行は変えない。
 
 | 航路×日付 | 通常以外の港の行 | 状況（今） | 状況（変更後） |
 |---|---|---|---|

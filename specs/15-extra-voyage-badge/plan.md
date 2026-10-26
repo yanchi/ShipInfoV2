@@ -75,6 +75,7 @@ specs/15-extra-voyage-badge/
 app/src/Controller/StatusController.php        # routeBadges（R1）、routesWithExtra に skipsPorts（R3）
 app/src/View/PortBoard.php                     # extraSkipsPortsOf（R3）
 app/src/View/PortBoardExtraDeparture.php       # skipsPorts
+app/src/View/PortBoardEntry.php                # isCalling（R3）
 app/src/View/IrregularService.php              # statusText（R4）
 app/templates/status/index.html.twig           # routeBadges、・抜港あり
 app/tests/Controller/StatusControllerTest.php
@@ -104,7 +105,8 @@ specs/13-marix-extra-voyages/contracts/ui-status.md
 ### Phase B：抜港あり（US2・FR-004）
 
 - `PortBoard::extraSkipsPortsOf(int $companyId, RouteDirectionEnum $direction): bool`（R3）
-- `PortBoardExtraDeparture` に `public bool $skipsPorts = false`。`routesWithExtra()` でボード全体から詰める
+- `PortBoardEntry::isCalling()`（寄る状態）を足す
+- `PortBoardExtraDeparture` のコンストラクタに昇格引数 `public bool $skipsPorts = false`（readonly のプロパティ宣言には既定値を書けない）。`routesWithExtra()` でボード全体から詰める
 - `index.html.twig`：`{% if extra.skipsPorts %}・抜港あり{% endif %}`
 - テスト（`PortBoardTest`。ボードを手で組む）
   - SC-004 / US2-1：10/27 下り（名瀬・本部が臨時便、亀徳・和泊・与論に同じ船の行なし）→ true
@@ -130,4 +132,4 @@ specs/13-marix-extra-voyages/contracts/ui-status.md
 
 | 増えるもの | なぜ要るか | もっと簡単な案を採らない理由 |
 |---|---|---|
-| 臨時便を船ごとの運航に分ける（R3） | 日をまたぐ運航・同じ日に2つの臨時便があっても、運航ごとに最初と最後の港のあいだを見る | 今日の臨時便の行を全部まとめて最初と最後を取ると、別の運航のあいだの港を抜港と取り違える |
+| 臨時便を船名・到着予定で運航に分ける（R3） | 日をまたぐ運航・同じ日に2つの臨時便・日が離れた同じ船の臨時便があっても、運航ごとに最初と最後の港のあいだを見る | 今日の臨時便の行を全部まとめる・寄港順の位置で切ると、別の運航のあいだの港を抜港と取り違える |
