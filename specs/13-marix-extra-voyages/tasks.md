@@ -14,9 +14,9 @@
 | A. 便の種類と、臨時便の寄る港の行 | Phase 2（T004〜T005）・Phase 3（US2）・Phase 4（US3。T010〜T011） |
 | B. Base の flush と、臨時便の行の後始末 | Phase 2（T006〜T007）・Phase 4（US3。T012〜T013） |
 | C. 同じキーの優先 | Phase 5（US1） |
-| D. 方向 | Phase 6（US4。T018〜T019） |
+| D. 方向 | Phase 6（US4。T019〜T020） |
 | E. 航路単位 | Phase 7（US5） |
-| F. トップのバッジと文書 | Phase 6（US4。T020〜T021）・Phase 8 |
+| F. トップのバッジと文書 | Phase 6（US4。T021〜T022）・Phase 8 |
 
 US1（同じキーの優先）は US2 の臨時便の行が無いと確かめられないので、US2・US3 の後に置く。
 
@@ -153,14 +153,14 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 
 - [ ] T016 [US1] `scraper/tests/test_marix_line.py` にテストを足す（実装の前に落ちることを確かめる）。全部 `db_session.autoflush = False`、1回目は今日 2026-09-07・今 2026-09-07 06:00 で、9/7 の一覧（定期便＋臨時便）を `_run_departures()`:
   - (a) US1-4：2回目は今 06:30、臨時便を一覧に残したまま詳細ページを 500 → 那覇・名瀬のクロスは `extra` のまま
-  - (b) US1-5：2回目は今 08:00（那覇 07:00 は出港済み）、臨時便を一覧から外す → 那覇のクロスは `extra` のまま
+  - (b) US1-5：2回目は今 08:00（那覇 07:00 は出港済み、名瀬 21:20 はまだ）、臨時便を一覧から外す → 那覇・名瀬のクロスは両方 `extra` のまま（出港済みは便ごと。analyze M1）
   - (c) US1-6：2回目は今 06:30（未出港）、臨時便を一覧から外す → 那覇・名瀬のクロスは `cancelled`（`source_url = UP_0907`）
   - (d) 2回目は今 06:30、臨時便の詳細ページの那覇・名瀬の日付を「09月08日」に書き換える → 9/7 の那覇・名瀬のクロスは `cancelled`（`source_url = UP_0907`）に戻り、9/8 に `extra` の行がある（R5・R7。flush が無いと 9/7 の行が消えるので、T007 の確認にもなる）
   - (e) 2回目は今 06:30、定期便を全部 `normal` に書き換え、臨時便を一覧から外す → 那覇のクロスは `operating`（定期便が走るときはいつでも定期便）
 - [ ] T017 [US1] `marix_line.py` を直す（research R5）:
   - `_extra_rows_kept(self, route_ids: list[int], since: date) -> dict[tuple, tuple[str, datetime | None]]`：`status = 'extra'` で `departure_date >= since` の行の、キー → (`source_url`, `scheduled_departure_at`)。`parse_departures()` の頭で1回だけ呼ぶ。`since` は一覧の便の始発日（`_parse_date()`）のいちばん前、一覧に便が無ければ今日
   - `list_urls`：今回の一覧の便の URL 全部
-  - `_resolve_extra_conflicts()` で、臨時便の行が無いキーの定期便の行（状態が `cancelled`・`suspended`・`skipped`・`unknown`）について、`kept` にそのキーがあり、次のどちらかなら定期便の行を落とす：① `source_url` が `list_urls` にあって `read_extra_urls` に無い、② `scheduled_departure_at` が今（`datetime.now()`）以前
+  - `_resolve_extra_conflicts()` で、臨時便の行が無いキーの定期便の行（状態が `cancelled`・`suspended`・`skipped`・`unknown`）について、`kept` にそのキーがあり、次のどちらかなら定期便の行を落とす：① `source_url` が `list_urls` にあって `read_extra_urls` に無い、② その `source_url` の `kept` の行の `scheduled_departure_at` のいちばん早いもの（始発港の出港）が今（`datetime.now()`）以前。②は港の行ごとに見ない（`kept` から URL ごとのいちばん早い出港予定を先に作る）
   - `make test-scraper`・`make lint-scraper`
 
 ### 予備ルート（research R6・FR-015）
@@ -213,14 +213,17 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
   - (c) 今日 2026-09-27、上りの欄に 9/27 の臨時便だけ → 上り 9/27 は `no_service`（`extra` の行を返さない）
   - (d) (a) で、一覧の臨時便のクラスを `route alert` にして（一覧に temporary が無い場合。research R1）、詳細ページで臨時便とわかる → 結果は (a) と同じ
   - (e) `parse()` の結果に `status = extra` の行が1つも無い（`operation_statuses` の ENUM に無いため）
-  - (f) SC-009：今日 2026-09-07、上りの欄に臨時便だけを `route alert`・詳細ページ 500（種類 `unknown`）で置く → 上り 9/7 の行が無い（`unknown` も `no_service` も無い）。`voyage_kind_unknown` の警告が1件
-  - (g) 今日 2026-09-07、上りの欄に (f) の便を先、定期便（`cancel alert`）を後に置く → 上り 9/7 が `cancelled`
-  - (h) 既存の `test_unknown_class_voyage_is_unknown_not_cancelled`（一覧のクラスは読めないが、詳細ページは取れて定期便とわかる）は今までどおり `unknown`
+  - (f) SC-009：今日 2026-09-07、上りの欄に便を1つだけ、一覧のクラス `foo alert`（状態として読めず temporary も無い）・詳細ページ 500 で置く → 上り 9/7 の行が無い（`unknown` も `no_service` も無い）。`voyage_kind_unknown` の警告が1件
+  - (g) 今日 2026-09-07、上りの欄に便を1つだけ、一覧のクラス `route alert`・詳細ページ 500 で置く → 上り 9/7 は今までどおり `delayed`（控えの行）
+  - (h) 今日 2026-09-07、上りの欄に `route alert`・詳細ページ 500 の便を先、定期便（`cancel alert`・詳細ページあり）を後に置く → 上り 9/7 が `cancelled`（定期便が控えの行に勝つ）。(f) の便を先にしても同じ
+  - (i) 既存の `test_unknown_class_voyage_is_unknown_not_cancelled`（一覧のクラスは読めないが、詳細ページは取れて定期便とわかる）は今までどおり `unknown`
+  - (j) 既存の航路単位のテスト（`test_normal_down_delayed_up`・`test_both_cancelled`・`test_no_service_*` など。詳細ページをモックしていないので種類は `unknown`）が、期待値を変えずに全部通る（analyze H1）
 - [ ] T024 [US5] `marix_line.py` の `parse()` を直す（research R8）:
   - ブロックごとに `kind = self._voyage_kind(block, detail_html)`（`detail_html` は `getattr(self, "_detail_pages", {}).get(urljoin(SOURCE_URL, href))`）
   - `extra` → 行を作らず、`seen` にも入れずに次へ
-  - `unknown` → `voyage_kind_unknown`（url）を出し、行を作らず、キー `(route.id, valid_date)` を `unknown_keys` にためて次へ
-  - ループの後、`no_service` を書く前に `seen |= unknown_keys`
+  - `unknown` で一覧のクラスが状態として読める → 今までどおりの行（一覧のクラスの状態・詳細）を作るが、`records` には入れず `fallback_records`（控えの行）にためて次へ。`seen` にも入れない
+  - `unknown` で一覧のクラスが読めない → `voyage_kind_unknown`（url）を出し、行を作らず、キー `(route.id, valid_date)` を `unknown_keys` にためて次へ
+  - ループの後、`no_service` を書く前に：`fallback_records` を一覧の順に見て、キーが `seen` に無ければ `records` に足して `seen` に入れる。そのあと `seen |= unknown_keys`
   - `make test-scraper`・`make lint-scraper`
 
 **Checkpoint**: T023 が通る・既存テストが全部通る → コミット
