@@ -654,8 +654,8 @@ def test_replace_source_without_port_deletes_rows_at_ports_not_written(
     assert [(r.port_id, r.source_url) for r in _rows(db_session)] == [(port.id, url)]
 
 
-def test_source_only_record_is_not_written_and_deletes_its_rows(db_session, setup):
-    """source_only のレコードは書かない。replace_source の行は全部消える（取りやめた便）。"""
+def test_unwritten_source_deletes_all_rows_of_the_voyage(db_session, setup):
+    """unwritten_sources の replace_source は、書いたキーが無いものとして、その便の行を全部消す。"""
     scraper, _, route, port = setup
     url = "https://example.com/service/service6731/"
     other_url = "https://example.com/service/upstream20260907/"
@@ -672,9 +672,50 @@ def test_source_only_record_is_not_written_and_deletes_its_rows(db_session, setu
     )
     db_session.commit()
 
-    scraper._upsert_departures(
-        [{"replace_source": (route.id, None, url), "source_only": True}]
-    )
+    scraper.unwritten_sources = [(route.id, None, url)]
+    scraper._upsert_departures([])
     db_session.commit()
 
     assert [r.source_url for r in _rows(db_session)] == [other_url]
+
+
+def test_replace_source_without_route_deletes_rows_on_other_routes(db_session, setup):
+    """route_id も None なら、別の航路にある同じ便の行も消える（臨時便の方向が変わった）。"""
+    scraper, company, route, port = setup
+    other_route = Route(
+        ferry_company_id=company.id,
+        name="テスト航路（上り）",
+        origin_port="那覇",
+        destination_port="鹿児島",
+        direction="up",
+        active=True,
+    )
+    db_session.add(other_route)
+    db_session.commit()
+    url = "https://example.com/service/service6819/"
+    scraper._upsert_departures([_rec(other_route, port, source_url=url)])
+    db_session.commit()
+
+    scraper._upsert_departures(
+        [_rec(route, port, source_url=url, replace_source=(None, None, url))]
+    )
+    db_session.commit()
+
+    assert [r.route_id for r in _rows(db_session)] == [route.id]
+
+
+def test_same_content_from_other_voyage_takes_over_source_url(db_session, setup):
+    """内容が同じでも、別の便が書いたら source_url は書き換わる。前の便のルール6で消えない。"""
+    db_session.autoflush = False
+    scraper, _, route, port = setup
+    regular_url = "https://example.com/service/upstream20260907/"
+    extra_url = "https://example.com/service/service6731/"
+    rec = _rec(route, port, source_url=regular_url)
+    scraper._upsert_departures([rec])
+    db_session.commit()
+
+    scraper.unwritten_sources = [(route.id, port.id, regular_url)]
+    scraper._upsert_departures([{**rec, "source_url": extra_url}])
+    db_session.commit()
+
+    assert [r.source_url for r in _rows(db_session)] == [extra_url]

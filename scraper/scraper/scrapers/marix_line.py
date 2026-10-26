@@ -80,9 +80,10 @@ Date: div.info2 の最初の "YYYY年M月D日" を valid_date として使用
         定期便の欠航で上書きしない。出港前に一覧から消えたら定期便の欠航に戻す
     予備ルート（R6）: 臨時便の詳細ページが取れなければ予備ルートは使わない（extra_voyage_detail_missing）。
         分からない便は今までどおり予備ルートの行を作る
-    後始末（R7）: 臨時便の行は replace_source を (航路, None, URL) にして、Base のルール6で書かなくなった行
-        （寄らなくなった港・日付がずれた古い行・分からなかった回の予備ルートの行）を消す。同じキーの便に負けて
-        書かなかった行と、取りやめた臨時便は、出どころだけ登録する行（source_only）でルール6に渡す
+    後始末（R7）: 臨時便の行は replace_source を (None, None, URL) にして、Base のルール6で書かなくなった行
+        （寄らなくなった港・日付がずれた古い行・方向が変わった前の航路の行・分からなかった回の予備ルートの行）を
+        消す。同じキーの便に負けて書かなかった行は unwritten_sources でルール6に渡す。出港前に一覧から消えた
+        臨時便（取りやめ）は、_upsert_departures で extra の行だけ消す
     航路単位（R8）: 臨時便は書かない（operation_statuses の ENUM に extra は無い）。分からない便は、一覧のクラスが
         読めれば控えの行（同じ日に定期便が無いときだけ書く）、読めなければ書かない（voyage_kind_unknown）
 """
@@ -92,7 +93,7 @@ from datetime import date, datetime, timedelta
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, Tag
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from scraper.db.models import DepartureStatus, OperationStatusEnum, Route, RouteStop
 from scraper.scrapers.base import BaseScraper
@@ -138,8 +139,9 @@ class MarixLine(BaseScraper):
         resp.encoding = resp.apparent_encoding
         self._list_html = resp.text
 
-        # 便別詳細ページ（失敗しても続ける。港別は予備ルートになる）。パースは URL ごとに1回だけ
-        self._detail_pages: dict[str, BeautifulSoup | None] = {}
+        # 便別詳細ページ（失敗しても続ける。港別は予備ルートになる）。パースした木は持たない
+        # （文字列より数倍大きい）。種類はここで決め、港の行は parse_departures() でもう1回パースする
+        self._detail_pages: dict[str, str | None] = {}
         # 詳細ページで決めた便の種類（一覧のクラスの temporary は _voyage_kind で見る）
         self._voyage_kinds: dict[str, str] = {}
         soup = BeautifulSoup(resp.text, "lxml")
@@ -151,14 +153,15 @@ class MarixLine(BaseScraper):
                 detail = self.http.get(url, timeout=30)
                 detail.raise_for_status()
                 detail.encoding = detail.apparent_encoding
-                detail_soup = BeautifulSoup(detail.text, "lxml")
             except Exception as exc:
                 self._log.warning("detail_fetch_failed", url=url, error=str(exc))
                 self._detail_pages[url] = None
                 self._voyage_kinds[url] = "unknown"
                 continue
-            self._detail_pages[url] = detail_soup
-            self._voyage_kinds[url] = self._detail_kind(detail_soup)
+            self._detail_pages[url] = detail.text
+            self._voyage_kinds[url] = self._detail_kind(
+                BeautifulSoup(detail.text, "lxml")
+            )
 
         # 戻り値は今までどおり一覧の HTML（raw_html_hash の意味を変えない）
         return resp.text
@@ -273,6 +276,9 @@ class MarixLine(BaseScraper):
     # ------------------------------------------------------------------
 
     def parse_departures(self) -> list[dict]:
+        # 落とした行の replace_source（ルール6）と、取りやめた臨時便の URL（R7）。_resolve_extra_conflicts が入れる
+        self.unwritten_sources = []
+        self._vanished_extra_urls: set[str] = set()
         list_html = getattr(self, "_list_html", None)
         if not list_html:
             return []
@@ -320,14 +326,14 @@ class MarixLine(BaseScraper):
                 continue
 
             url = urljoin(SOURCE_URL, link["href"])
-            detail_soup = detail_pages.get(url)
+            detail_html = detail_pages.get(url)
             kind = self._voyage_kind(block, url)
             if kind == "extra":
                 # 臨時便は一覧のクラスに関係なく便全体を extra として読む（research R3）
                 status = OperationStatusEnum.extra
             detail_records = (
                 self._departures_from_detail(
-                    detail_soup,
+                    BeautifulSoup(detail_html, "lxml"),
                     route,
                     stops[route.id],
                     start_date,
@@ -335,7 +341,7 @@ class MarixLine(BaseScraper):
                     url,
                     resolver,
                 )
-                if detail_soup is not None
+                if detail_html
                 else None
             )
             if detail_records:
@@ -433,8 +439,8 @@ class MarixLine(BaseScraper):
         「（臨時便 HH:MM発あり）」を足す）。一覧の並び順に関係なく同じ結果になる。
         臨時便同士・定期便同士の重複は触らない（Base が先の行を使う）。返す行は元の順を保つ。
 
-        落とした行の replace_source と、取りやめた臨時便は、書かずに出どころだけ登録する行
-        （source_only）を最後に足す。Base のルール6が、書かなくなった古い行を消す（research R7）。
+        落とした行の replace_source は self.unwritten_sources に入れて、Base のルール6で古い行を消す。
+        取りやめた臨時便の URL は self._vanished_extra_urls に入れる（research R7）。
         """
         extras: dict[tuple, dict] = {}
         regulars: dict[tuple, dict] = {}
@@ -465,9 +471,8 @@ class MarixLine(BaseScraper):
                 extra_url=extra["source_url"],
             )
 
-        # 一覧から消えた未出港の臨時便（取りやめ）の URL → 航路。同じキーの定期便が無くても
-        # 行が残らないよう、ルール6で便の行を全部消す（PR #90 レビュー）
-        vanished: dict[str, int] = {}
+        # 一覧から消えた未出港の臨時便（取りやめ）の URL。同じキーの定期便が無くても行が残らないよう、
+        # _upsert_departures で extra の行を消す（PR #90 レビュー）
         # この回の臨時便の行が無いキー：前の回の臨時便の行を、定期便の欠航で上書きしない（research R5）
         if kept:
             firsts = self._extra_first_departures(
@@ -485,9 +490,9 @@ class MarixLine(BaseScraper):
                     return first <= now
                 return first_dates[url] <= now.date()
 
-            vanished = {
-                url: route_id
-                for (route_id, _, _, _), url in kept.items()
+            self._vanished_extra_urls = {
+                url
+                for url in set(kept.values())
                 if url not in list_urls and not departed(url)
             }
             for rec in records:
@@ -504,16 +509,34 @@ class MarixLine(BaseScraper):
                 if (url in list_urls and url not in read_extra_urls) or departed(url):
                     drop.add(id(rec))
 
-        sources = {
-            tuple(r["replace_source"])
-            for r in records
-            if id(r) in drop and r.get("replace_source")
-        }
-        sources |= {(route_id, None, url) for url, route_id in vanished.items()}
-        return [r for r in records if id(r) not in drop] + [
-            {"replace_source": source, "source_only": True}
-            for source in sorted(sources, key=str)
-        ]
+        self.unwritten_sources = sorted(
+            {
+                tuple(r["replace_source"])
+                for r in records
+                if id(r) in drop and r.get("replace_source")
+            },
+            key=str,
+        )
+        return [r for r in records if id(r) not in drop]
+
+    def _upsert_departures(self, records: list[dict]) -> tuple[int, int]:
+        """Base の処理の後、出港前に一覧から消えた臨時便（取りやめ）の extra の行を消す（research R7）。
+
+        出港済みかを見たのは extra の行だけなので、ほかの状態の行（分からなかった回の予備ルートの行など）
+        は消さない。Base が消す前に flush しているので、同じ回に定期便が上書きした行は source_url が
+        変わっていて対象にならない。
+        """
+        created, updated = super()._upsert_departures(records)
+        for url in getattr(self, "_vanished_extra_urls", ()):
+            self.session.execute(
+                delete(DepartureStatus)
+                .where(
+                    DepartureStatus.source_url == url,
+                    DepartureStatus.status == OperationStatusEnum.extra.value,
+                )
+                .execution_options(synchronize_session="fetch")
+            )
+        return created, updated
 
     def _departures_from_detail(
         self,
@@ -618,12 +641,10 @@ class MarixLine(BaseScraper):
                     "replace_scope": None,
                     # 同じ便の、今回書かなかった行（予備ルートの行、遅延で前の日付になった行）を消すため
                     # （詳細ページの URL は便ごとに一つ：/service/downstream20260930/。予備ルートの行も同じ URL）
-                    # 臨時便は港を決めない（寄らなくなった港の行も消す。research R7）
-                    "replace_source": (
-                        route.id,
-                        None if is_extra else stop.port_id,
-                        url,
-                    ),
+                    # 臨時便は航路・港を決めない（寄らなくなった港の行・方向が変わった前の航路の行も消す。research R7）
+                    "replace_source": (None, None, url)
+                    if is_extra
+                    else (route.id, stop.port_id, url),
                 }
             )
         return records or None
@@ -748,7 +769,14 @@ class MarixLine(BaseScraper):
         """
         if _EXTRA_CLASS in block.get("class", []):
             return "extra"
-        return getattr(self, "_voyage_kinds", {}).get(url or "", "regular")
+        kinds = getattr(self, "_voyage_kinds", None)
+        if kinds is None:
+            return "regular"
+        if url not in kinds:
+            # fetch() と URL の取り方がずれた。詳細ページを見ていないので臨時便でも定期便になる
+            self._log.warning("voyage_kind_not_fetched", url=url)
+            return "regular"
+        return kinds[url]
 
     @staticmethod
     def _detail_kind(soup: BeautifulSoup) -> str:

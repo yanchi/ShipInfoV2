@@ -132,11 +132,11 @@
 
 ## R7. 臨時便の行の後始末（FR-011）
 
-**Decision**: Base のルール6（`replace_source`）で消す。臨時便の行の `replace_source` は `(route_id, None, source_url)`（港を決めない。Base は航路の全港の行を見る）にして、`source_url` がその URL の行のうち、この回にその臨時便が書かなかったキーの行を消す。はじめは `MarixLine._upsert_departures()` を上書きして同じことをしていたが、flush の順番などを2か所で合わせ続けることになるので Base に寄せた（#91）
+**Decision**: Base のルール6（`replace_source`）で消す。臨時便の行の `replace_source` は `(None, None, source_url)`（航路・港を決めない。方向が前の回と変わっても前の航路の行が消える。PR #93 レビュー）にして、`source_url` がその URL の行のうち、この回にその臨時便が書かなかったキーの行を消す。はじめは `MarixLine._upsert_departures()` を上書きして同じことをしていたが、flush の順番などを2か所で合わせ続けることになるので Base に寄せた（#91）
 
 - 出港日がずれた古い日付の行、寄らなくなった港の行（前は寄る予定だった港が `no_status` になった）、種類が `unknown` だった回の予備ルートの行（船名なし）が消える
-- R4・R5 で落とした行は Base に届かないので、そのままだと前の回の予備ルートの行（船名なし・定期便の URL）が、臨時便が勝った港に残る。落とした行の `replace_source` は、書かずに出どころだけ登録する行（`source_only`）で Base に渡す。落とした行のキーの行は、勝った便の行で上書きされて `source_url` が変わっている（R5 で残した行はもとから臨時便の URL）ので、消す対象にならない
-- 出港前に一覧から消えた臨時便（取りやめ）も、`(route_id, None, source_url)` の `source_only` の行で、その URL の行を全部消す
+- R4・R5 で落とした行は Base に届かないので、そのままだと前の回の予備ルートの行（船名なし・定期便の URL）が、臨時便が勝った港に残る。落とした行の `replace_source` は、`self.unwritten_sources`（書いたキーが無いものとして扱う）で Base に渡す。落とした行のキーの行は、勝った便の行で上書きされて `source_url` が変わっている（R5 で残した行はもとから臨時便の URL）ので、消す対象にならない。内容のハッシュが同じでも Base は `source_url` を書き換える（PR #93 レビュー）
+- 出港前に一覧から消えた臨時便（取りやめ）は、`MarixLine._upsert_departures()` で、その URL の `extra` の行だけ消す。出港済みか（R5）を見たのは `extra` の行だけなので、ほかの状態の行は消さない
 - 消す前に `session.flush()` する（Base。下の R10）
 
 **Rationale**:
@@ -185,7 +185,7 @@
 
 ## R10. Base の flush
 
-**Decision**: `BaseScraper._upsert_departures()` で、行の書き込みが終わった後、ルール5（`replace_scope`）・ルール6（`replace_source`）で消す前に `self.session.flush()` を入れる。臨時便の後始末（R7）も同じルール6なので、この flush の後に消える（#91）。
+**Decision**: `BaseScraper._upsert_departures()` で、行の書き込みが終わった後、ルール5（`replace_scope`）・ルール6（`replace_source`）で消す前に `self.session.flush()` を入れる。臨時便の後始末（R7）も同じルール6なので、この flush の後に消える（#91）。取りやめた臨時便の行は `MarixLine._upsert_departures()` が Base の後に消すので、この flush の後になる。
 
 **Rationale**:
 - 本番の `SessionLocal` は `autoflush=False`（`scraper/scraper/db/connection.py`）。flush しないと、消す行を探す SELECT は DB に残った古い `source_url` を読む。さっき定期便の行で上書きした行（メモリの中だけで `source_url` が変わった行）を消してしまう（PR #89 レビュー）

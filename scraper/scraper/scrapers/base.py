@@ -31,6 +31,8 @@ class BaseScraper(ABC):
         self.company_id = company_id
         self.http = create_session(retry_post=retry_post)
         self._log = log.bind(scraper=self.__class__.__name__, company_id=company_id)
+        # この回に1行も書かない便の replace_source（parse_departures() が入れる。ルール6）
+        self.unwritten_sources: list[tuple] = []
 
     @abstractmethod
     def fetch(self) -> str:
@@ -74,11 +76,10 @@ class BaseScraper(ABC):
             - freeze_after_departure: bool（出港済みの行を更新・作成しない）
             - replace_scope: (route_id, port_id, departure_date)（このキーで今回に無い船の行を消す）
             - replace_source: (route_id, port_id, source_url)（同じ便の行のうち、今回書かなかった日付・船の行を消す。
-              出港済みの行を残すのは freeze_after_departure の便だけ。port_id が None なら航路の全港）
+              出港済みの行を残すのは freeze_after_departure の便だけ。route_id・port_id が None なら絞らない）
 
-        書かずに出どころだけ登録するレコード（source_only）:
-            - {"replace_source": (...), "source_only": True}
-              この回に1行も書かない便（取りやめた便・同じキーの別の便に負けた便）の古い行を、ルール6で消すため
+        この回に1行も書かない便（同じキーの別の便に負けた便など）の replace_source は、レコードに
+        混ぜずに self.unwritten_sources に入れる。ルール6で、その便の古い行が全部消える。
         """
         return []
 
@@ -213,13 +214,13 @@ class BaseScraper(ABC):
            （出港済みかは今回の出港予定で判定する。遅延で後ろにずれた便は、まだ更新する）
         5. replace_scope があれば、そのキーで今回に無い ship_name の行を消す（出港済みの行は残す）。
            消すのは同じ source_url の行だけ（別の出どころの行は、同じ航路・港・日付でも消さない）
-        6. replace_source があれば、同じ航路・港・source_url（＝同じ便）で今回書かなかった
-           (departure_date, ship_name) の行を消す。遅延で出港日がずれたときに、前の日付の行を
+        6. replace_source (route_id, port_id, source_url) があれば、その source_url（＝同じ便）の行のうち、
+           今回その replace_source で書かなかったキー (route_id, port_id, departure_date, ship_name) の行を
+           消す。route_id・port_id が None ならその列では絞らない（便の行が航路・港をまたいでも消せる）。遅延で出港日がずれたときに、前の日付の行を
            残さないため。古い行は同じ便の新しい情報で置き換わったものなので、出港予定を
            過ぎていても消す（元の出港時刻の後に遅延が発表されることがある）。
            ただし freeze_after_departure の便は、ルール4に合わせて出港済みの行を残す。
-           port_id が None の replace_source は、航路の全港の行が対象（書いたかは港も含めて見る）。
-           source_only のレコードは書かず、replace_source だけ登録する
+           self.unwritten_sources の replace_source は、書いたキーが無いものとして扱う
 
         ルール5・6で消す前に flush する（本番の SessionLocal は autoflush=False。同じ回に上書きした
         行を、古い source_url で消さないため）。
@@ -231,12 +232,11 @@ class BaseScraper(ABC):
         frozen_sources: set[tuple] = set()
         processed: set[tuple] = set()
 
+        for source in self.unwritten_sources:
+            sources.setdefault(tuple(source), set())
+
         for rec in records:
             source = rec.get("replace_source")
-            if rec.get("source_only"):
-                if source is not None:
-                    sources.setdefault(tuple(source), set())
-                continue
             ship_name = rec.get("ship_name") or ""
             key = (rec["route_id"], rec["port_id"], rec["departure_date"], ship_name)
             scope = rec.get("replace_scope")
@@ -274,6 +274,8 @@ class BaseScraper(ABC):
                     continue  # 出港済みで確定（checked_at も進めない）
                 if existing.content_hash == content_hash:
                     existing.checked_at = now
+                    # 同じ内容を別の便が書いた。出どころは書き換える（古い便のルール6で消されないため）
+                    existing.source_url = rec.get("source_url")
                     continue
                 existing.status = status_value
                 existing.status_detail = rec.get("status_detail")
@@ -330,9 +332,10 @@ class BaseScraper(ABC):
         for source, written in sources.items():
             route_id, port_id, source_url = source
             query = select(DepartureStatus).where(
-                DepartureStatus.route_id == route_id,
-                DepartureStatus.source_url == source_url,
+                DepartureStatus.source_url == source_url
             )
+            if route_id is not None:
+                query = query.where(DepartureStatus.route_id == route_id)
             if port_id is not None:
                 query = query.where(DepartureStatus.port_id == port_id)
             if source in frozen_sources:
