@@ -212,6 +212,8 @@ class DepartureStatus(Base):
     )
     source_url = Column(String(512), nullable=True)
     content_hash = Column(String(64), nullable=False)
+    # 臨時便の行：この港を出たあと、運航の最後の港までに抜港がある（16-extra-skip-flag）。定期便の行は False
+    skips_ports_after = Column(Boolean, nullable=False, default=False)
     scraped_at = Column(DateTime, nullable=False, default=datetime.now)
     checked_at = Column(DateTime, nullable=False, default=datetime.now)
     created_at = Column(DateTime, nullable=False, default=datetime.now)

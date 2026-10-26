@@ -4,7 +4,6 @@ namespace App\Controller;
 
 use App\Entity\FerryCompany;
 use App\Entity\OperationStatus;
-use App\Entity\RouteStop;
 use App\Enum\DepartureDisplayStateEnum;
 use App\Enum\OperationStatusEnum;
 use App\Enum\RouteDirectionEnum;
@@ -180,7 +179,7 @@ class StatusController extends AbstractController
 
     /**
      * 今日その方向に臨時便がある航路の、いちばん早い臨時便（会社カードの「◆ 臨時便 鹿児島 16:00発」。12-marue-extra-voyages FR-016）。
-     * 臨時便の運航に抜港があれば「・抜港あり」を足す（15-extra-voyage-badge）。
+     * 臨時便の行に抜港のフラグがあれば「・抜港あり」を足す（16-extra-skip-flag）。
      *
      * @param list<array{company: FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: ?OperationStatus}>}> $companies
      *
@@ -199,14 +198,10 @@ class StatusController extends AbstractController
                 if ($direction === null) {
                     continue;
                 }
-                $companyId = $companyData['company']->getId();
-                $extra     = $today->firstExtraDepartureOf($companyId, $direction);
-                if ($extra === null) {
-                    continue;
+                $extra = $today->firstExtraDepartureOf($companyData['company']->getId(), $direction);
+                if ($extra !== null) {
+                    $result[$routeId] = $extra;
                 }
-                $portIds = array_values(array_map(static fn (RouteStop $stop) => (int) $stop->getPort()->getId(), $r['route']->getStops()->toArray()));
-
-                $result[$routeId] = $extra->withSkipsPorts($board->extraSkipsPortsOf($companyId, $direction, $portIds));
             }
         }
 

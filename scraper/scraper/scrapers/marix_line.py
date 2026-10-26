@@ -558,6 +558,8 @@ class MarixLine(BaseScraper):
         stop_port_ids = {s.port_id for s in stops}
         terminal_port_id = stops[-1].port_id
         by_port: dict[int, dict] = {}
+        # 臨時便が寄らない（no_status）港。行は作らないが、抜港のフラグに使う（16-extra-skip-flag R3）
+        skipped_port_ids: set[int] = set()
         for single in singles:
             name_el = single.select_one("span.port_name")
             name = name_el.get_text(strip=True) if name_el else ""
@@ -569,6 +571,7 @@ class MarixLine(BaseScraper):
             if is_extra and _SKIPPED_PORT_CLASS in classes:
                 # 臨時便が寄らない港には行を作らない。時刻も使わない（research R3。
                 # 寄らない港には定期便の時刻や別の日付が残っている）
+                skipped_port_ids.add(port.id)
                 continue
             if _SKIPPED_PORT_CLASS in classes:
                 # 便全体が欠航・運休のときは抜港ではなく便のステータス（FR-005）
@@ -604,8 +607,11 @@ class MarixLine(BaseScraper):
             soup, with_notes=voyage_status != OperationStatusEnum.operating
         )
         arrival_at = by_port.get(terminal_port_id, {}).get("entry_at")
+        order = [s.port_id for s in stops]
+        # 寄る港のうち寄港順で最後の位置（終点まで行けば終点）。それより後の no_status は抜港に数えない
+        last = max((i for i, p in enumerate(order) if p in by_port), default=-1)
         records: list[dict] = []
-        for stop in stops[:-1]:
+        for index, stop in enumerate(stops[:-1]):
             info = by_port.get(stop.port_id)
             if info is None:
                 if not is_extra:  # 臨時便では寄らない港を by_port に入れない
@@ -634,6 +640,9 @@ class MarixLine(BaseScraper):
                     "scheduled_arrival_at": arrival_at,
                     "operated_by_company_id": None,
                     "source_url": url,
+                    # この港を出たあと最後の港までに、臨時便が寄らない港がある。定期便の行は False
+                    "skips_ports_after": is_extra
+                    and any(p in skipped_port_ids for p in order[index + 1 : last]),
                     "freeze_after_departure": False,
                     # 臨時便が書いた行か（同じキーの定期便との優先に使う。research R4）
                     "extra_voyage": is_extra,

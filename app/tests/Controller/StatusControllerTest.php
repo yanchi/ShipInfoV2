@@ -485,13 +485,13 @@ class StatusControllerTest extends WebTestCase
         $this->assertCount(1, $card->filter('.route-extra'));
     }
 
-    /** 臨時便の運航に抜港があれば、1行の後ろに「・抜港あり」（15-extra-voyage-badge SC-004） */
+    /** 今日の臨時便の行のどれかに抜港のフラグがあれば、1行の後ろに「・抜港あり」（15-extra-voyage-badge SC-004、16-extra-skip-flag FR-006） */
     public function testIndexCardExtraLineShowsSkippedPorts(): void
     {
         $this->createPortBoardData();
         $this->useFullDownStops();
         $this->setRouteStatus(OperationStatusEnum::Operating);
-        $this->addTodayDeparture('名瀬', '臨時丸', OperationStatusEnum::Extra, '03:50', '13:50');
+        $this->addTodayDeparture('名瀬', '臨時丸', OperationStatusEnum::Extra, '03:50', '13:50', skipsPortsAfter: true);
         $this->addTodayDeparture('本部', '臨時丸', OperationStatusEnum::Extra, '12:00', '13:50');
 
         $card = $this->findCard($this->client->request('GET', '/'), '港別テスト運航会社');
@@ -499,12 +499,14 @@ class StatusControllerTest extends WebTestCase
         $this->assertSame('◆ 臨時便 名瀬 03:50発・抜港あり', trim($card->filter('.route-extra')->text()));
     }
 
+    /** フラグが無ければ、あいだの港に行が無くても「・抜港あり」は出さない（ボードから逆算しない。16-extra-skip-flag FR-006） */
     public function testIndexCardExtraLineWithoutSkippedPorts(): void
     {
         $this->createPortBoardData();
         $this->useFullDownStops();
         $this->setRouteStatus(OperationStatusEnum::Operating);
         $this->addTodayDeparture('名瀬', '臨時丸', OperationStatusEnum::Extra, '03:50', '13:50');
+        $this->addTodayDeparture('本部', '臨時丸', OperationStatusEnum::Extra, '12:00', '13:50');
 
         $card = $this->findCard($this->client->request('GET', '/'), '港別テスト運航会社');
 
@@ -1418,7 +1420,7 @@ class StatusControllerTest extends WebTestCase
     }
 
     /** createPortBoardData() の運航会社の下り航路に、今日の港別の行を足す。$arrival は到着予定（今日の HH:MM） */
-    private function addTodayDeparture(string $portName, string $ship, OperationStatusEnum $status, string $time, ?string $arrival = null): void
+    private function addTodayDeparture(string $portName, string $ship, OperationStatusEnum $status, string $time, ?string $arrival = null, bool $skipsPortsAfter = false): void
     {
         $em    = $this->entityManager();
         $route = $em->getRepository(Route::class)->findOneBy(['name' => '港別テスト運航会社 下り']);
@@ -1430,6 +1432,7 @@ class StatusControllerTest extends WebTestCase
         if ($arrival !== null) {
             $departure->setScheduledArrivalAt((new \DateTime('today'))->setTime((int) substr($arrival, 0, 2), (int) substr($arrival, 3, 2)));
         }
+        $departure->setSkipsPortsAfter($skipsPortsAfter);
         $em->persist($departure);
         $em->flush();
         $em->clear();

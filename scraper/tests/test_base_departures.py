@@ -4,6 +4,8 @@ BaseScraper の港別処理（parse_departures / _upsert_departures / run）の�
 data-model.md の更新ルール1〜5・7 を確認する。
 """
 
+import hashlib
+import json
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -719,3 +721,70 @@ def test_same_content_from_other_voyage_takes_over_source_url(db_session, setup)
     db_session.commit()
 
     assert [r.source_url for r in _rows(db_session)] == [extra_url]
+
+
+# ---------------------------------------------------------------------------
+# skips_ports_after（16-extra-skip-flag research R4）
+# ---------------------------------------------------------------------------
+
+
+def test_hash_without_skips_ports_after_is_unchanged(setup):
+    """False（無い・False）の行のハッシュは列を足す前と同じ。最初の回に全部の行を書き直さない（SC-004）。"""
+    scraper, _, route, port = setup
+    rec = _rec(
+        route,
+        port,
+        scheduled_departure_at=datetime(2026, 10, 27, 3, 50),
+        scheduled_arrival_at=datetime(2026, 10, 27, 13, 50),
+    )
+    # 列を足す前の _departure_hash() の payload
+    expected = hashlib.sha256(
+        json.dumps(
+            [
+                "operating",
+                None,
+                "フェリーあけぼの",
+                "2026-10-27T03:50:00",
+                "2026-10-27T13:50:00",
+                None,
+            ],
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    assert scraper._departure_hash(rec) == expected
+    assert scraper._departure_hash({**rec, "skips_ports_after": False}) == expected
+    assert scraper._departure_hash({**rec, "skips_ports_after": True}) != expected
+
+
+def test_skips_ports_after_is_written(db_session, setup):
+    scraper, _, route, port = setup
+    scraper._upsert_departures([_rec(route, port, skips_ports_after=True)])
+    db_session.commit()
+
+    assert _rows(db_session)[0].skips_ports_after is True
+
+
+def test_skips_ports_after_defaults_to_false(db_session, setup):
+    scraper, _, route, port = setup
+    scraper._upsert_departures([_rec(route, port)])
+    db_session.commit()
+
+    assert _rows(db_session)[0].skips_ports_after is False
+
+
+def test_skips_ports_after_turning_true_updates_row(db_session, setup):
+    """列を足す前の行（False）は、次の回に True になれば書き直される（FR-010）。"""
+    scraper, _, route, port = setup
+    rec = _rec(route, port)
+    scraper._upsert_departures([rec])
+    db_session.commit()
+    row = _rows(db_session)[0]
+    old = _age(row)
+    db_session.commit()
+
+    created, updated = scraper._upsert_departures([{**rec, "skips_ports_after": True}])
+    db_session.commit()
+
+    assert (created, updated) == (0, 1)
+    assert row.skips_ports_after is True
+    assert row.scraped_at > old

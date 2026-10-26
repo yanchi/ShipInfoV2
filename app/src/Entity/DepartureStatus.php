@@ -60,6 +60,10 @@ class DepartureStatus
     #[ORM\Column(length: 64, options: ['fixed' => true])]
     private string $contentHash = '';
 
+    /** 臨時便の行：この港を出たあと、運航の最後の港までに抜港がある（16-extra-skip-flag）。定期便の行は false */
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $skipsPortsAfter = false;
+
     #[ORM\Column(type: 'datetime')]
     private ?\DateTimeInterface $scrapedAt = null;
 
@@ -209,6 +213,18 @@ class DepartureStatus
     public function setSourceUrl(?string $sourceUrl): static
     {
         $this->sourceUrl = $sourceUrl;
+
+        return $this;
+    }
+
+    public function isSkipsPortsAfter(): bool
+    {
+        return $this->skipsPortsAfter;
+    }
+
+    public function setSkipsPortsAfter(bool $skipsPortsAfter): static
+    {
+        $this->skipsPortsAfter = $skipsPortsAfter;
 
         return $this;
     }
