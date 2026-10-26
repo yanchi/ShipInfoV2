@@ -19,6 +19,7 @@ class OperationStatusEnumTest extends TestCase
         yield 'cancelled' => [OperationStatusEnum::Cancelled, '欠航', true];
         yield 'suspended' => [OperationStatusEnum::Suspended, '運休', true];
         yield 'unknown' => [OperationStatusEnum::Unknown, '不明', true];
+        yield 'extra' => [OperationStatusEnum::Extra, '臨時便', true];
         yield 'no_service' => [OperationStatusEnum::NoService, '便なし', false];
     }
 
@@ -37,6 +38,6 @@ class OperationStatusEnumTest extends TestCase
         ));
 
         $this->assertSame($expected, OperationStatusEnum::irregularCases());
-        $this->assertCount(5, OperationStatusEnum::irregularCases());
+        $this->assertCount(6, OperationStatusEnum::irregularCases());
     }
 }

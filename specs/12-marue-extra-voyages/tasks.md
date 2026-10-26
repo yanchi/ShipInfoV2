@@ -32,8 +32,8 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 `make up` → `make test-scraper`・`make test-php` が全部通ることを確認してから始める
-- [ ] T002 `scraper/tests/fixtures/marue/ship_detail_naminoue_20261026.html` と `specs/12-marue-extra-voyages/samples/naminoue_detail_2026-10-26.html` が同じ中身であることを `cmp` で確かめる（違えば止めて相談する。fixture は新しく作らない）
+- [X] T001 `make up` → `make test-scraper`・`make test-php` が全部通ることを確認してから始める
+- [X] T002 `scraper/tests/fixtures/marue/ship_detail_naminoue_20261026.html` と `specs/12-marue-extra-voyages/samples/naminoue_detail_2026-10-26.html` が同じ中身であることを `cmp` で確かめる（違えば止めて相談する。fixture は新しく作らない）
 
 **Checkpoint**: 既存テストが全部通る（コミットなし）
 
@@ -45,16 +45,16 @@
 
 ### 状態「臨時便」（Web が先。research R4・R9・R10、contracts/ui-status.md）
 
-- [ ] T003 [P] `app/tests/Enum/OperationStatusEnumTest.php` に、`Extra` の label が「臨時便」、`isIrregular()` が true、`irregularCases()` に入ることのテストを足す → `app/src/Enum/OperationStatusEnum.php` に `case Extra = 'extra';` を足し、`label()`・`isIrregular()` の match に入れる
-- [ ] T004 [P] `app/tests/View/PortBoardEntryTest.php` に、Extra の entry が `isAlert()` true、出港時刻を過ぎても `isDeparted()` false（ほかの異常と同じ）のテストを足す → `app/src/View/PortBoardEntry.php` の `isAlert()` の配列に `OperationStatusEnum::Extra` を足す（docblock の「欠航・条件付・遅延・運休」に「臨時便」も足す）
-- [ ] T005 `app/templates/status/_status_badge.html.twig` に `status.value == 'extra'` → `<span class="status-badge status-badge--extra">◆ {{ status.label() }}</span>` を足す（skipped の次）。`app/templates/status/_status_warning.html.twig` の条件に `extra` を足す（コメントも直す）。`app/templates/status/_status_legend.html.twig` の抜港と欠航のあいだに `{status: Extra, note: '便検索に無い臨時の便。時刻・寄港地は定期便と違う'}` を足す（コメントに 12-marue-extra-voyages の contracts を足す）
-- [ ] T006 `app/templates/_site_styles.html.twig` に `.status-badge--extra { background: #dbe9ff; color: #0b4a8b; }`、`.port-entry--extra { border-left-color: #0b4a8b; background: #eef4ff; }`、`.route-extra`（文字色 `#0b4a8b`、小さめ）を、skipped の並びの次に足す
-- [ ] T007 [P] `scraper/scraper/db/models.py` の `OperationStatusEnum` に `extra = "extra"` を足す。コメント「skipped は港の行（departure_statuses）だけで使う」に extra も足す
-- [ ] T008 `app/tests/Controller/StatusControllerTest.php` に、Extra の港の行があると `/ports` と会社詳細ページ（`/company/{id}`）に「◆ 臨時便」と注意書きが出て、凡例に「臨時便」が出るテストを足す。`make test-php`・`make phpstan`・`make cs-php`・`make lint-php`
+- [X] T003 [P] `app/tests/Enum/OperationStatusEnumTest.php` に、`Extra` の label が「臨時便」、`isIrregular()` が true、`irregularCases()` に入ることのテストを足す → `app/src/Enum/OperationStatusEnum.php` に `case Extra = 'extra';` を足し、`label()`・`isIrregular()` の match に入れる
+- [X] T004 [P] `app/tests/View/PortBoardEntryTest.php` に、Extra の entry が `isAlert()` true、出港時刻を過ぎても `isDeparted()` false（ほかの異常と同じ）のテストを足す → `app/src/View/PortBoardEntry.php` の `isAlert()` の配列に `OperationStatusEnum::Extra` を足す（docblock の「欠航・条件付・遅延・運休」に「臨時便」も足す）
+- [X] T005 `app/templates/status/_status_badge.html.twig` に `status.value == 'extra'` → `<span class="status-badge status-badge--extra">◆ {{ status.label() }}</span>` を足す（skipped の次）。`app/templates/status/_status_warning.html.twig` の条件に `extra` を足す（コメントも直す）。`app/templates/status/_status_legend.html.twig` の抜港と欠航のあいだに `{status: Extra, note: '便検索に無い臨時の便。時刻・寄港地は定期便と違う'}` を足す（コメントに 12-marue-extra-voyages の contracts を足す）
+- [X] T006 `app/templates/_site_styles.html.twig` に `.status-badge--extra { background: #dbe9ff; color: #0b4a8b; }`、`.port-entry--extra { border-left-color: #0b4a8b; background: #eef4ff; }`、`.route-extra`（文字色 `#0b4a8b`、小さめ）を、skipped の並びの次に足す
+- [X] T007 [P] `scraper/scraper/db/models.py` の `OperationStatusEnum` に `extra = "extra"` を足す。コメント「skipped は港の行（departure_statuses）だけで使う」に extra も足す
+- [X] T008 `app/tests/Controller/StatusControllerTest.php` に、Extra の港の行があると `/ports` と会社詳細ページ（`/company/{id}`）に「◆ 臨時便」と注意書きが出て、凡例に「臨時便」が出るテストを足す。`make test-php`・`make phpstan`・`make cs-php`・`make lint-php`
 
 ### 臨時便を読む（research R1〜R3、data-model の ExtraStop・ExtraVoyage）
 
-- [ ] T009 `scraper/tests/test_marue_ferry.py` にテストを足す（実装の前に落ちることを確かめる）。`_parse_extra_voyages(detail_html, ship_name)` を直接呼ぶ。`fixed_now(NOW_1026)` の中で、ルート・港は既存の `marue_with_ports` を使う:
+- [X] T009 `scraper/tests/test_marue_ferry.py` にテストを足す（実装の前に落ちることを確かめる）。`_parse_extra_voyages(detail_html, ship_name)` を直接呼ぶ。`fixed_now(NOW_1026)` の中で、ルート・港は既存の `marue_with_ports` を使う:
   - (a) `ship_detail_naminoue_20261026.html` → 2便
     - 下り：鹿児島 10/26 16:00 出港、名瀬 10/27 03:00 入港/03:50 出港、本部 10/27 11:30/12:00、那覇 10/27 13:50 入港
     - 上り：那覇 10/28 05:00、本部 07:00/07:20、与論 09:50/10:10、和泊 12:10/12:40、亀徳 14:30/15:00、名瀬 18:30/19:20、鹿児島 10/29 07:30 入港
@@ -66,12 +66,12 @@
   - (e) 見出しの括弧が半角・全角どちらでも読める
   - (f) 【臨時便(下り)】が2つ（日付違い）→ 下りの便が2つ（Edge Cases）
   - (g) `fixed_now(datetime(2026, 12, 30, 10, 0))` で「1月2日(土)」の臨時便 → 2027-01-02。曜日の確かめも 2027 年で行う（FR-010）
-- [ ] T010 `scraper/scraper/scrapers/marue_ferry.py` に `ExtraStop`・`ExtraVoyage`（frozen dataclass。data-model のとおり）と `ExtraParse`（`voyages`・`complete`）と `_parse_extra_voyages(detail_html: str | None, ship_name: str) -> ExtraParse | None` を作る（data-model「船ごとの読み取り結果」）
+- [X] T010 `scraper/scraper/scrapers/marue_ferry.py` に `ExtraStop`・`ExtraVoyage`（frozen dataclass。data-model のとおり）と `ExtraParse`（`voyages`・`complete`）と `_parse_extra_voyages(detail_html: str | None, ship_name: str) -> ExtraParse | None` を作る（data-model「船ごとの読み取り結果」）
   - `div.status-archive` の `p` を上から読み、【臨時便(上り/下り)】で始めて、次の【…】・《…》・終わりで閉じる（research R1）
   - 行の正規表現はモジュールの定数（`_EXTRA_HEADING`・`_EXTRA_STOP`）にする
   - 港は `self._get_resolver().resolve()`、航路は `_route_directions()`、順番は `self._get_stops()` の `stop_order` で確かめる（research R2・R3）
   - 月日から年を決める処理は `_parse_voyages()` から `_nearest_date(month, day, today) -> date | None` に切り出して、両方で使う（`_parse_voyages()` の結果は変えない）
-- [ ] T011 `fetch()` で、詳細ページを取ったあとに `self._extra_voyages: dict[str, ExtraParse | None]` を作る（船ごと。取れなかった船は None）。`make test-scraper`・`make lint-scraper`
+- [X] T011 `fetch()` で、詳細ページを取ったあとに `self._extra_voyages: dict[str, ExtraParse | None]` を作る（船ごと。取れなかった船は None）。`make test-scraper`・`make lint-scraper`
 
 **Checkpoint**: 既存テストが全部通る（結果は変わらない）＋ T003〜T009 が通る → コミット
 

@@ -166,6 +166,34 @@ class RecordedVoyage:
     worst_detail: str | None = None
 
 
+@dataclass(frozen=True)
+class ExtraStop:
+    """臨時便の1港。始発港は arrival_at が、終点は departure_at が None。"""
+
+    port_id: int
+    arrival_at: datetime | None
+    departure_at: datetime | None
+
+
+@dataclass(frozen=True)
+class ExtraVoyage:
+    """船の詳細ページの【臨時便(上り/下り)】1つ。stops は本文の順で、最後が終点（入港だけ）。"""
+
+    ship_name: str
+    route_id: int
+    stops: tuple[ExtraStop, ...]
+    # 「※ …寄港いたしません。」の文（行の詳細に使う）
+    skip_note: str | None
+
+
+@dataclass(frozen=True)
+class ExtraParse:
+    """船ごとの臨時便の読み取り結果。complete が False なら読めない臨時便があった（その船の行は消さない）。"""
+
+    voyages: tuple[ExtraVoyage, ...]
+    complete: bool
+
+
 class MarueFerry(BaseScraper):
     def __init__(self, session, company_id: int) -> None:
         # 便検索の POST は読み取り専用の検索（副作用なし）なので、429/5xx でリトライする
@@ -236,6 +264,12 @@ class MarueFerry(BaseScraper):
                     "ship_detail_fetch_failed", ship=ship.name, error=str(exc)
                 )
                 self._ship_details[ship.name] = None
+
+        # 船別詳細ページの臨時便（取れなかった船は None＝行も作らず、消しもしない）
+        self._extra_voyages: dict[str, ExtraParse | None] = {
+            name: self._parse_extra_voyages(detail, name)
+            for name, detail in self._ship_details.items()
+        }
 
         # 方向ごとの便有無が変わったら raw_html_hash も変わるように、今日の始発港の検索結果をつなげる
         return (
@@ -1155,16 +1189,11 @@ class MarueFerry(BaseScraper):
         today = getattr(self, "_valid_date", None) or date.today()
         voyages: list[VoyageStatus] = []
         for m in _VOYAGE_LINE.finditer(excerpt):
-            month, day = int(m.group("month")), int(m.group("day"))
-            candidates = []
-            for year in (today.year - 1, today.year, today.year + 1):
-                try:
-                    candidates.append(date(year, month, day))
-                except ValueError:
-                    continue
-            if not candidates:
+            departure_date = _nearest_date(
+                int(m.group("month")), int(m.group("day")), today
+            )
+            if departure_date is None:
                 continue
-            departure_date = min(candidates, key=lambda d: abs((d - today).days))
             # 状態の語だけを見る。補足（「（与論港は欠航の可能性あり）」「※…欠航となる場合が…」）は捨てる
             words = _VOYAGE_STATUS_END.split(m.group("status"), maxsplit=1)[0]
             status, conditional, schedule_changed = self._classify(
@@ -1206,6 +1235,127 @@ class MarueFerry(BaseScraper):
         )
         stops = self._get_stops().get(route_id, [])
         return any(s.port_id == port.id for s in stops[1:-1])
+
+    def _parse_extra_voyages(
+        self, detail_html: str | None, ship_name: str
+    ) -> ExtraParse | None:
+        """船の詳細ページの【臨時便(上り/下り)】を読む（research R1〜R3）。
+
+        詳細ページが無い・status-archive が無ければ None。読めない臨時便は警告を出して入れず、
+        complete を False にする（前回作った行を、読めなかったことを理由に消さないため）。
+        """
+        if not detail_html:
+            return None
+        archive = BeautifulSoup(detail_html, "lxml").select_one("div.status-archive")
+        if archive is None:
+            return None
+
+        # (見出し, 方向, 行) の列にする。次の【…】・《…》の行で臨時便を閉じる
+        blocks: list[tuple[str, str, list[str]]] = []
+        current: tuple[str, str, list[str]] | None = None
+        for p in archive.find_all("p"):
+            text = p.get_text(" ", strip=True).replace("\xa0", " ").strip()
+            heading = _EXTRA_HEADING.match(text)
+            if heading:
+                current = (text, heading.group("direction"), [])
+                blocks.append(current)
+            elif text.startswith(("【", "《")):
+                current = None
+            elif current is not None:
+                current[2].append(text)
+
+        voyages: list[ExtraVoyage] = []
+        complete = True
+        for heading, direction, lines in blocks:
+            voyage = self._build_extra_voyage(ship_name, heading, direction, lines)
+            if voyage is None:
+                complete = False
+            else:
+                voyages.append(voyage)
+        return ExtraParse(tuple(voyages), complete)
+
+    def _build_extra_voyage(
+        self, ship_name: str, heading: str, direction: str, lines: list[str]
+    ) -> ExtraVoyage | None:
+        """臨時便1つの行 → ExtraVoyage。読めなければ警告を出して None。"""
+        route_id = next(
+            (
+                rid
+                for rid, label in self._route_directions().items()
+                if label == direction
+            ),
+            None,
+        )
+        order = {
+            s.port_id: i for i, s in enumerate(self._get_stops().get(route_id, []))
+        }
+
+        def unreadable(line: str) -> None:
+            self._log.warning(
+                "extra_voyage_unreadable", ship=ship_name, heading=heading, line=line
+            )
+
+        if route_id is None:
+            unreadable("")
+            return None
+        today = getattr(self, "_valid_date", None) or date.today()
+        stops: list[ExtraStop] = []
+        skip_note: str | None = None
+        last_order = -1
+        last_time: datetime | None = None
+        for line in lines:
+            if not line:
+                continue
+            if line.startswith("※"):
+                if _EXTRA_SKIP_NOTE.search(line):
+                    skip_note = line
+                continue
+            m = _EXTRA_STOP.match(line)
+            day = (
+                _nearest_date(int(m.group("month")), int(m.group("day")), today)
+                if m
+                else None
+            )
+            port = self._get_resolver().resolve(m.group("port")) if m else None
+            if (
+                m is None
+                or day is None
+                or _WEEKDAYS[day.weekday()] != m.group("weekday")
+                or port is None
+                or order.get(port.id, -1) <= last_order
+            ):
+                unreadable(line)
+                return None
+            times = {
+                kind: datetime(day.year, day.month, day.day, int(h), int(mi))
+                for h, mi, kind in _EXTRA_TIME_PART.findall(m.group("times"))
+            }
+            arrival, departure = times.get("入港"), times.get("出港")
+            if (
+                (arrival is not None and last_time is not None and arrival < last_time)
+                or (
+                    departure is not None
+                    and departure < (arrival or last_time or departure)
+                )
+                or (not stops and arrival is not None)
+                or (stops and arrival is None)
+            ):
+                unreadable(line)
+                return None
+            stops.append(ExtraStop(port.id, arrival, departure))
+            last_order = order[port.id]
+            last_time = departure or arrival
+
+        # 始発港は出港だけ、途中は入港と出港、終点は入港だけ
+        if (
+            len(stops) < 2
+            or stops[0].departure_at is None
+            or stops[-1].departure_at is not None
+            or any(s.departure_at is None for s in stops[1:-1])
+        ):
+            unreadable(lines[-1] if lines else "")
+            return None
+        return ExtraVoyage(ship_name, route_id, tuple(stops), skip_note)
 
     def _get_resolver(self) -> PortResolver:
         if not hasattr(self, "_resolver"):
@@ -1296,6 +1446,30 @@ _VOYAGE_LINE = re.compile(
 )
 # 便の行の状態の語の終わり（この手前までが「条件付き運航・寄港地変更」）
 _VOYAGE_STATUS_END = re.compile(r"[（(※。\s]")
+
+# 船の詳細ページの臨時便。「【臨時便(下り)】」で始まり、次の【…】・《…》・終わりで閉じる
+_EXTRA_HEADING = re.compile(r"^【臨時便[(（](?P<direction>上り|下り)[)）]】$")
+_EXTRA_TIME = r"\d{1,2}:\d{2}[(（](?:入港|出港)[)）]"
+_EXTRA_STOP = re.compile(
+    r"^(?P<month>\d{1,2})月(?P<day>\d{1,2})日[(（](?P<weekday>[日月火水木金土])[)）]"
+    r"\s*(?P<port>[^\s\d]+?)\s*(?P<times>" + _EXTRA_TIME + "(?:/" + _EXTRA_TIME + ")?)$"
+)
+_EXTRA_TIME_PART = re.compile(r"(\d{1,2}):(\d{2})[(（](入港|出港)[)）]")
+_EXTRA_SKIP_NOTE = re.compile(r"寄港(?:いたし|致し|し)ません")
+_WEEKDAYS = "月火水木金土日"  # date.weekday() の順
+
+
+def _nearest_date(month: int, day: int, today: date) -> date | None:
+    """月日 → 今日にいちばん近い日付になる年の日付。存在しない日付は None。"""
+    candidates = []
+    for year in (today.year - 1, today.year, today.year + 1):
+        try:
+            candidates.append(date(year, month, day))
+        except ValueError:
+            continue
+    if not candidates:
+        return None
+    return min(candidates, key=lambda d: abs((d - today).days))
 
 
 def _parse_search_datetime(text: str) -> datetime | None:

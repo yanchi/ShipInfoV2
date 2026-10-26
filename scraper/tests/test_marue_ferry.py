@@ -2721,3 +2721,187 @@ def test_previous_day_is_searched_only_for_lines_from_midway(
 
     far = {c for c in search_calls() if c[2] in ("2026年10月28日", "2026年10月29日")}
     assert far == _far_up_keys(*expected_days)
+
+
+# ---------------------------------------------------------------------------
+# 臨時便の読み取り（12-marue-extra-voyages。_parse_extra_voyages）
+# ---------------------------------------------------------------------------
+
+NAMINOUE = "フェリー波之上"
+
+
+def naminoue_detail(*replacements: tuple[str, str]) -> str:
+    html = read_fixture("marue/ship_detail_naminoue_20261026.html")
+    for old, new in replacements:
+        assert old in html, old
+        html = html.replace(old, new)
+    return html
+
+
+def parse_extra(db_session, company_id, html, now: datetime = NOW_1026):
+    scraper = MarueFerry(db_session, company_id)
+    with structlog.testing.capture_logs() as logs, fixed_now(now):
+        parsed = scraper._parse_extra_voyages(html, NAMINOUE)
+    return scraper, parsed, logs
+
+
+def stop_times(voyage):
+    return [
+        (
+            s.arrival_at.strftime("%m-%d %H:%M") if s.arrival_at else None,
+            s.departure_at.strftime("%m-%d %H:%M") if s.departure_at else None,
+        )
+        for s in voyage.stops
+    ]
+
+
+def test_extra_voyages_are_read_from_detail_page(db_session, marue_with_ports):
+    company, ports = marue_with_ports
+    scraper, parsed, logs = parse_extra(db_session, company.id, naminoue_detail())
+
+    assert parsed.complete is True
+    down, up = parsed.voyages
+    assert [v.ship_name for v in parsed.voyages] == [NAMINOUE, NAMINOUE]
+    assert stop_times(down) == [
+        (None, "10-26 16:00"),
+        ("10-27 03:00", "10-27 03:50"),
+        ("10-27 11:30", "10-27 12:00"),
+        ("10-27 13:50", None),
+    ]
+    assert stop_times(up) == [
+        (None, "10-28 05:00"),
+        ("10-28 07:00", "10-28 07:20"),
+        ("10-28 09:50", "10-28 10:10"),
+        ("10-28 12:10", "10-28 12:40"),
+        ("10-28 14:30", "10-28 15:00"),
+        ("10-28 18:30", "10-28 19:20"),
+        ("10-29 07:30", None),
+    ]
+    assert down.skip_note == (
+        "※ 亀徳港(徳之島)、和泊港(沖永良部島)、与論港(与論島)には寄港いたしません。"
+    )
+    assert up.skip_note is None
+    routes = scraper._route_directions()
+    assert routes[down.route_id] == "下り" and routes[up.route_id] == "上り"
+    # 【欠航】の「9月27日(火)」は臨時便ではないので警告も出ない
+    assert not [log for log in logs if log["log_level"] == "warning"]
+
+
+def test_extra_voyages_none_for_plain_page(db_session, marue_with_ports):
+    company, _ = marue_with_ports
+    _, parsed, logs = parse_extra(
+        db_session, company.id, read_fixture("marue/ship_detail_normal.html")
+    )
+    assert parsed.voyages == () and parsed.complete is True
+    assert not [log for log in logs if log["log_level"] == "warning"]
+
+
+def test_extra_voyages_none_without_archive(db_session, marue_with_ports):
+    company, _ = marue_with_ports
+    assert parse_extra(db_session, company.id, "<html><body>x</body></html>")[1] is None
+    assert parse_extra(db_session, company.id, None)[1] is None
+
+
+@pytest.mark.parametrize(
+    "replacements",
+    [
+        # 曜日違い
+        [("10月28日(水)那覇港", "10月28日(木)那覇港")],
+        # 航路に無い港
+        [("10月28日(水)与論港", "10月28日(水)伊延港")],
+        # 順番違い（本部と与論を入れ替え）
+        [
+            ("10月28日(水)本部港　07:00(入港)/07:20(出港)", "@@"),
+            (
+                "10月28日(水)与論港　09:50(入港)/10:10(出港)",
+                "10月28日(水)本部港　07:00(入港)/07:20(出港)",
+            ),
+            ("@@", "10月28日(水)与論港　09:50(入港)/10:10(出港)"),
+        ],
+        # 途中の港で出港なし
+        [
+            (
+                "10月28日(水)本部港　07:00(入港)/07:20(出港)",
+                "10月28日(水)本部港　07:00(入港)",
+            )
+        ],
+        # 終点の入港なし
+        [("<p>10月29日(木)鹿児島新港　07:30(入港)</p>", "")],
+        # 時刻が前の港より前
+        [
+            (
+                "10月28日(水)本部港　07:00(入港)/07:20(出港)",
+                "10月28日(水)本部港　04:00(入港)/04:20(出港)",
+            )
+        ],
+        # 知らない形の行
+        [
+            (
+                "10月28日(水)亀徳港　14:30(入港)/15:00(出港)",
+                "10月28日(水)亀徳港　14:30ごろ",
+            )
+        ],
+    ],
+)
+def test_unreadable_extra_voyage_is_dropped_with_warning(
+    db_session, marue_with_ports, replacements
+):
+    company, _ = marue_with_ports
+    _, parsed, logs = parse_extra(
+        db_session, company.id, naminoue_detail(*replacements)
+    )
+
+    # 読めた下りだけが入り、complete は False（消さない）
+    assert parsed.complete is False
+    assert len(parsed.voyages) == 1
+    assert stop_times(parsed.voyages[0])[0] == (None, "10-26 16:00")
+    warnings = [log for log in logs if log["event"] == "extra_voyage_unreadable"]
+    assert len(warnings) == 1
+    assert warnings[0]["ship"] == NAMINOUE
+    assert "上り" in warnings[0]["heading"]
+
+
+@pytest.mark.parametrize("left,right", [("(", ")"), ("（", "）")])
+def test_extra_heading_accepts_both_parentheses(
+    db_session, marue_with_ports, left, right
+):
+    company, _ = marue_with_ports
+    html = naminoue_detail(
+        ("【臨時便(下り)】", f"【臨時便{left}下り{right}】"),
+        ("【臨時便(上り)】", f"【臨時便{left}上り{right}】"),
+    )
+    _, parsed, _ = parse_extra(db_session, company.id, html)
+    assert len(parsed.voyages) == 2
+
+
+def test_two_extra_voyages_in_same_direction(db_session, marue_with_ports):
+    company, _ = marue_with_ports
+    second = (
+        "<p>【臨時便(下り)】</p>"
+        "<p>10月27日(火)鹿児島新港　16:00(出港)</p>"
+        "<p>10月28日(水)名瀬港　03:00(入港)/03:50(出港)</p>"
+        "<p>10月28日(水)那覇港　13:50(入港)</p>"
+    )
+    html = naminoue_detail(
+        ("<p>【臨時便(上り)】</p>", second + "<p>【臨時便(上り)】</p>")
+    )
+    _, parsed, _ = parse_extra(db_session, company.id, html)
+    assert len(parsed.voyages) == 3
+    assert [stop_times(v)[0][1] for v in parsed.voyages[:2]] == [
+        "10-26 16:00",
+        "10-27 16:00",
+    ]
+
+
+def test_extra_year_rolls_over_new_year(db_session, marue_with_ports):
+    company, _ = marue_with_ports
+    html = naminoue_detail(
+        ("10月26日(月)鹿児島新港", "1月2日(土)鹿児島新港"),
+        ("10月27日(火)", "1月3日(日)"),
+    )
+    _, parsed, _ = parse_extra(
+        db_session, company.id, html, now=datetime(2026, 12, 30, 10, 0)
+    )
+    down = parsed.voyages[0]
+    assert down.stops[0].departure_at == datetime(2027, 1, 2, 16, 0)
+    assert down.stops[-1].arrival_at == datetime(2027, 1, 3, 13, 50)

@@ -253,6 +253,23 @@ class StatusControllerTest extends WebTestCase
         $this->assertStringContainsString('≫ 抜港', $crawler->filter(".alert-summary a[href=\"#{$anchor}\"]")->text());
     }
 
+    /** 臨時便は港別ページに ◆ 臨時便 で出て、注意書きも付く。異常の要約にも入る（12-marue-extra-voyages US1・FR-005） */
+    public function testPortsShowsExtraBadgeAndWarning(): void
+    {
+        $this->createPortBoardData(OperationStatusEnum::Extra);
+        $anchor = sprintf('r-%s-down-%d', (new \DateTimeImmutable('tomorrow'))->format('Y-m-d'), $this->portId('名瀬'));
+
+        $crawler = $this->client->request('GET', '/ports');
+
+        $this->assertResponseIsSuccessful();
+        $row = $this->findPortRow($crawler, 1, '名瀬');
+        $this->assertStringContainsString('◆ 臨時便', $row->text());
+        $this->assertCount(1, $row->filter('.port-entry.port-entry--alert.port-entry--extra'));
+        $this->assertCount(1, $row->filter('.status-warning'));
+        $this->assertCount(1, $crawler->filter(".alert-summary a[href=\"#{$anchor}\"]"));
+        $this->assertStringContainsString('便検索に無い臨時の便', $crawler->filter('details.status-legend')->text());
+    }
+
     public function testStatusWarningOnIndexCardAndCompanySummary(): void
     {
         $companyId = $this->createCompanyWithRoute('注意書きテスト会社', OperationStatusEnum::Cancelled);
@@ -646,7 +663,7 @@ class StatusControllerTest extends WebTestCase
 
         $legend = $crawler->filter('details.status-legend');
         $this->assertCount(1, $legend);
-        foreach (['✓ 通常運航', '○ 運航予定', '▲ 条件付・遅延', '≫ 抜港', '✗ 欠航', '■ 運休', '— 便なし', '？ 情報なし', '？ 不明'] as $label) {
+        foreach (['✓ 通常運航', '○ 運航予定', '▲ 条件付・遅延', '≫ 抜港', '◆ 臨時便', '✗ 欠航', '■ 運休', '— 便なし', '？ 情報なし', '？ 不明'] as $label) {
             $this->assertStringContainsString($label, $legend->text());
         }
     }
