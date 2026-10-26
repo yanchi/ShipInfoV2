@@ -24,7 +24,7 @@
 **Testing**: pytest（2026-10-26 の保存版を fixture にする）
 **Target Platform**: Docker Compose（本番はさくら VPS の `compose.prod.yml`）
 **Project Type**: スクレイパー
-**Performance Goals**: 便の行が無い日付の検索回数は変えない。便の行がある日付だけ、2日先以降の検索が1回の実行で十数回まで増える
+**Performance Goals**: 便の行が無い日付の検索回数は変えない。便の行がある日付と、前回状態を付けた日付（DB の行で船名があり、欠航・運休・条件付・通常運航のどれか。T016b）だけ、2日先以降の検索が1回の実行で十数回まで増える
 **Constraints**:
 - `BaseScraper.fetch()` / `parse()` / `parse_departures()` のシグネチャは変えない
 - `raw_html_hash` に使う文字列は変えない
@@ -92,7 +92,7 @@ specs/4-departure-port-status/spec.md              # FR-021 の書き換え（FR
 - `_voyage_line()`（R1・R7）、`_for_voyage()` の書き換え（R2・R7）、出港済みの判定
 - `parse_departures()` の先の便（R3）、`_route_status()`（R6）
 - 既存の `test_voyage_not_in_excerpt_keeps_ship_status` は結果を変えず、名前だけ `test_departed_voyage_not_in_excerpt_keeps_ship_status` に変える（R2）
-- テスト：SC-001（10/27 那覇発上りが全港 cancelled）、10/25 便が出港済みでタグのまま、SC-006（10/29 便が operating）、行0のときタグ、途中の港の行が範囲で合う、先の便に港別情報が付かない、行の無い先の便は None（SC-004）
+- テスト：SC-001（10/27 那覇発上りが全港 cancelled）、10/25 便が出港済みで前回の記録（無ければタグ）のまま、FR-011 で operating・前回の記録にした今の便に港別情報が付かない、SC-006（10/29 便が operating）、行0のときタグ、途中の港の行が範囲で合う、先の便に港別情報が付かない、行の無い先の便は None（SC-004）
 
 ### Phase C：検索の追加（FR-010）と文書
 

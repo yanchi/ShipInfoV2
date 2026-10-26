@@ -35,6 +35,8 @@
 
 **影響する既存テスト**: `test_voyage_not_in_excerpt_keeps_ship_status` は今の便が出港済み（10/20 07:00 発、11:39 に実行）なので、R7 により結果は `cancelled` のまま。名前だけ `test_departed_voyage_not_in_excerpt_keeps_ship_status` に変える。出港前で `operating` になるケースは新しいテスト（T014）で見る。
 
+**港別情報を当てない（4回目の analyze H4・M4）**: 行が合わずに operating にした今の便（`assumed_operating`）と、出港済みで前回の記録に戻した今の便（`use_recorded`）には、港別情報（`_ship_notices()`）を当てない。`_current_voyage_status()` と `_skipped_on_current_voyage()` の両方で見ない。港別情報はどの便の話か書いていないことが多く、10/26 の波之上の詳細ページには臨時便（10/26 鹿児島発）の「亀徳港・和泊港・与論港には寄港いたしません」がある。これを 10/29 便に当てると、10/30 の亀徳・和泊・与論が「抜港」になる。今までは船のタグ（欠航）で早く返していたので起きなかった。
+
 **安全装置（PR #85 レビュー）**: 合わないときに operating にするのは、次の両方を満たすときだけ。(1) 船のタグのうち一番重いもの（`ship.status`）が、読めた便の行のうち一番重いもの以下（比べるときは `_SEVERITY.get(…, 0)`。タグが読めず `ship.status` が None の船でも例外にしない）。(2) `ship.conditional` が True なら、条件付の行（`v.conditional`）が1つ以上ある。どちらかを満たさなければ、行の無い便の変更（欠航・条件付）がどこかにあり、今の便かもしれない。そのときは船のタグのままにして `voyage_tag_heavier_than_lines` を警告する。2026-10-26 の保存ページは、波之上（タグ欠航・行に欠航あり）、あけぼの（タグ欠航・行も欠航）とも operating 側になる（SC-006 は崩れない）。
 
 ## R3. 先の便（FR-001〜004）
