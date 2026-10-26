@@ -142,6 +142,39 @@ class IrregularServiceCollectorTest extends TestCase
         $this->assertSame('情報なし（途中の港に変更あり）', $noService[0]->statusText());
     }
 
+    /** 臨時便の行（Extra）だけの日も通知の対象に入る（12-marue-extra-voyages US4） */
+    public function testExtraOnlyDayIsCollected(): void
+    {
+        $items = $this->collector->build(
+            [],
+            [$this->departure($this->route, '2026-10-28', '那覇', OperationStatusEnum::Extra, '05:00', 'フェリー波之上')],
+        );
+
+        $this->assertCount(1, $items);
+        $this->assertSame(OperationStatusEnum::Extra, $items[0]->ports[0]->status);
+        $this->assertSame('臨時便あり', $items[0]->statusText());
+    }
+
+    /** 「状況」の文言：臨時便だけの日は、定期便に変更があるとは書かない */
+    public function testStatusTextForExtraPorts(): void
+    {
+        $extra = fn (string $port) => $this->departure($this->route, '2026-10-28', $port, OperationStatusEnum::Extra, '05:00', 'フェリー波之上');
+        $cases = [
+            '行なし・全部 Extra'     => [[], [$extra('那覇'), $extra('本部')], '臨時便あり'],
+            '便なし・全部 Extra'     => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::NoService)], [$extra('那覇')], '臨時便あり'],
+            '通常運航・全部 Extra'   => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::Operating)], [$extra('那覇')], '通常運航（臨時便あり）'],
+            '欠航は今までどおり'     => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::Cancelled)], [$extra('那覇')], '欠航'],
+            'Extra と条件付が混ざる' => [[$this->operation($this->route, '2026-10-28', OperationStatusEnum::Operating)], [$extra('那覇'), $this->departure($this->route, '2026-10-28', '名瀬', OperationStatusEnum::Delayed)], '通常運航（途中の港に変更あり）'],
+            '行なし・Extra と欠航'   => [[], [$extra('那覇'), $this->departure($this->route, '2026-10-28', '名瀬', OperationStatusEnum::Cancelled)], '情報なし（途中の港に変更あり）'],
+        ];
+
+        foreach ($cases as $label => [$operations, $departures, $expected]) {
+            $items = $this->collector->build($operations, $departures);
+            $this->assertCount(1, $items, $label);
+            $this->assertSame($expected, $items[0]->statusText(), $label);
+        }
+    }
+
     public function testNothingIrregularYieldsNoItems(): void
     {
         $items = $this->collector->build(

@@ -202,10 +202,10 @@
 
 **Goal**: 臨時便の行が通知メールに「臨時便」として載る（FR-011。行は T003 の Enum で自動で入る）。臨時便だけの日の「状況」を「臨時便あり」にする（contracts/notification-mail.md）。
 
-- [ ] T032 [P] [US4] `app/tests/Service/IrregularServiceCollectorTest.php` にテストを足す：Extra の港の行だけがある日も1件になる（`ports` に入る）
-- [ ] T033 [P] [US4] `app/tests/Service/IrregularStatusMailerTest.php` にテストを足す：Extra の港の行が「- 那覇 05:00発 フェリー波之上：臨時便」の形で本文に出る（contracts/notification-mail.md）
-- [ ] T034 [US4] `app/tests/Repository/DepartureStatusRepositoryTest.php` に、`findIrregularBetween()` が `status = 'extra'` の行を返すテストを足す
-- [ ] T034a [US4] `app/tests/Service/IrregularStatusMailerTest.php` に「状況」のテストを足す：航路×日付が便なし・行なしで港が全部 Extra →「臨時便あり」、航路が通常運航で港が全部 Extra →「通常運航（臨時便あり）」、Extra と条件付が混ざる →「〜（途中の港に変更あり）」、航路が欠航 →「欠航」。→ `app/src/View/IrregularService.php` の `statusText()` を直す（contracts/notification-mail.md）。`make test-php`・`make phpstan`
+- [X] T032 [P] [US4] `app/tests/Service/IrregularServiceCollectorTest.php` にテストを足す：Extra の港の行だけがある日も1件になる（`ports` に入る）
+- [X] T033 [P] [US4] `app/tests/Service/IrregularStatusMailerTest.php` にテストを足す：Extra の港の行が「- 那覇 05:00発 フェリー波之上：臨時便」の形で本文に出る（contracts/notification-mail.md）
+- [X] T034 [US4] `app/tests/Repository/DepartureStatusRepositoryTest.php` に、`findIrregularBetween()` が `status = 'extra'` の行を返すテストを足す
+- [X] T034a [US4] `app/tests/Service/IrregularStatusMailerTest.php` に「状況」のテストを足す：航路×日付が便なし・行なしで港が全部 Extra →「臨時便あり」、航路が通常運航で港が全部 Extra →「通常運航（臨時便あり）」、Extra と条件付が混ざる →「〜（途中の港に変更あり）」、航路が欠航 →「欠航」。→ `app/src/View/IrregularService.php` の `statusText()` を直す（contracts/notification-mail.md）。`make test-php`・`make phpstan`
 
 **Checkpoint**: T032〜T034a が通る → コミット
 
