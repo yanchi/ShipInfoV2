@@ -64,7 +64,7 @@ class StatusController extends AbstractController
             'companies'       => $companies,
             'idleCompanies'   => $idleCompanies,
             'routeBadges'     => $this->routeBadges($companies, $fullBoard->days[0] ?? null),
-            'routesWithExtra' => $this->routesWithExtra($companies, $fullBoard->days[0] ?? null),
+            'routesWithExtra' => $this->routesWithExtra($companies, $fullBoard),
             'today'           => $today,
             'now'             => new \DateTimeImmutable(),
         ]);
@@ -165,23 +165,26 @@ class StatusController extends AbstractController
 
     /**
      * 今日その方向に臨時便がある航路の、いちばん早い臨時便（会社カードの「◆ 臨時便 鹿児島 16:00発」。12-marue-extra-voyages FR-016）。
+     * 臨時便の運航に抜港があれば「・抜港あり」を足す（15-extra-voyage-badge）。
      *
      * @param list<array{company: FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: ?OperationStatus}>}> $companies
      *
      * @return array<int, PortBoardExtraDeparture> [routeId => 臨時便]
      */
-    private function routesWithExtra(array $companies, ?PortBoardDay $today): array
+    private function routesWithExtra(array $companies, PortBoard $board): array
     {
         $result = [];
+        $today  = $board->days[0] ?? null;
         if ($today === null) {
             return $result;
         }
         foreach ($companies as $companyData) {
             foreach ($companyData['routes'] as $routeId => $r) {
                 $direction = $r['route']->getDirection();
-                $extra     = $direction === null ? null : $today->firstExtraDepartureOf($companyData['company']->getId(), $direction);
-                if ($extra !== null) {
-                    $result[$routeId] = $extra;
+                $companyId = $companyData['company']->getId();
+                $extra     = $direction === null ? null : $today->firstExtraDepartureOf($companyId, $direction);
+                if ($direction !== null && $extra !== null) {
+                    $result[$routeId] = new PortBoardExtraDeparture($extra->portName, $extra->departureAt, $board->extraSkipsPortsOf($companyId, $direction));
                 }
             }
         }

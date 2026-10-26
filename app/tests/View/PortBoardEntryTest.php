@@ -49,6 +49,20 @@ class PortBoardEntryTest extends TestCase
         $this->assertFalse($entry->isDeparted(new \DateTimeImmutable('2026-10-01 23:00')));
     }
 
+    /** 寄港する便か：運航予定と、走る状態（臨時便・通常運航・条件付遅延・不明）。欠航・運休・抜港・便なし・情報なしは寄らない */
+    public function testIsCalling(): void
+    {
+        foreach ([OperationStatusEnum::Extra, OperationStatusEnum::Operating, OperationStatusEnum::Delayed, OperationStatusEnum::Unknown] as $status) {
+            $this->assertTrue($this->statusEntry($status)->isCalling(), $status->value);
+        }
+        foreach ([OperationStatusEnum::Cancelled, OperationStatusEnum::Suspended, OperationStatusEnum::Skipped, OperationStatusEnum::NoService] as $status) {
+            $this->assertFalse($this->statusEntry($status)->isCalling(), $status->value);
+        }
+        $this->assertTrue((new PortBoardEntry(DepartureDisplayStateEnum::Scheduled))->isCalling());
+        $this->assertFalse((new PortBoardEntry(DepartureDisplayStateEnum::NoService))->isCalling());
+        $this->assertFalse((new PortBoardEntry(DepartureDisplayStateEnum::NoInfo))->isCalling());
+    }
+
     public function testCheckedAtDiffersFrom(): void
     {
         $entry = new PortBoardEntry(DepartureDisplayStateEnum::NoService, checkedAt: new \DateTimeImmutable('2026-10-01 06:00:10'));

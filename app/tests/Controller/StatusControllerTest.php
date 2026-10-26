@@ -485,6 +485,32 @@ class StatusControllerTest extends WebTestCase
         $this->assertCount(1, $card->filter('.route-extra'));
     }
 
+    /** 臨時便の運航に抜港があれば、1行の後ろに「・抜港あり」（15-extra-voyage-badge SC-004） */
+    public function testIndexCardExtraLineShowsSkippedPorts(): void
+    {
+        $this->createPortBoardData();
+        $this->useFullDownStops();
+        $this->setRouteStatus(OperationStatusEnum::Operating);
+        $this->addTodayDeparture('名瀬', '臨時丸', OperationStatusEnum::Extra, '03:50', '13:50');
+        $this->addTodayDeparture('本部', '臨時丸', OperationStatusEnum::Extra, '12:00', '13:50');
+
+        $card = $this->findCard($this->client->request('GET', '/'), '港別テスト運航会社');
+
+        $this->assertSame('◆ 臨時便 名瀬 03:50発・抜港あり', trim($card->filter('.route-extra')->text()));
+    }
+
+    public function testIndexCardExtraLineWithoutSkippedPorts(): void
+    {
+        $this->createPortBoardData();
+        $this->useFullDownStops();
+        $this->setRouteStatus(OperationStatusEnum::Operating);
+        $this->addTodayDeparture('名瀬', '臨時丸', OperationStatusEnum::Extra, '03:50', '13:50');
+
+        $card = $this->findCard($this->client->request('GET', '/'), '港別テスト運航会社');
+
+        $this->assertSame('◆ 臨時便 名瀬 03:50発', trim($card->filter('.route-extra')->text()));
+    }
+
     /** トップの「欠航・条件付などの便」に臨時便が入る（FR-017） */
     public function testIndexAlertSummaryIncludesExtra(): void
     {

@@ -29,6 +29,17 @@ final readonly class PortBoardEntry
         return \in_array($this->state, [DepartureDisplayStateEnum::Status, DepartureDisplayStateEnum::Scheduled], true);
     }
 
+    /**
+     * その港に寄る便か（運航予定、または臨時便・通常運航・条件付遅延・不明）。
+     * 欠航・運休・抜港・便なし・情報なしは寄らない。臨時便の抜港の判定に使う（15-extra-voyage-badge）。
+     */
+    public function isCalling(): bool
+    {
+        return $this->state === DepartureDisplayStateEnum::Scheduled
+            || ($this->state === DepartureDisplayStateEnum::Status
+                && \in_array($this->status, [OperationStatusEnum::Extra, OperationStatusEnum::Operating, OperationStatusEnum::Delayed, OperationStatusEnum::Unknown], true));
+    }
+
     /** 欠航・条件付・遅延・運休・臨時便（異常の要約に入れ、行を目立たせる） */
     public function isAlert(): bool
     {

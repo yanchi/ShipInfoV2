@@ -90,7 +90,7 @@
                                     {# 今日その方向に臨時便がある航路は、バッジ・注意書きの下に1行（12-marue-extra-voyages FR-016） #}
                                     {% set extra = routesWithExtra[route.id] ?? null %}
                                     {% if extra is not null %}
-                                        <div><a href="{{ path('app_status_company', {id: company.id}) }}" class="route-extra small text-decoration-none">◆ 臨時便 {{ extra.portName }} {{ extra.departureAt|date('H:i') }}発</a></div>
+                                        <div><a href="{{ path('app_status_company', {id: company.id}) }}" class="route-extra small text-decoration-none">◆ 臨時便 {{ extra.portName }} {{ extra.departureAt|date('H:i') }}発{% if extra.skipsPorts %}・抜港あり{% endif %}</a></div>
                                     {% endif %}
                                 </li>
                             {% else %}

@@ -77,7 +77,7 @@
 
 ### Tests for User Story 2
 
-- [ ] T007 [P] [US2] `app/tests/View/PortBoardTest.php` に `extraSkipsPortsOf()` のテストを足す（実装の前に落ちることを確かめる）。下りの港を6つ（鹿児島・名瀬・亀徳・和泊・与論・本部。添字 0〜5。終点の那覇は行にしない）並べたボードを手で組む道具（例：`extraBoard(array $days)`。日ごとに `[港の添字 => list<PortBoardEntry>]`）を足す。エントリーは `companyId: 1`、`shipName`・`departureAt`・`arrivalAt` つき（同じ運航の臨時便は同じ `arrivalAt`）:
+- [X] T007 [P] [US2] `app/tests/View/PortBoardTest.php` に `extraSkipsPortsOf()` のテストを足す（実装の前に落ちることを確かめる）。下りの港を6つ（鹿児島・名瀬・亀徳・和泊・与論・本部。添字 0〜5。終点の那覇は行にしない）並べたボードを手で組む道具（例：`extraBoard(array $days)`。日ごとに `[港の添字 => list<PortBoardEntry>]`）を足す。エントリーは `companyId: 1`、`shipName`・`departureAt`・`arrivalAt` つき（同じ運航の臨時便は同じ `arrivalAt`）:
   - (a) US2-1：今日 名瀬 03:50・本部 12:00 が波之上の Extra、亀徳・和泊・与論は行なし（または別の船の通常運航だけ）→ true
   - (b) US2-3（上りのボード）：今日 那覇 07:00・名瀬 21:20 がクロスの Extra、本部・与論・和泊・亀徳はクロスの Cancelled → true
   - (c) US2-2：今日 名瀬 05:50 だけが Extra → false
@@ -91,23 +91,23 @@
   - (l) 船名が null のエントリー：今日 名瀬 03:50・本部 12:00 が船名 null の Extra（到着予定は同じ）→ まとめないので false
   - (m) 到着予定が null のエントリー：今日 名瀬・本部が同じ船の Extra で `arrivalAt` が null → まとめないので false
   - (j) 別の会社（`companyId: 2`）の Extra は見ない → false
-- [ ] T008 [P] [US2] `app/tests/Controller/StatusControllerTest.php` にテストを足す:
+- [X] T008 [P] [US2] `app/tests/Controller/StatusControllerTest.php` にテストを足す:
   - `addTodayDeparture()` に省略できる到着予定の引数（`?string $arrival = null`、今日の `'HH:MM'`）を足し、`setScheduledArrivalAt()` に渡す
   - (a) SC-004：`addTodayDeparture('名瀬', '臨時丸', Extra, '03:50', '13:50')`・`addTodayDeparture('本部', '臨時丸', Extra, '12:00', '13:50')` → `.route-extra` が「◆ 臨時便 名瀬 03:50発・抜港あり」
   - (b) 名瀬だけの臨時便 → 「◆ 臨時便 名瀬 03:50発」（「抜港あり」なし）
 
 ### Implementation for User Story 2
 
-- [ ] T009 [P] [US2] `app/src/View/PortBoardEntry.php` に `isCalling(): bool` を足す（その港に寄る便か）。`state === Scheduled`、または `state === Status` で `status` が Extra・Operating・Delayed・Unknown なら true。`app/tests/View/PortBoardEntryTest.php` に、全部の `OperationStatusEnum` と運航予定・便なし・情報なしの表でテストを足す
-- [ ] T010 [US2] `app/src/View/PortBoard.php` に `extraSkipsPortsOf(int $companyId, RouteDirectionEnum $direction): bool` を足す（research R3・data-model.md）:
+- [X] T009 [P] [US2] `app/src/View/PortBoardEntry.php` に `isCalling(): bool` を足す（その港に寄る便か）。`state === Scheduled`、または `state === Status` で `status` が Extra・Operating・Delayed・Unknown なら true。`app/tests/View/PortBoardEntryTest.php` に、全部の `OperationStatusEnum` と運航予定・便なし・情報なしの表でテストを足す
+- [X] T010 [US2] `app/src/View/PortBoard.php` に `extraSkipsPortsOf(int $companyId, RouteDirectionEnum $direction): bool` を足す（research R3・data-model.md）:
   - 全日付の、その方向の行を順に見て、その会社の Extra のエントリーを `[行の添字, エントリー]` で集める（出港時刻が無いものは除く）
   - 船名と到着予定（`arrivalAt` の `Y-m-d H:i`）でまとめて運航にする。船名が空・null、または `arrivalAt` が null のエントリーは1つで1回の運航にする
   - 今日（`days[0]->date`）を出るエントリーを含む運航だけを見る
   - 運航の最初と最後の添字のあいだの行ごとに、運航の出港日の範囲の日で、同じ会社・同じ船のエントリーが `isCalling()` なら寄港。どの日も無ければ抜港 → true
   - docblock に「臨時便は寄らない港の行を作らない（12 の FR-006・13 の FR-003）ので、同じ船の寄る行が無い港を抜港とみなす」と、同じ運航の臨時便の行は到着予定（終点への到着）が同じであること、前日に始発港を出た運航は今日の最初の港から見ることを書く
-- [ ] T011 [US2] `app/src/View/PortBoardExtraDeparture.php`（`final readonly class`）のコンストラクタに昇格引数 `public bool $skipsPorts = false` を足す（readonly のプロパティ宣言には既定値を書けないので、プロパティとしては足さない）。docblock に「・抜港あり」を出すかと書く
-- [ ] T012 [US2] `app/src/Controller/StatusController.php` の `routesWithExtra()` にボード全体（`$fullBoard`）を渡し、`new PortBoardExtraDeparture($extra->portName, $extra->departureAt, $board->extraSkipsPortsOf($companyId, $direction))` で詰める
-- [ ] T013 [US2] `app/templates/status/index.html.twig` の臨時便の1行に `{% if extra.skipsPorts %}・抜港あり{% endif %}`。テキストに余計な空白が入らないようにする（T008 は `trim()` の完全一致）
+- [X] T011 [US2] `app/src/View/PortBoardExtraDeparture.php`（`final readonly class`）のコンストラクタに昇格引数 `public bool $skipsPorts = false` を足す（readonly のプロパティ宣言には既定値を書けないので、プロパティとしては足さない）。docblock に「・抜港あり」を出すかと書く
+- [X] T012 [US2] `app/src/Controller/StatusController.php` の `routesWithExtra()` にボード全体（`$fullBoard`）を渡し、`new PortBoardExtraDeparture($extra->portName, $extra->departureAt, $board->extraSkipsPortsOf($companyId, $direction))` で詰める
+- [X] T013 [US2] `app/templates/status/index.html.twig` の臨時便の1行に `{% if extra.skipsPorts %}・抜港あり{% endif %}`。テキストに余計な空白が入らないようにする（T008 は `trim()` の完全一致）
 
 **Checkpoint**: `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` が通る → コミット
 
