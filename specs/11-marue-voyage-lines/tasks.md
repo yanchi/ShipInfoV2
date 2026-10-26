@@ -97,6 +97,14 @@
 
 **Independent Test**: `run_1026(..., now=datetime(2026, 10, 28, 12, 0))` に、10/29 鹿児島発下り（波之上、乗船 18:00、下船 2026-10-30 19:00）だけの検索結果を渡す。10/29 便の行は `operating`。
 
+> **実装時に直すこと（4回目の `/speckit.analyze`、2026-10-26）**：Phase 5 の実装と一緒に、下の5つを直す。spec・research・data-model・plan の文書も、直すテストと同じコミットで揃える（共通の注意の「テストを書きながら詰める」と同じ進め方）。Phase 1〜4 には影響しない。
+>
+> - **H4（HIGH）**：FR-011 で今の便を operating にしたとき、`_current_voyage_status()` がほかの便の港別情報を当ててしまう。10/26 の詳細ページには臨時便の「亀徳港・和泊港・与論港には寄港いたしません」があるので、10/29 便の 10/30 の亀徳・和泊・与論が「抜港」になる。`ShipInfo` に `assumed_operating: bool` を足し、True なら `_current_voyage_status()` と `_skipped_on_current_voyage()` の両方で港別情報を見ない（先の便の FR-004 と同じ理由）。T014(a) の期待値に「10/30 の亀徳・和泊・与論も `operating`（抜港にならない）」を足す。spec FR-011・research R2・data-model の表・T016 に書く
+> - **M4（MEDIUM）**：出港済みで `use_recorded` のときも、港別情報は一切見ない。前回の行が無い港（`ship.status` と抜粋に戻る道）と `_skipped_on_current_voyage()` も含める。T016・data-model「前回記録したその便のステータス」に書く
+> - **L3（LOW）**：spec の Edge Cases の「便の行が1つだけ」と「航路単位」に、「（出港前で、安全装置に当たらなければ。FR-011）」を足す
+> - **L4（LOW）**：plan.md の Phase B「10/25 便が出港済みでタグのまま」を「前回の記録、無ければタグ」に直す。Technical Context の Performance Goals に、DB の行による追加検索（T016b）を足す
+> - **L5（LOW）**：T014 に (m) を足す：今日の始発港の便が出港済みで、行が合わず、DB に記録がある → 航路単位（`operation_statuses`）も記録のステータス
+
 ### Tests
 
 - [ ] T013 [P] [US3] `scraper/tests/test_marue_ferry.py` の `test_voyage_not_in_excerpt_keeps_ship_status` を `test_departed_voyage_not_in_excerpt_keeps_ship_status` に変える。今の便（あけぼの 10/20 那覇 07:00 発）は `NOW_1020`（11:39）で出港済みで、DB に記録も無いので、期待値は `cancelled` のまま（research R2）。`voyage_not_in_excerpt` の警告が1回で、`assumed="ship_status"` が付くことを足す
