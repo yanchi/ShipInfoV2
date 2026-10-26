@@ -7,9 +7,16 @@ use App\Enum\OperationStatusEnum;
 
 /**
  * 出発港の行に出す1便ぶん（または「便なし」「情報なし」）。
+ *
+ * $noServiceShipNames は、この港の行に船名つきの no_service の行があったときのその船名（画面には出さない）。
+ * no_service の行は、ほかの会社の便があっても（ルール2・3）ボードに出ない。臨時便の抜港の判定で、
+ * 便検索の行に隠れた寄港を抜港と取り違えないために使う（15-extra-voyage-badge）。
  */
 final readonly class PortBoardEntry
 {
+    /**
+     * @param list<string> $noServiceShipNames
+     */
     public function __construct(
         public DepartureDisplayStateEnum $state,
         public ?OperationStatusEnum $status = null,
@@ -20,6 +27,7 @@ final readonly class PortBoardEntry
         public ?string $detail = null,
         public ?\DateTimeInterface $checkedAt = null,
         public ?int $companyId = null,
+        public array $noServiceShipNames = [],
     ) {
     }
 
@@ -27,6 +35,17 @@ final readonly class PortBoardEntry
     public function isDeparture(): bool
     {
         return \in_array($this->state, [DepartureDisplayStateEnum::Status, DepartureDisplayStateEnum::Scheduled], true);
+    }
+
+    /**
+     * その港に寄る便か（運航予定、または臨時便・通常運航・条件付遅延・不明）。
+     * 欠航・運休・抜港・便なし・情報なしは寄らない。臨時便の抜港の判定に使う（15-extra-voyage-badge）。
+     */
+    public function isCalling(): bool
+    {
+        return $this->state === DepartureDisplayStateEnum::Scheduled
+            || ($this->state === DepartureDisplayStateEnum::Status
+                && \in_array($this->status, [OperationStatusEnum::Extra, OperationStatusEnum::Operating, OperationStatusEnum::Delayed, OperationStatusEnum::Unknown], true));
     }
 
     /** 欠航・条件付・遅延・運休・臨時便（異常の要約に入れ、行を目立たせる） */

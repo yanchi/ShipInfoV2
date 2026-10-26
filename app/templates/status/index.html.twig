@@ -71,26 +71,26 @@
                                 <li class="list-group-item">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span>{{ route.name }}</span>
-                                        {% set midway = routesDepartingMidway[route.id] ?? null %}
-                                        {% if midway is null %}
+                                        {% set routeBadge = routeBadges[route.id] ?? null %}
+                                        {% if routeBadge is null %}
                                             {{ include('status/_status_badge.html.twig', {state: null, status: status ? status.status : null}) }}
-                                        {% elseif midway.kind == 'changed' %}
-                                            {# 航路単位では便なし（始発港を出る便が無い）でも、途中の港を出る便がある。状態がバラけていて欠航・運休・条件付・遅延が混じる（tasks T054a） #}
+                                        {% elseif routeBadge.kind == 'changed' %}
+                                            {# 途中の港の状態がバラけている日（欠航・運休・条件付・遅延が混じる。tasks T054a）、または臨時便がある日（15-extra-voyage-badge） #}
                                             <a href="{{ path('app_status_company', {id: company.id}) }}" class="status-badge status-badge--delayed route-midway text-decoration-none">▲ スケジュール変更</a>
                                         {% else %}
                                             {# 航路単位では便なし（始発港を出る便が無い）でも、途中の港を出る便がある。その便の状態を出す #}
-                                            {{ include('status/_status_badge.html.twig', {state: midway.state, status: midway.status}) }}
+                                            {{ include('status/_status_badge.html.twig', {state: routeBadge.state, status: routeBadge.status}) }}
                                         {% endif %}
                                     </div>
-                                    {% if midway is null %}
+                                    {% if routeBadge is null %}
                                         {{ include('status/_status_warning.html.twig', {status: status ? status.status : null}) }}
-                                    {% elseif midway.kind == 'badge' %}
-                                        {{ include('status/_status_warning.html.twig', {status: midway.status}) }}
+                                    {% elseif routeBadge.kind == 'badge' %}
+                                        {{ include('status/_status_warning.html.twig', {status: routeBadge.status}) }}
                                     {% endif %}
                                     {# 今日その方向に臨時便がある航路は、バッジ・注意書きの下に1行（12-marue-extra-voyages FR-016） #}
                                     {% set extra = routesWithExtra[route.id] ?? null %}
                                     {% if extra is not null %}
-                                        <div><a href="{{ path('app_status_company', {id: company.id}) }}" class="route-extra small text-decoration-none">◆ 臨時便 {{ extra.portName }} {{ extra.departureAt|date('H:i') }}発</a></div>
+                                        <div><a href="{{ path('app_status_company', {id: company.id}) }}" class="route-extra small text-decoration-none">◆ 臨時便 {{ extra.portName }} {{ extra.departureAt|date('H:i') }}発{% if extra.skipsPorts %}・抜港あり{% endif %}</a></div>
                                     {% endif %}
                                 </li>
                             {% else %}

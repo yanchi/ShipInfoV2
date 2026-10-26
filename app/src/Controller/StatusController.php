@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\FerryCompany;
 use App\Entity\OperationStatus;
+use App\Entity\RouteStop;
 use App\Enum\DepartureDisplayStateEnum;
 use App\Enum\OperationStatusEnum;
 use App\Enum\RouteDirectionEnum;
@@ -57,16 +58,16 @@ class StatusController extends AbstractController
 
         $response = $this->render('status/index.html.twig', [
             // 要約は常に全港・4日分（Cookie では絞り込まない）
-            'summary'               => $portAlertSummaryBuilder->build($fullBoard, PortFilter::none()),
-            'portFilter'            => $resolution->filter,
-            'portOptions'           => $portFilterResolver->departurePorts($boardStops),
-            'savedToday'            => $savedToday,
-            'companies'             => $companies,
-            'idleCompanies'         => $idleCompanies,
-            'routesDepartingMidway' => $this->routesDepartingMidway($companies, $fullBoard->days[0] ?? null),
-            'routesWithExtra'       => $this->routesWithExtra($companies, $fullBoard->days[0] ?? null),
-            'today'                 => $today,
-            'now'                   => new \DateTimeImmutable(),
+            'summary'         => $portAlertSummaryBuilder->build($fullBoard, PortFilter::none()),
+            'portFilter'      => $resolution->filter,
+            'portOptions'     => $portFilterResolver->departurePorts($boardStops),
+            'savedToday'      => $savedToday,
+            'companies'       => $companies,
+            'idleCompanies'   => $idleCompanies,
+            'routeBadges'     => $this->routeBadges($companies, $fullBoard->days[0] ?? null),
+            'routesWithExtra' => $this->routesWithExtra($companies, $fullBoard),
+            'today'           => $today,
+            'now'             => new \DateTimeImmutable(),
         ]);
 
         if ($resolution->cookie !== null) {
@@ -107,33 +108,52 @@ class StatusController extends AbstractController
     }
 
     /**
-     * 航路単位では no_service でも、今日その方向の便が途中の港を出る航路（会社カードで「— 便なし」と出さない。tasks T054a）。
+     * 航路のバッジを、航路単位の状態から変えるもの（会社カード）。ここに無い航路は航路単位の状態をそのまま出す。
      *
+     * 航路単位では no_service でも、今日その方向の便が途中の港を出る航路は、「— 便なし」と出さない（tasks T054a）。
      * 前日に始発港を出た便が今日途中の港を出る日は、その区間（始発港を除いた港を出る便）の状態を出す。
      * 全便が同じ状態ならそれを badge。バラけていて欠航・運休・条件付・遅延が混じれば changed（スケジュール変更）、
      * 混じらなければ通常運航 → 不明 → 運航予定の順で badge。
      * 臨時便以外の行が無く（始発港の行も見る）臨時便があれば「臨時便」の badge（13-marix-extra-voyages FR-014）。
      *
+     * 今日その方向に臨時便がある航路は、ふだんのバッジが通常運航・運航予定なら changed（15-extra-voyage-badge）。
+     * 欠航・運休・条件付・遅延・不明・便なし・臨時便だけの日は変えない。
+     *
      * @param list<array{company: FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: ?OperationStatus}>}> $companies
      *
      * @return array<int, array{kind: 'changed'|'badge', state: ?DepartureDisplayStateEnum, status: ?OperationStatusEnum}> [routeId => 表示]
      */
-    private function routesDepartingMidway(array $companies, ?PortBoardDay $today): array
+    private function routeBadges(array $companies, ?PortBoardDay $today): array
     {
         $result = [];
+        if ($today === null) {
+            return $result;
+        }
         foreach ($companies as $companyData) {
             $companyId = $companyData['company']->getId();
             foreach ($companyData['routes'] as $routeId => $r) {
                 $direction = $r['route']->getDirection();
-                if ($today === null || $direction === null || $r['status']?->getStatus() !== OperationStatusEnum::NoService) {
+                if ($direction === null) {
                     continue;
                 }
-                if (!$today->hasRegularDeparturesOf($companyId, $direction) && $today->firstExtraDepartureOf($companyId, $direction) !== null) {
-                    $result[$routeId] = ['kind' => 'badge', 'state' => null, 'status' => OperationStatusEnum::Extra];
+                $hasExtra    = $today->firstExtraDepartureOf($companyId, $direction) !== null;
+                $routeStatus = $r['status']?->getStatus();
 
-                    continue;
+                // ふだんのバッジ：航路単位が便なしのときは、途中の港の便から決める。ここに無ければ航路単位の状態
+                $display = null;
+                if ($routeStatus === OperationStatusEnum::NoService) {
+                    if ($hasExtra && !$today->hasRegularDeparturesOf($companyId, $direction)) {
+                        $result[$routeId] = ['kind' => 'badge', 'state' => null, 'status' => OperationStatusEnum::Extra];
+
+                        continue;
+                    }
+                    $display = $this->midwayDisplay($today->midwayDeparturesOf($companyId, $direction));
                 }
-                $display = $this->midwayDisplay($today->midwayDeparturesOf($companyId, $direction));
+
+                // 臨時便がある日の通常運航・運航予定は「スケジュール変更」にする
+                if ($hasExtra && $this->isCalmBadge($display, $routeStatus)) {
+                    $display = ['kind' => 'changed', 'state' => null, 'status' => null];
+                }
                 if ($display !== null) {
                     $result[$routeId] = $display;
                 }
@@ -144,25 +164,49 @@ class StatusController extends AbstractController
     }
 
     /**
+     * ふだんのバッジが通常運航・運航予定か（臨時便がある日にスケジュール変更へ変える対象）。
+     *
+     * @param array{kind: 'changed'|'badge', state: ?DepartureDisplayStateEnum, status: ?OperationStatusEnum}|null $display 途中の港から決めたバッジ。null なら航路単位の状態
+     */
+    private function isCalmBadge(?array $display, ?OperationStatusEnum $routeStatus): bool
+    {
+        if ($display === null) {
+            return $routeStatus === OperationStatusEnum::Operating;
+        }
+
+        return $display['kind'] === 'badge'
+            && ($display['status'] === OperationStatusEnum::Operating || $display['state'] === DepartureDisplayStateEnum::Scheduled);
+    }
+
+    /**
      * 今日その方向に臨時便がある航路の、いちばん早い臨時便（会社カードの「◆ 臨時便 鹿児島 16:00発」。12-marue-extra-voyages FR-016）。
+     * 臨時便の運航に抜港があれば「・抜港あり」を足す（15-extra-voyage-badge）。
      *
      * @param list<array{company: FerryCompany, routes: array<int, array{route: \App\Entity\Route, status: ?OperationStatus}>}> $companies
      *
      * @return array<int, PortBoardExtraDeparture> [routeId => 臨時便]
      */
-    private function routesWithExtra(array $companies, ?PortBoardDay $today): array
+    private function routesWithExtra(array $companies, PortBoard $board): array
     {
         $result = [];
+        $today  = $board->days[0] ?? null;
         if ($today === null) {
             return $result;
         }
         foreach ($companies as $companyData) {
             foreach ($companyData['routes'] as $routeId => $r) {
                 $direction = $r['route']->getDirection();
-                $extra     = $direction === null ? null : $today->firstExtraDepartureOf($companyData['company']->getId(), $direction);
-                if ($extra !== null) {
-                    $result[$routeId] = $extra;
+                if ($direction === null) {
+                    continue;
                 }
+                $companyId = $companyData['company']->getId();
+                $extra     = $today->firstExtraDepartureOf($companyId, $direction);
+                if ($extra === null) {
+                    continue;
+                }
+                $portIds = array_values(array_map(static fn (RouteStop $stop) => (int) $stop->getPort()->getId(), $r['route']->getStops()->toArray()));
+
+                $result[$routeId] = $extra->withSkipsPorts($board->extraSkipsPortsOf($companyId, $direction, $portIds));
             }
         }
 
@@ -179,8 +223,8 @@ class StatusController extends AbstractController
         if ($entries === []) {
             return null;
         }
-        // 臨時便は会社カードの専用の1行で伝える。定期便の通常運航と混ざっても「スケジュール変更」にしない。
-        // 臨時便しか無いときだけ「臨時便」のバッジにする
+        // 臨時便の行を除いて決める（臨時便は会社カードの専用の1行でも伝える）。
+        // 臨時便がある日の通常運航・運航予定は routeBadges() でスケジュール変更にする。臨時便しか無いときだけ「臨時便」のバッジにする
         $regular = array_values(array_filter($entries, static fn (PortBoardEntry $e) => $e->status !== OperationStatusEnum::Extra));
         if ($regular === []) {
             return ['kind' => 'badge', 'state' => null, 'status' => OperationStatusEnum::Extra];
