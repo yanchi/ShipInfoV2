@@ -2244,3 +2244,38 @@ def test_route_level_regular_voyage_beats_unknown_voyage(
     )
 
     assert _status_of(records, up, _DAY_0907) == OperationStatusEnum.cancelled
+
+
+@resp_mock.activate
+def test_run_writes_route_level_and_extra_rows_for_0907(db_session, marix_line_company):
+    """SC-005：9/7 の一覧（定期便の欠航＋臨時便）を run() で DB に書く。
+
+    航路単位は欠航、那覇・名瀬のクロスは臨時便。トップ・通知メールは、12 の既存テスト
+    （testIndexCardShowsExtraDepartureUnderRouteBadge・testStatusTextForExtraPorts・
+    testExtraPortsAreLabeledExtra）と同じ形の行から出る。
+    """
+    from scraper.db.models import OperationStatus
+
+    db_session.autoflush = False
+    setup_port_master(db_session, marix_line_company)
+    _mock_extra_pages(_list_0907(True), _PAGES_0907)
+    scraper = MarixLine(db_session, marix_line_company.id)
+    with (
+        patch("scraper.scrapers.marix_line.date", _make_date_mock(_DAY_0907)),
+        patch(
+            "scraper.scrapers.marix_line.datetime",
+            _make_datetime_mock(datetime(2026, 9, 7, 6, 0)),
+        ),
+    ):
+        scraper.run()
+    db_session.commit()
+
+    _, up = _routes(db_session, marix_line_company)
+    route_rows = db_session.query(OperationStatus).filter_by(route_id=up.id).all()
+    assert [(r.valid_date, r.status) for r in route_rows] == [
+        (_DAY_0907, OperationStatusEnum.cancelled)
+    ]
+    assert _up_cross(db_session) == [
+        ("名瀬", "extra", EXTRA_UP_0907),
+        ("那覇", "extra", EXTRA_UP_0907),
+    ]

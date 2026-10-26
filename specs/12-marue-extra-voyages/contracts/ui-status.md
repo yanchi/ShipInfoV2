@@ -21,6 +21,8 @@
 
 途中の港だけを出る日（航路単位が便なし）の航路のバッジ（`midwayDisplay()`）は、Extra の entry を除いて今までどおり決める。Extra しか無いときだけ「◆ 臨時便」。定期便の通常運航と臨時便が混ざっても「スケジュール変更」にしない（臨時便は下の1行で伝える）。
 
+臨時便以外の行が無い日（始発港の行も見る）のバッジは [specs/13-marix-extra-voyages/contracts/ui-status.md](../../13-marix-extra-voyages/contracts/ui-status.md)。
+
 | 画面 | 部品 |
 |---|---|
 | トップ「欠航・条件付などの便」 | `_alert_summary.html.twig`（`isAlert()` に Extra を足す） |

@@ -234,12 +234,12 @@ US1（同じキーの優先）は US2 の臨時便の行が無いと確かめら
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T025 [P] `scraper/scraper/scrapers/marix_line.py` 冒頭の docstring を書き足す：CSS class の対応に `temporary → extra`、便の種類（R1）、方向の決め方（R2）、寄らない港は作らないこと（R3）、同じキーの優先と前の回の行（R4・R5）、臨時便に予備ルートを使わないこと（R6）、後始末（R7）、航路単位（R8）。確認日と例（2026-09-06 service6727・2026-09-07 service6731・2026-09-27 service6819）
-- [ ] T026 [P] `specs/12-marue-extra-voyages/contracts/ui-status.md` の「出るところ」の `midwayDisplay()` の段落の後に「臨時便以外の行が無い日のバッジは specs/13-marix-extra-voyages/contracts/ui-status.md」と1行足す
-- [ ] T027 SC-005 をマリックスのデータで確かめる。今日を 2026-09-07 にした `scraper/tests/test_marix_line.py` のテストで、9/7 の一覧（定期便＋臨時便）を `run()` で DB に書き、上り 9/7 の航路単位が `cancelled`、那覇・名瀬のクロスが `extra` であることを確かめる。画面と通知は、同じ形の行を `app/tests/Controller/StatusControllerTest.php`（航路が欠航・始発港が Extra →「✗ 欠航」と「◆ 臨時便 那覇 07:00発」）と `app/tests/Service/IrregularStatusMailerTest.php`（欠航の航路に Extra の港 → 本文に「- 那覇 07:00発 クイーンコーラルクロス：臨時便」、状況は「欠航」）で確かめる。12 の既存テストで同じ形がもう確かめられていれば、そのテスト名を quickstart.md に書いて足さない
-- [ ] T028 全部のチェックを流す：`make test-scraper`・`make lint-scraper`・`make test-php`・`make phpstan`・`make cs-php`・`make lint-php`・`make check-schema`・`make verify-prod`
-- [ ] T029 `make up` → `make scraper-run` で、今の公式の一覧（臨時便なし）でエラー・新しい警告が出ないこと、`/ports`・トップが今と同じことを目で見る。`make notify-dry-run` で本文が崩れないこと。臨時便が出ていない日なので、臨時便の表示は T021・T027 の画面のテストと 12 の既存テストで代える
-- [ ] T030 quickstart.md の本番の確認手順を、実装に合わせて直す（ログのイベント名 `extra_voyage_detail_missing`・`extra_voyage_conflict`・`voyage_kind_unknown`、SQL）
+- [X] T025 [P] `scraper/scraper/scrapers/marix_line.py` 冒頭の docstring を書き足す：CSS class の対応に `temporary → extra`、便の種類（R1）、方向の決め方（R2）、寄らない港は作らないこと（R3）、同じキーの優先と前の回の行（R4・R5）、臨時便に予備ルートを使わないこと（R6）、後始末（R7）、航路単位（R8）。確認日と例（2026-09-06 service6727・2026-09-07 service6731・2026-09-27 service6819）
+- [X] T026 [P] `specs/12-marue-extra-voyages/contracts/ui-status.md` の「出るところ」の `midwayDisplay()` の段落の後に「臨時便以外の行が無い日のバッジは specs/13-marix-extra-voyages/contracts/ui-status.md」と1行足す
+- [X] T027 SC-005 をマリックスのデータで確かめる。今日を 2026-09-07 にした `scraper/tests/test_marix_line.py` のテストで、9/7 の一覧（定期便＋臨時便）を `run()` で DB に書き、上り 9/7 の航路単位が `cancelled`、那覇・名瀬のクロスが `extra` であることを確かめる。画面と通知は、同じ形の行を `app/tests/Controller/StatusControllerTest.php`（航路が欠航・始発港が Extra →「✗ 欠航」と「◆ 臨時便 那覇 07:00発」）と `app/tests/Service/IrregularStatusMailerTest.php`（欠航の航路に Extra の港 → 本文に「- 那覇 07:00発 クイーンコーラルクロス：臨時便」、状況は「欠航」）で確かめる。12 の既存テストで同じ形がもう確かめられていれば、そのテスト名を quickstart.md に書いて足さない
+- [X] T028 全部のチェックを流す：`make test-scraper`・`make lint-scraper`・`make test-php`・`make phpstan`・`make cs-php`・`make lint-php`・`make check-schema`・`make verify-prod`
+- [X] T029 `make up` → `make scraper-run` で、今の公式の一覧（臨時便なし）でエラー・新しい警告が出ないこと、`/ports`・トップが今と同じことを目で見る。`make notify-dry-run` で本文が崩れないこと。臨時便が出ていない日なので、臨時便の表示は T021・T027 の画面のテストと 12 の既存テストで代える
+- [X] T030 quickstart.md の本番の確認手順を、実装に合わせて直す（ログのイベント名 `extra_voyage_detail_missing`・`extra_voyage_conflict`・`voyage_kind_unknown`、SQL）
 
 **Checkpoint**: 全部通る → コミット → PR
 

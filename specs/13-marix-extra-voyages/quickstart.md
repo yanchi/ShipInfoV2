@@ -57,3 +57,22 @@ ORDER BY departure_date, route_id, scheduled_departure_at;
 
 - 臨時便の行は `status = 'extra'`、`source_url` が臨時便の詳細ページ
 - 同じ航路・港・出港日に船名ありの行と船名なしの行が並ぶのは、定期便の詳細ページが取れなかった回だけ（FR-015）。次の回（詳細ページが取れた回）には船名なしの行が消えている
+
+スクレイパーのログ（`scraper_logs` の横の標準出力）に出る警告:
+
+| イベント名 | 意味 | 見るところ |
+|---|---|---|
+| `extra_voyage_detail_missing`（url・route_id） | 臨時便の詳細ページが取れず、行を作らなかった。前の回の行はそのまま | 次の回に取れれば直る。続くなら公式の詳細ページを確かめる |
+| `extra_voyage_conflict`（key・regular_url・extra_url） | 同じキーに、走る定期便と臨時便が来た。定期便の行を残した（詳細に「（臨時便 HH:MM発あり）」）。キーごとに1件 | 公式の記録に前例が無い。実際に両方走るのか確かめる |
+| `voyage_kind_unknown`（url） | 一覧のクラスが読めず、詳細ページも取れない便。航路単位を書かなかった | 一覧の HTML が変わっていないか。詳細ページが取れれば次の回で直る |
+| `departure_duplicate_key` | Base が同じキーの2本目を捨てた。臨時便と定期便の組では出ない | 出たら `_resolve_extra_conflicts()` を通っていない |
+
+## SC-005 を確かめるテスト
+
+9/7 の一覧（定期便の欠航＋臨時便）を、DB・画面・通知に通した形。
+
+| 見るところ | テスト |
+|---|---|
+| DB（航路単位が `cancelled`、那覇・名瀬のクロスが `extra`） | `scraper/tests/test_marix_line.py::test_run_writes_route_level_and_extra_rows_for_0907` |
+| トップ（航路が欠航・臨時便あり →「✗ 欠航」と「◆ 臨時便 〇〇 HH:MM発」） | `StatusControllerTest::testIndexCardShowsExtraDepartureUnderRouteBadge`（12）・`testIndexCardOriginExtraKeepsCancelledBadge`（13） |
+| 通知メール（欠航の航路に Extra の港 → 状況は「欠航」、港は「臨時便」） | `IrregularServiceCollectorTest::testStatusTextForExtraPorts`（「欠航は今までどおり」）・`IrregularStatusMailerTest::testExtraPortsAreLabeledExtra`（12） |
