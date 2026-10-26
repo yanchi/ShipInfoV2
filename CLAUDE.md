@@ -47,6 +47,8 @@
 
 各フェーズ完了後に `git commit` すること（NON-NEGOTIABLE）。
 
+PR をマージしたら、その head ブランチをローカルからも消すこと（master に切り替えて `git pull --prune` してから `git branch -d`）。リモートのブランチは GitHub の設定（マージ後に head ブランチを自動で消す）で消える。
+
 ## よく使うコマンド
 
 ```bash
