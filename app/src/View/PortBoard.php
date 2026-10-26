@@ -97,7 +97,7 @@ final readonly class PortBoard
      * - 同じ運航の臨時便は、船名と到着予定（終点への到着）が同じ。船名か到着予定が無い臨時便は運航にまとめられないので見ない
      * - 前日に始発港を出た運航は、ボードに前日の行が無いので、今日の最初の港から見る
      * - 同じ船が同じ日に別の運航でそのあいだの港に寄ると、寄港に数える（抜港を見落とす。1日に2回出た例は無いので割り切り）
-     * - 便検索の no_service の行に隠れた寄港は、船名つきの「便なし」を寄港に数える（noServiceShipName）
+     * - 便検索の no_service の行に隠れた寄港は、行に残した船名（noServiceShipNames。ほかの会社の便がある港でも残る）を寄港に数える
      * - 港の並び（行の添字）は、日付が違っても同じとして扱う
      *
      * @param list<int>|null $portIds その会社の航路が寄る港の ID。ボードの行は方向ごとに最初の航路の寄港順で作るので、
@@ -190,7 +190,7 @@ final readonly class PortBoard
                 foreach ($d->rows[$position]->entries as $entry) {
                     if (
                         ($entry->companyId === $companyId && $entry->shipName === $ship && $entry->isCalling())
-                        || ($entry->state === DepartureDisplayStateEnum::NoService && $entry->noServiceShipName === $ship)
+                        || \in_array($ship, $entry->noServiceShipNames, true)
                     ) {
                         return true;
                     }

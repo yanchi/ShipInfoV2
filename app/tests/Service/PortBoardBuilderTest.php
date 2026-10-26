@@ -71,18 +71,37 @@ class PortBoardBuilderTest extends TestCase
         $this->assertSame('05:50', $entries[0]->departureAt->format('H:i'));
     }
 
-    /** 船名つきの no_service の行（臨時便とぶつかった便検索の行）は「便なし」に落ちるが、船名は残す（15-extra-voyage-badge） */
-    public function testNoServiceEntryKeepsShipNameOfNoServiceRow(): void
+    /** 船名つきの no_service の行（臨時便とぶつかった便検索の行）は便として出ないが、船名は行のエントリーに残す（15-extra-voyage-badge） */
+    public function testNoServiceShipNamesAreKeptOnEveryEntry(): void
     {
+        // ルール4：全社 no_service。船名は両社ぶん残る
         $board = $this->build([
             $this->departure('marue_down', '名瀬', '2026-10-01', OperationStatusEnum::NoService, '波之上'),
-            $this->departure('marix_down', '名瀬', '2026-10-01', OperationStatusEnum::NoService),
+            $this->departure('marix_down', '名瀬', '2026-10-01', OperationStatusEnum::NoService, 'クイーンコーラルプラス'),
+            $this->departure('marix_down', '亀徳', '2026-10-01', OperationStatusEnum::NoService),
         ]);
-
         $entries = $this->row($board, 0, RouteDirectionEnum::Down, '名瀬')->entries;
         $this->assertSame(DepartureDisplayStateEnum::NoService, $entries[0]->state);
         $this->assertNull($entries[0]->shipName);
-        $this->assertSame('波之上', $entries[0]->noServiceShipName);
+        $this->assertSame(['波之上', 'クイーンコーラルプラス'], $entries[0]->noServiceShipNames);
+        $this->assertSame([], $this->row($board, 0, RouteDirectionEnum::Down, '亀徳')->entries[0]->noServiceShipNames);
+
+        // ルール2：もう1社に便がある港でも残る
+        $board = $this->build([
+            $this->departure('marue_down', '名瀬', '2026-10-01', OperationStatusEnum::NoService, '波之上'),
+            $this->departure('marix_down', '名瀬', '2026-10-01', OperationStatusEnum::Operating, 'クイーンコーラルプラス', '2026-10-01 05:50'),
+        ]);
+        $entries = $this->row($board, 0, RouteDirectionEnum::Down, '名瀬')->entries;
+        $this->assertCount(1, $entries);
+        $this->assertSame(['波之上'], $entries[0]->noServiceShipNames);
+
+        // ルール3：他社運航の目印があるときも残る
+        $board = $this->build([
+            $this->departure('marue_down', '名瀬', '2026-10-03', OperationStatusEnum::NoService, '波之上', operatedBy: $this->marix),
+        ]);
+        $entries = $this->row($board, 2, RouteDirectionEnum::Down, '名瀬')->entries;
+        $this->assertSame(DepartureDisplayStateEnum::Scheduled, $entries[0]->state);
+        $this->assertSame(['波之上'], $entries[0]->noServiceShipNames);
     }
 
     public function testBothNoServiceShowsNoService(): void

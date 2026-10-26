@@ -8,11 +8,15 @@ use App\Enum\OperationStatusEnum;
 /**
  * 出発港の行に出す1便ぶん（または「便なし」「情報なし」）。
  *
- * $noServiceShipName は「便なし」の行に限り、船名つきの no_service の行があったときのその船名（画面には出さない）。
- * 臨時便の抜港の判定で、便検索の行に隠れた寄港を抜港と取り違えないために使う（15-extra-voyage-badge）。
+ * $noServiceShipNames は、この港の行に船名つきの no_service の行があったときのその船名（画面には出さない）。
+ * no_service の行は、ほかの会社の便があっても（ルール2・3）ボードに出ない。臨時便の抜港の判定で、
+ * 便検索の行に隠れた寄港を抜港と取り違えないために使う（15-extra-voyage-badge）。
  */
 final readonly class PortBoardEntry
 {
+    /**
+     * @param list<string> $noServiceShipNames
+     */
     public function __construct(
         public DepartureDisplayStateEnum $state,
         public ?OperationStatusEnum $status = null,
@@ -23,7 +27,7 @@ final readonly class PortBoardEntry
         public ?string $detail = null,
         public ?\DateTimeInterface $checkedAt = null,
         public ?int $companyId = null,
-        public ?string $noServiceShipName = null,
+        public array $noServiceShipNames = [],
     ) {
     }
 

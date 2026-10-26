@@ -74,6 +74,12 @@ class PortBoardBuilder
      */
     private function entries(array $statuses, \DateTimeImmutable $date, \DateTimeImmutable $today): array
     {
+        // 臨時便は便検索の行とぶつかると行を作らない。その行が no_service で落ちても、船名は全部のエントリーに残す（抜港の判定用）
+        $hidden = array_values(array_unique(array_filter(
+            array_map(static fn (DepartureStatus $s) => $s->getStatus() === OperationStatusEnum::NoService ? $s->getShipName() : '', $statuses),
+            static fn (string $name) => $name !== '',
+        )));
+
         // ルール2: 便がある行（運航予定を含む）
         $services = array_values(array_filter(
             $statuses,
@@ -95,6 +101,7 @@ class PortBoardBuilder
                 detail: $s->getStatusDetail(),
                 checkedAt: $s->getCheckedAt(),
                 companyId: $s->getRoute()->getFerryCompany()->getId(),
+                noServiceShipNames: $hidden,
             ), $services);
         }
 
@@ -111,6 +118,7 @@ class PortBoardBuilder
                 companyName: $operator->getName(),
                 checkedAt: $s->getCheckedAt(),
                 companyId: $operator->getId(),
+                noServiceShipNames: $hidden,
             )];
         }
 
@@ -118,10 +126,7 @@ class PortBoardBuilder
         if ($statuses !== []) {
             $checkedAt = max(array_map(static fn (DepartureStatus $s) => $s->getCheckedAt(), $statuses));
 
-            // 臨時便は便検索の行とぶつかると行を作らない。その行が no_service でここで落ちても、船名は残す（抜港の判定用）
-            $shipNames = array_values(array_filter(array_map(static fn (DepartureStatus $s) => $s->getShipName(), $statuses), static fn (string $n) => $n !== ''));
-
-            return [new PortBoardEntry(state: DepartureDisplayStateEnum::NoService, checkedAt: $checkedAt, noServiceShipName: $shipNames[0] ?? null)];
+            return [new PortBoardEntry(state: DepartureDisplayStateEnum::NoService, checkedAt: $checkedAt, noServiceShipNames: $hidden)];
         }
 
         // ルール5: 行が無い

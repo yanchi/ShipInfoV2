@@ -293,21 +293,24 @@ class PortBoardTest extends TestCase
         $this->assertFalse($board->extraSkipsPortsOf(1, RouteDirectionEnum::Down, []));
     }
 
-    /** 便検索の no_service の行に隠れた寄港（船名つきの便なし）は抜港に数えない。船名が違えば数えない */
+    /** 便検索の no_service の行に隠れた寄港（行に残した船名）は抜港に数えない。船名が違えば数える */
     public function testExtraCountsNoServiceRowOfSameShipAsHidden(): void
     {
-        $noService = fn (?string $ship) => new PortBoardEntry(DepartureDisplayStateEnum::NoService, noServiceShipName: $ship);
-        $make      = fn (?string $ship) => $this->extraBoard([[
+        $noService = fn (array $ships) => new PortBoardEntry(DepartureDisplayStateEnum::NoService, noServiceShipNames: array_values($ships));
+        // 名瀬のようにほかの会社の便がある港でも、船名は便のエントリーに残る
+        $withOther = fn (array $ships) => new PortBoardEntry(DepartureDisplayStateEnum::Status, OperationStatusEnum::Operating, shipName: 'クロス', companyId: 2, noServiceShipNames: array_values($ships));
+        $make      = fn (array $ships) => $this->extraBoard([[
             1 => [$this->extra('波之上', '03:50', '13:50')],
-            2 => [$noService($ship)],
-            3 => [$noService($ship)],
-            4 => [$noService($ship)],
+            2 => [$noService($ships)],
+            3 => [$withOther($ships)],
+            4 => [$noService($ships)],
             5 => [$this->extra('波之上', '12:00', '13:50')],
         ]]);
 
-        $this->assertFalse($make('波之上')->extraSkipsPortsOf(1, RouteDirectionEnum::Down));
-        $this->assertTrue($make(null)->extraSkipsPortsOf(1, RouteDirectionEnum::Down));
-        $this->assertTrue($make('クロス')->extraSkipsPortsOf(1, RouteDirectionEnum::Down));
+        $this->assertFalse($make(['波之上'])->extraSkipsPortsOf(1, RouteDirectionEnum::Down));
+        $this->assertFalse($make(['あけぼの', '波之上'])->extraSkipsPortsOf(1, RouteDirectionEnum::Down));
+        $this->assertTrue($make([])->extraSkipsPortsOf(1, RouteDirectionEnum::Down));
+        $this->assertTrue($make(['クロス'])->extraSkipsPortsOf(1, RouteDirectionEnum::Down));
     }
 
     /** 運航が2つあって、どちらかに抜港があれば true */
