@@ -27,6 +27,8 @@
 
 ## R3: 「抜港あり」の判定
 
+> **16-extra-skip-flag で変更**：ボードの行から逆算するのをやめ、スクレイパーが臨時便の行に書く `skips_ports_after` を読むだけにした（[16 の research R1〜R5](../16-extra-skip-flag/research.md)）。下の `extraSkipsPortsOf()`・`isCalling()`・`noServiceShipNames` は消した。経緯として残す。
+
 **Decision**: `PortBoard` に、その会社・その方向について「今日を出る臨時便のうち、抜港があるものがあるか」を返すメソッドを足す。
 
 1. ボードの全日付から、その会社・その方向の状態 `Extra` のエントリーを集める（港の行の並び＝寄港順の位置と一緒に）

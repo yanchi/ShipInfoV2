@@ -47,8 +47,8 @@
 
 ## Phase 5: Polish
 
-- [ ] T022 specs/15-extra-voyage-badge/contracts/ui-status.md・specs/15-extra-voyage-badge/research.md の R3 に「16-extra-skip-flag で変更」の注記とリンク（FR-011）
-- [ ] T023 quickstart.md の確認（`make scraper-run` 後の SQL）を流し、すべてのチェックを通してコミット
+- [X] T022 specs/15-extra-voyage-badge/contracts/ui-status.md・specs/15-extra-voyage-badge/research.md の R3 に「16-extra-skip-flag で変更」の注記とリンク（FR-011）
+- [X] T023 quickstart.md の確認（`make scraper-run` 後の SQL）を流し、すべてのチェックを通してコミット
 
 ## Dependencies
 
