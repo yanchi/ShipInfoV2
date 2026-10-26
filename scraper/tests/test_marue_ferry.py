@@ -2573,3 +2573,61 @@ def test_departed_voyage_keeps_recorded_skipped_port(db_session, marue_with_port
     assert row["status"] == OperationStatusEnum.skipped
     assert row["status_detail"] == "与論港には寄港いたしません。"
     assert row["ship_name"] == NAMINOUE
+
+
+@resp_mock.activate
+def test_departed_voyage_with_heavier_tag_uses_tag_for_ports_not_yet_departed(
+    db_session, marue_with_ports
+):
+    """PR #86 高：出港後でもタグが行より重ければ、まだ出港していない港はタグを優先する。出港済みの港は記録のまま。"""
+    company, ports = marue_with_ports
+    down, _ = routes_of(db_session, company)
+    # 10/30 10:00 時点：名瀬（05:50）・亀徳（09:40）は出港済み。和泊（12:00）以降は未出港
+    for name, d in (
+        ("鹿児島", date(2026, 10, 29)),
+        ("名瀬", date(2026, 10, 30)),
+        ("亀徳", date(2026, 10, 30)),
+    ):
+        record_down_1029(db_session, down, ports, name, d, "operating")
+
+    _, _, departures, logs = run_1026(
+        db_session,
+        company.id,
+        down_1029_rows(),
+        now=datetime(2026, 10, 30, 10, 0),
+        kagoshima=kagoshima_1026(LINES_0_TO_2.format(first="条件付運航")),
+    )
+
+    d1030 = date(2026, 10, 30)
+    for name in ["名瀬", "亀徳"]:
+        assert (
+            find(departures, down, ports[name], d1030)["status"]
+            == OperationStatusEnum.operating
+        ), name
+    for name in ["和泊", "与論", "本部"]:
+        assert (
+            find(departures, down, ports[name], d1030)["status"]
+            == OperationStatusEnum.cancelled
+        ), name
+    assert [log for log in logs if log["event"] == "voyage_tag_heavier_than_lines"]
+
+
+@resp_mock.activate
+def test_route_status_departed_with_heavier_tag_uses_tag(db_session, marue_with_ports):
+    """航路単位も、出港後にタグが行より重ければタグ。"""
+    company, ports = marue_with_ports
+    down, _ = routes_of(db_session, company)
+    record_down_1029(db_session, down, ports, "鹿児島", date(2026, 10, 29), "operating")
+
+    _, records, _, _ = run_1026(
+        db_session,
+        company.id,
+        down_1029_rows(),
+        now=NOW_1029_EVE,
+        kagoshima=kagoshima_1026(LINES_0_TO_2.format(first="条件付運航")),
+    )
+
+    assert (
+        next(r for r in records if r["route_id"] == down.id)["status"]
+        == OperationStatusEnum.cancelled
+    )

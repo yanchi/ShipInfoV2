@@ -143,6 +143,9 @@ class ShipInfo:
     assumed_operating: bool = False
     # 今の便に合う行が無く、出港済みなので前回記録したステータスに戻す（R7）。港別情報は当てない
     use_recorded: bool = False
+    # use_recorded のうち、タグのほうが行より重い（行の無い便の変更かもしれない）。
+    # まだ出港していない港は記録でなくタグ＋港別情報で決める
+    tag_over_recorded: bool = False
 
 
 @dataclass(frozen=True)
@@ -468,7 +471,10 @@ class MarueFerry(BaseScraper):
                 "ship_not_found", ship=marue_rows[0].ship_name, route_id=route.id
             )
             return OperationStatusEnum.unknown, None, KAGOSHIMA_URL
+        original = ship
         ship = self._for_voyage(ship, route.id, valid_date, marue_rows[0].arrival_at)
+        if ship.tag_over_recorded:
+            ship = original
         return ship.status, self._ship_detail_text(ship), KAGOSHIMA_URL
 
     def _worst_ship_status(
@@ -594,7 +600,7 @@ class MarueFerry(BaseScraper):
                     continue
                 if current_voyage.get(row.ship_name) == (route_id, row.arrival_at):
                     status, detail = self._current_voyage_status(
-                        row.ship_name, ships, route_id, port_id, d
+                        row.ship_name, ships, route_id, port_id, d, row.departure_at
                     )
                 else:
                     status, detail = self._future_voyage_status(
@@ -656,7 +662,11 @@ class MarueFerry(BaseScraper):
             status, detail = self._recorded_voyage(
                 ship_name, route_id, cur[1]
             ).ports.get((port_id, d), (None, None))
-            return detail if status == OperationStatusEnum.skipped and detail else None
+            if status == OperationStatusEnum.skipped and detail:
+                return detail
+            if not ship.tag_over_recorded:
+                return None  # 港別情報は見ない
+            ship = self._ships[ship_name]  # タグのほうが重い。タグ＋港別情報で決める
         if (
             ship is None
             or ship.assumed_operating
@@ -767,6 +777,7 @@ class MarueFerry(BaseScraper):
         route_id: int,
         port_id: int,
         d: date,
+        departure_at: datetime | None,
     ) -> tuple[OperationStatusEnum, str | None]:
         """今の便の行のステータス：船ステータス（船ブロックに無ければ unknown）に港別情報を重ねる（FR-006）。"""
         ship = ships.get(ship_name)
@@ -776,7 +787,14 @@ class MarueFerry(BaseScraper):
             )
             return OperationStatusEnum.unknown, None
 
+        original = ship
         ship = self._for_current_voyage(ship)
+        if (
+            ship.use_recorded
+            and ship.tag_over_recorded
+            and (departure_at is None or departure_at > datetime.now())
+        ):
+            ship = original  # まだ出港していない港は、タグのほうが重いのでタグ＋港別情報で決める
         if ship.use_recorded:
             # 港別情報は見ない。前回その港に付けたステータスのまま（無ければその便で一番重いもの）
             arrival_at = self._current_voyage[ship_name][1]
@@ -918,21 +936,14 @@ class MarueFerry(BaseScraper):
                 assumed=assumed,
             )
 
-        if self._voyage_departed(ship.name, route_id, origin_date, arrival_at):
-            recorded = self._recorded_voyage(ship.name, route_id, arrival_at)
-            if recorded.worst is None:
-                warn("ship_status")
-                return ship
-            warn("recorded")
-            return replace(ship, status=recorded.worst, use_recorded=True)
-
         worst_line = max(_SEVERITY.get(v.status, 0) for v in ship.voyages)
         tag_heavier = _SEVERITY.get(ship.status, 0) > worst_line
         conditional_missing = ship.conditional and not any(
             v.conditional for v in ship.voyages
         )
-        if tag_heavier or conditional_missing:
-            # 行の無い便の変更（欠航・条件付）がどこかにあり、今の便かもしれない
+        # 行の無い便の変更（欠航・条件付）がどこかにあり、今の便かもしれない
+        tag_unsafe = tag_heavier or conditional_missing
+        if tag_unsafe:
             self._log.warning(
                 "voyage_tag_heavier_than_lines",
                 ship=ship.name,
@@ -945,6 +956,21 @@ class MarueFerry(BaseScraper):
                 ).value,
                 reason="tag_heavier" if tag_heavier else "conditional_missing",
             )
+
+        if self._voyage_departed(ship.name, route_id, origin_date, arrival_at):
+            recorded = self._recorded_voyage(ship.name, route_id, arrival_at)
+            if recorded.worst is None:
+                warn("ship_status")
+                return ship
+            warn("recorded")
+            return replace(
+                ship,
+                status=recorded.worst,
+                use_recorded=True,
+                tag_over_recorded=tag_unsafe,
+            )
+
+        if tag_unsafe:
             return ship
         warn("operating")
         return replace(
