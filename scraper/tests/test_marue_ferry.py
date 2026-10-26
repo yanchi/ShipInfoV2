@@ -1690,3 +1690,185 @@ def test_voyage_status_ignores_notes_after_status(db_session, marue_with_ports, 
     assert voyages[0].status == OperationStatusEnum.delayed
     assert voyages[0].conditional is True
     assert [v.status for v in voyages[1:]] == [OperationStatusEnum.cancelled] * 2
+
+
+# ---------------------------------------------------------------------------
+# 先の便・臨時便（保存版 2026-10-26：波之上は 10/27 那覇発上り＝欠航、10/26 鹿児島発下り・10/28 那覇発上り＝臨時便運航）
+# ---------------------------------------------------------------------------
+
+NOW_1026 = datetime(2026, 10, 26, 10, 50)
+AKEBONO_17809 = (
+    "https://www.aline-ferry.com/status/route-kagoshima/ferry-akebono/17809/"
+)
+NAMINOUE_25492 = (
+    "https://www.aline-ferry.com/status/route-kagoshima/ferry-naminoue/25492/"
+)
+
+
+def _voyage_searches(
+    ship: str, origin_code_to_dep: dict[str, str], end_code: str, day: str, arr: str
+) -> dict[tuple[str, str, str], str]:
+    return {
+        (code, end_code, day): search_html([marue(ship, dep, arr)])
+        for code, dep in origin_code_to_dep.items()
+    }
+
+
+def down_1025_rows() -> dict[tuple[str, str, str], str]:
+    """波之上の 10/25 鹿児島発下り（今の便）の 10/26 ぶんの検索結果。本番の DB と同じ時刻。"""
+    return _voyage_searches(
+        "フェリー波之上",
+        {
+            NAZE: "2026年10月26日 05:50",
+            KAMETOKU: "2026年10月26日 09:40",
+            WADOMARI: "2026年10月26日 12:00",
+            YORON: "2026年10月26日 14:10",
+            MOTOBU: "2026年10月26日 17:10",
+        },
+        NAHA,
+        "2026年10月26日",
+        "2026年10月26日 19:00",
+    )
+
+
+def up_1027_rows() -> dict[tuple[str, str, str], str]:
+    """波之上の 10/27 那覇発上り（先の便）の検索結果。"""
+    return _voyage_searches(
+        "フェリー波之上",
+        {
+            NAHA: "2026年10月27日 07:00",
+            MOTOBU: "2026年10月27日 09:20",
+            YORON: "2026年10月27日 12:10",
+            WADOMARI: "2026年10月27日 14:40",
+            KAMETOKU: "2026年10月27日 17:00",
+            NAZE: "2026年10月27日 21:20",
+        },
+        KAGOSHIMA,
+        "2026年10月27日",
+        "2026年10月28日 08:30",
+    )
+
+
+def run_1026(
+    db_session,
+    company_id,
+    searches,
+    *,
+    now: datetime = NOW_1026,
+    kagoshima: str | None = None,
+):
+    """保存版 2026-10-26 の鹿児島航路ページと詳細ページで fetch → parse → parse_departures する。"""
+    mock_search(searches)
+    resp_mock.add(
+        resp_mock.GET,
+        KAGOSHIMA_URL,
+        body=kagoshima or read_fixture("marue/kagoshima_20261026.html"),
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        AKEBONO_17809,
+        body=read_fixture("marue/ship_detail_akebono_20261026.html"),
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        NAMINOUE_25492,
+        body=read_fixture("marue/ship_detail_naminoue_20261026.html"),
+    )
+    scraper = MarueFerry(db_session, company_id)
+    with structlog.testing.capture_logs() as logs, fixed_now(now):
+        records = scraper.parse(scraper.fetch())
+        departures = scraper.parse_departures()
+    # 詳細ページのモック漏れがあると港別情報の確認が空振りになる
+    assert not [log for log in logs if log["event"] == "ship_detail_fetch_failed"]
+    return scraper, records, departures, logs
+
+
+# ---------------------------------------------------------------------------
+# 便の行の照合（_voyage_line）
+# ---------------------------------------------------------------------------
+
+
+def test_voyage_lines_know_whether_they_start_midway(db_session, marue_with_ports):
+    """途中の港から書いた行だけ from_midway（港名は PortResolver で引く）。"""
+    company, _ = marue_with_ports
+    scraper = MarueFerry(db_session, company.id)
+
+    with fixed_now(NOW_1026):
+        ship = scraper._parse_ships(read_fixture("marue/kagoshima_20261026.html"))[
+            "フェリー波之上"
+        ]
+    assert ship.voyages[0].departure_date == date(2026, 10, 27)
+    assert ship.voyages[0].from_midway is False  # 那覇港発上り
+
+    def midway(line: str) -> bool:
+        html = read_fixture("marue/kagoshima_20261026.html").replace(
+            "■10月27日（火）那覇港発上り便", line
+        )
+        with fixed_now(NOW_1026):
+            ship = scraper._parse_ships(html)["フェリー波之上"]
+        return ship.voyages[0].from_midway
+
+    assert midway("■10月22日（木）名瀬発下り便") is True
+    assert midway("■10月22日（木）名瀬発那覇行き下り便") is True
+    assert midway("■10月27日（火）上り便") is False  # 港名なし
+    assert midway("■10月27日（火）鹿児島新港18:00発／下り便") is False  # 始発港
+
+
+@resp_mock.activate
+def test_voyage_line_prefers_departure_date_over_range(db_session, marue_with_ports):
+    company, _ = marue_with_ports
+    down, up = routes_of(db_session, company)
+    scraper = MarueFerry(db_session, company.id)
+    with fixed_now(NOW_1026):
+        ship = scraper._parse_ships(read_fixture("marue/kagoshima_20261026.html"))[
+            "フェリー波之上"
+        ]
+        line = scraper._voyage_line(ship, up.id, date(2026, 10, 27), date(2026, 10, 28))
+    assert line.departure_date == date(2026, 10, 27)
+    assert line.status == OperationStatusEnum.cancelled
+
+
+def _ship_with(scraper, lines: str):
+    """波之上の抜粋の便の行を差し替えて読む。"""
+    html, n = re.subn(
+        r'(フェリー波之上</div>.*?<div class="situation-excerpt">).*?(</div>)',
+        rf"\g<1>{lines}\g<2>",
+        read_fixture("marue/kagoshima_20261026.html"),
+        count=1,
+        flags=re.S,
+    )
+    assert n == 1
+    with fixed_now(NOW_1026):
+        return scraper._parse_ships(html)["フェリー波之上"]
+
+
+def test_voyage_line_range_only_for_lines_from_midway(db_session, marue_with_ports):
+    company, _ = marue_with_ports
+    down, up = routes_of(db_session, company)
+    scraper = MarueFerry(db_session, company.id)
+
+    # 始発港の行・港名の無い行は、範囲では合わない
+    for line in ("■10月28日（水）那覇港発上り便…欠航", "■10月28日（水）上り便…欠航"):
+        ship = _ship_with(scraper, line)
+        with fixed_now(NOW_1026):
+            assert (
+                scraper._voyage_line(
+                    ship, up.id, date(2026, 10, 27), date(2026, 10, 28)
+                )
+                is None
+            )
+
+    # 途中の港の行は、出港日〜到着日の範囲で合う
+    ship = _ship_with(scraper, "■10月28日（水）名瀬発上り便…欠航")
+    with fixed_now(NOW_1026):
+        line = scraper._voyage_line(ship, up.id, date(2026, 10, 27), date(2026, 10, 28))
+        assert line is not None and line.departure_date == date(2026, 10, 28)
+        # 範囲の外、方向違いは合わない
+        assert (
+            scraper._voyage_line(ship, up.id, date(2026, 10, 29), date(2026, 10, 30))
+            is None
+        )
+        assert (
+            scraper._voyage_line(ship, down.id, date(2026, 10, 27), date(2026, 10, 28))
+            is None
+        )

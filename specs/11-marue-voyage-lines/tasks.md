@@ -30,9 +30,9 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 `make up` → `make test-scraper` が全部通ることを確認してから始める
-- [ ] T002 [P] `specs/11-marue-voyage-lines/samples/` の3つを `scraper/tests/fixtures/marue/` にコピーする：`kagoshima_2026-10-26.html` → `kagoshima_20261026.html`、`naminoue_detail_2026-10-26.html` → `ship_detail_naminoue_20261026.html`、`akebono_detail_2026-10-26.html` → `ship_detail_akebono_20261026.html`（中身は変えない。`samples/` は証跡として残す）
-- [ ] T002a `scraper/tests/test_marue_ferry.py` に 2026-10-26 用のヘルパーを足す（`run_1020()` と同じ作り）：
+- [X] T001 `make up` → `make test-scraper` が全部通ることを確認してから始める
+- [X] T002 [P] `specs/11-marue-voyage-lines/samples/` の3つを `scraper/tests/fixtures/marue/` にコピーする：`kagoshima_2026-10-26.html` → `kagoshima_20261026.html`、`naminoue_detail_2026-10-26.html` → `ship_detail_naminoue_20261026.html`、`akebono_detail_2026-10-26.html` → `ship_detail_akebono_20261026.html`（中身は変えない。`samples/` は証跡として残す）
+- [X] T002a `scraper/tests/test_marue_ferry.py` に 2026-10-26 用のヘルパーを足す（`run_1020()` と同じ作り）：
   - 定数 `NOW_1026 = datetime(2026, 10, 26, 10, 50)`、`AKEBONO_17809 = "https://www.aline-ferry.com/status/route-kagoshima/ferry-akebono/17809/"`、`NAMINOUE_25492 = "https://www.aline-ferry.com/status/route-kagoshima/ferry-naminoue/25492/"`
   - `run_1026(db_session, company_id, searches, *, now=NOW_1026, kagoshima=None)`：`mock_search(searches)`、鹿児島航路ページ（既定は `kagoshima_20261026.html`）、上の2つの詳細ページ（それぞれの `ship_detail_*_20261026.html`）をモックして、`fixed_now(now)` の中で `fetch` → `parse` → `parse_departures` する。戻り値は `(scraper, records, departures, logs)`
   - 検索結果を作るヘルパー：`down_1025_rows()`（波之上、10/26 の名瀬 05:50・亀徳 09:40・和泊 12:00・与論 14:10・本部 17:10、下船 2026-10-26 19:00。本番の DB と同じ）、`up_1027_rows()`（波之上、10/27 の那覇 07:00・本部 09:20・与論 12:10・和泊 14:40・亀徳 17:00・名瀬 21:20、下船 2026-10-28 08:30）
@@ -46,9 +46,9 @@
 
 **Purpose**: US1・US3 が使う `_voyage_line()` を作る。この Phase では今の便・航路単位の結果を変えない（既存テストが全部そのまま通る）。
 
-- [ ] T003 `scraper/scraper/scrapers/marue_ferry.py` の `VoyageStatus` に `from_midway: bool` を足す。`_VOYAGE_LINE` で日付と方向の間の文字列を名前付きグループ（`place`）で取り、`_parse_voyages()` で、`place` の最後の「発」より前を `PortResolver.resolve()` で引き、その港が行の方向の航路の途中の港（`self._stops` の始発・終点以外）のときだけ True にする。港名は直書きしない。`_parse_ships()` は `fetch()` の中で便検索より前に呼ぶ（T010）ので、`fetch()` の最初で `self._stops` と `self._resolver = PortResolver.from_session(self.session)` を用意する（`parse_departures()` の中の resolver の作成はこれを使う形にする）。`_stops`・`_resolver` が無いとき（`_parse_ships()` を単独で呼ぶテスト）は、その場で読み込む。港名の無い行・始発港の行は False。「名瀬発那覇行き」は最後の「発」より前が「名瀬」なので True（research R7・data-model）
-- [ ] T004 `scraper/scraper/scrapers/marue_ferry.py` に `_voyage_line(ship, route_id, origin_date, arrival_date) -> VoyageStatus | None` を作る。1. 方向が同じで `departure_date == origin_date` の最初の行、2. 無ければ方向が同じで `from_midway` かつ `origin_date <= departure_date <= arrival_date` の最初の行、3. None（research R1・R7）。`_match_voyage()` の行探しをこれに置き換え、`_for_voyage()` に `arrival_date` を足す。呼び出し元（`_for_current_voyage()` は今の便の下船日、`_route_status()` は今日の始発港の検索結果の1行目の下船日）も直す。キャッシュのキーに `arrival_date` を足す。合わないときの挙動（船のタグ＋`voyage_not_in_excerpt`）はまだ変えない
-- [ ] T005 `scraper/tests/test_marue_ferry.py` にテストを足す：(a) `run_1026()`（または `kagoshima_20261026.html` を `_parse_ships()`）で、波之上の「鹿児島新港発」「那覇港発」の行が `from_midway=False`。「■10月22日（木）名瀬発下り便…」を差し込んだ行は True、「■10月27日（火）上り便…」（港名なし）は False、「■10月22日（木）名瀬発那覇行き下り便…」は True、(b) `_voyage_line()` が出港日の一致を範囲より優先する、(c) 始発港の行・港名の無い行は範囲では合わない、(d) 途中の港の行は範囲（出港日〜到着日）で合う
+- [X] T003 `scraper/scraper/scrapers/marue_ferry.py` の `VoyageStatus` に `from_midway: bool` を足す。`_VOYAGE_LINE` で日付と方向の間の文字列を名前付きグループ（`place`）で取り、`_parse_voyages()` で、`place` の最後の「発」より前を `PortResolver.resolve()` で引き、その港が行の方向の航路の途中の港（`self._stops` の始発・終点以外）のときだけ True にする。港名は直書きしない。`_parse_ships()` は `fetch()` の中で便検索より前に呼ぶ（T010）ので、`fetch()` の最初で `self._stops` と `self._resolver = PortResolver.from_session(self.session)` を用意する（`parse_departures()` の中の resolver の作成はこれを使う形にする）。`_stops`・`_resolver` が無いとき（`_parse_ships()` を単独で呼ぶテスト）は、その場で読み込む。港名の無い行・始発港の行は False。「名瀬発那覇行き」は最後の「発」より前が「名瀬」なので True（research R7・data-model）
+- [X] T004 `scraper/scraper/scrapers/marue_ferry.py` に `_voyage_line(ship, route_id, origin_date, arrival_date) -> VoyageStatus | None` を作る。1. 方向が同じで `departure_date == origin_date` の最初の行、2. 無ければ方向が同じで `from_midway` かつ `origin_date <= departure_date <= arrival_date` の最初の行、3. None（research R1・R7）。`_match_voyage()` の行探しをこれに置き換え、`_for_voyage()` に `arrival_date` を足す。呼び出し元（`_for_current_voyage()` は今の便の下船日、`_route_status()` は今日の始発港の検索結果の1行目の下船日）も直す。キャッシュのキーに `arrival_date` を足す。合わないときの挙動（船のタグ＋`voyage_not_in_excerpt`）はまだ変えない
+- [X] T005 `scraper/tests/test_marue_ferry.py` にテストを足す：(a) `run_1026()`（または `kagoshima_20261026.html` を `_parse_ships()`）で、波之上の「鹿児島新港発」「那覇港発」の行が `from_midway=False`。「■10月22日（木）名瀬発下り便…」を差し込んだ行は True、「■10月27日（火）上り便…」（港名なし）は False、「■10月22日（木）名瀬発那覇行き下り便…」は True、(b) `_voyage_line()` が出港日の一致を範囲より優先する、(c) 始発港の行・港名の無い行は範囲では合わない、(d) 途中の港の行は範囲（出港日〜到着日）で合う
 
 **Checkpoint**: 既存テストが全部通る（結果は変わらない）＋ T005 が通る → コミット
 

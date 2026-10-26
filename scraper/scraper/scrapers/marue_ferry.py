@@ -111,6 +111,8 @@ class VoyageStatus:
     status: OperationStatusEnum
     conditional: bool
     schedule_changed: bool
+    # 途中の港から書いた行（「■10月22日(木)名瀬発下り便…」）か。この行だけ出港日〜到着日の範囲で照合する（R7）
+    from_midway: bool = False
 
 
 @dataclass(frozen=True)
@@ -146,6 +148,7 @@ class MarueFerry(BaseScraper):
 
         routes = [r for r in self._load_routes() if r]
         self._stops = self._load_stops(routes)
+        self._resolver = PortResolver.from_session(self.session)
         codes = self._load_port_codes()
         now = datetime.now()
 
@@ -175,7 +178,7 @@ class MarueFerry(BaseScraper):
         resp.raise_for_status()
         resp.encoding = resp.apparent_encoding
         self._ships = self._parse_ships(resp.text)
-        self._voyage_cache: dict[tuple[str, int, date], ShipInfo] = {}
+        self._voyage_cache: dict[tuple[str, int, date, date], ShipInfo] = {}
 
         # 船別詳細ページ（港別情報の抽出用。失敗しても続ける）
         self._ship_details: dict[str, str | None] = {}
@@ -367,7 +370,10 @@ class MarueFerry(BaseScraper):
                 "ship_not_found", ship=marue_rows[0].ship_name, route_id=route.id
             )
             return OperationStatusEnum.unknown, None, KAGOSHIMA_URL
-        ship = self._for_voyage(ship, route.id, valid_date)
+        arrival = marue_rows[0].arrival_at
+        ship = self._for_voyage(
+            ship, route.id, valid_date, arrival.date() if arrival else valid_date
+        )
         return ship.status, self._ship_detail_text(ship), KAGOSHIMA_URL
 
     def _worst_ship_status(
@@ -406,7 +412,7 @@ class MarueFerry(BaseScraper):
         ships = getattr(self, "_ships", {})
         marix_id = self._marix_company_id()
         now = datetime.now()
-        self._resolver = PortResolver.from_session(self.session)
+        self._get_resolver()
         self._notices: dict[str, list[PortNotice]] = {}
 
         # 船ごとに「まだ着いていない一番早い便」(route_id, arrival_at) を決める（research R9）
@@ -684,9 +690,11 @@ class MarueFerry(BaseScraper):
         origin_date = arrival_at.date() - timedelta(
             days=stops[-1].day_offset - stops[0].day_offset
         )
-        return self._for_voyage(ship, route_id, origin_date)
+        return self._for_voyage(ship, route_id, origin_date, arrival_at.date())
 
-    def _for_voyage(self, ship: ShipInfo, route_id: int, origin_date: date) -> ShipInfo:
+    def _for_voyage(
+        self, ship: ShipInfo, route_id: int, origin_date: date, arrival_date: date
+    ) -> ShipInfo:
         """抜粋にその便（始発港の出港日・方向）の行があれば、その行の状態にした ShipInfo。
 
         タグは全便ぶんなので、別の便の「欠航」が付いていることがある。行が無ければ船のまま（安全側）。
@@ -699,23 +707,41 @@ class MarueFerry(BaseScraper):
             return ship
         if not hasattr(self, "_voyage_cache"):
             self._voyage_cache = {}
-        key = (ship.name, route_id, origin_date)
+        key = (ship.name, route_id, origin_date, arrival_date)
         if key not in self._voyage_cache:
-            self._voyage_cache[key] = self._match_voyage(ship, route_id, origin_date)
+            self._voyage_cache[key] = self._match_voyage(
+                ship, route_id, origin_date, arrival_date
+            )
         return self._voyage_cache[key]
 
-    def _match_voyage(
-        self, ship: ShipInfo, route_id: int, origin_date: date
-    ) -> ShipInfo:
+    def _voyage_line(
+        self, ship: ShipInfo, route_id: int, origin_date: date, arrival_date: date
+    ) -> VoyageStatus | None:
+        """その便（始発港の出港日〜下船日・方向）に合う抜粋の行。無ければ None。
+
+        1. 出港日が同じ行を優先する
+        2. 無ければ、途中の港から書いた行だけ、出港日〜下船日の範囲で合わせる（R1・R7）
+        """
         direction = self._route_directions().get(route_id)
-        voyage = next(
+        same_direction = [v for v in ship.voyages if v.direction == direction]
+        exact = next(
+            (v for v in same_direction if v.departure_date == origin_date), None
+        )
+        if exact is not None:
+            return exact
+        return next(
             (
                 v
-                for v in ship.voyages
-                if v.departure_date == origin_date and v.direction == direction
+                for v in same_direction
+                if v.from_midway and origin_date <= v.departure_date <= arrival_date
             ),
             None,
         )
+
+    def _match_voyage(
+        self, ship: ShipInfo, route_id: int, origin_date: date, arrival_date: date
+    ) -> ShipInfo:
+        voyage = self._voyage_line(ship, route_id, origin_date, arrival_date)
         if voyage is None:
             self._log.warning(
                 "voyage_not_in_excerpt",
@@ -822,9 +848,38 @@ class MarueFerry(BaseScraper):
                     status,
                     conditional,
                     schedule_changed,
+                    from_midway=self._is_from_midway(
+                        m.group("place"), m.group("direction")
+                    ),
                 )
             )
         return tuple(voyages)
+
+    def _is_from_midway(self, place: str, direction: str) -> bool:
+        """日付と方向の間の文字列の、最後の「発」より前の港が、その方向の航路の途中の港か。"""
+        port = self._get_resolver().resolve(place.rpartition("発")[0])
+        if port is None:
+            return False
+        route_id = next(
+            (
+                rid
+                for rid, label in self._route_directions().items()
+                if label == direction
+            ),
+            None,
+        )
+        stops = self._get_stops().get(route_id, [])
+        return any(s.port_id == port.id for s in stops[1:-1])
+
+    def _get_resolver(self) -> PortResolver:
+        if not hasattr(self, "_resolver"):
+            self._resolver = PortResolver.from_session(self.session)
+        return self._resolver
+
+    def _get_stops(self) -> dict[int, list[RouteStop]]:
+        if not hasattr(self, "_stops"):
+            self._stops = self._load_stops([r for r in self._load_routes() if r])
+        return self._stops
 
     def _load_routes(self) -> tuple:
         """(down_route, up_route) を返す。origin_port で判定。"""
@@ -895,7 +950,7 @@ class MarueFerry(BaseScraper):
 # 「10/5(月)鹿児島新港18:00発／下り便…スケジュール変更・条件付運航」。次の行の日付の手前まで
 _VOYAGE_LINE = re.compile(
     r"(?P<month>\d{1,2})(?:月|/)(?P<day>\d{1,2})日?\s*[(（][^)）]*[)）]"
-    r"[^…■]*?(?P<direction>上り|下り)便?\s*(?:…|\.{3})+\s*"
+    r"(?P<place>[^…■]*?)(?P<direction>上り|下り)便?\s*(?:…|\.{3})+\s*"
     r"(?P<status>.+?)(?=■|\d{1,2}(?:月|/)\d{1,2}日?\s*[(（]|$)",
     re.S,
 )
