@@ -8,11 +8,14 @@
 make up
 docker compose cp specs/17-scraper-refactor/snapshot_plugin.py scraper:/tmp/
 docker compose cp specs/17-scraper-refactor/compare_snapshots.py scraper:/tmp/
+docker compose cp specs/17-scraper-refactor/log_events.py scraper:/tmp/
 docker compose exec -T scraper sh -c '
   rm -f /tmp/before1.jsonl /tmp/before2.jsonl
   PYTHONHASHSEED=0 PYTHONPATH=/tmp SNAPSHOT_OUT=/tmp/before1.jsonl python -m pytest tests/ -q -p snapshot_plugin
   PYTHONHASHSEED=0 PYTHONPATH=/tmp SNAPSHOT_OUT=/tmp/before2.jsonl python -m pytest tests/ -q -p snapshot_plugin
-  wc -l /tmp/before1.jsonl'   # 270
+  wc -l /tmp/before1.jsonl     # 270
+  python /tmp/log_events.py scraper/scrapers > /tmp/events_before.txt
+  wc -l /tmp/events_before.txt'  # 49（ログの出来事の種類。FR-007）
 ```
 
 コンテナを作り直すと `/tmp` は消える。消したら master のコードに戻して取り直す（`git stash` か worktree）。
@@ -28,8 +31,10 @@ make check-schema
 docker compose exec -T scraper sh -c '
   rm -f /tmp/after.jsonl
   PYTHONHASHSEED=0 PYTHONPATH=/tmp SNAPSHOT_OUT=/tmp/after.jsonl python -m pytest tests/ -q -p snapshot_plugin
-  python /tmp/compare_snapshots.py /tmp/before1.jsonl /tmp/before2.jsonl /tmp/after.jsonl'
+  python /tmp/compare_snapshots.py /tmp/before1.jsonl /tmp/before2.jsonl /tmp/after.jsonl
+  python /tmp/log_events.py scraper/scrapers | diff /tmp/events_before.txt - && echo events-same'
 # → tests=270 masked_cells=95 diffs=0
+# → events-same
 ```
 
 `diffs` が 0 でなければ、出た (テスト, 表, 行, 列) を見て、整理で振る舞いが変わったところを戻す（直すのではなく戻す。FR-008）。

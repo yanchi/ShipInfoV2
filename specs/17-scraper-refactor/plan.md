@@ -9,7 +9,7 @@
 スクレイパーのコードの置き場所と重複だけを整理する。振る舞い（DB に書く行・ハッシュ・ログ・例外）は変えない。
 
 - US1：`_load_routes()`・`_load_stops()` を `BaseScraper` に移す（R1）
-- US2：`marue_ferry.py`（1788 行）をパッケージ `marue_ferry/` にし、役割ごとの mixin 7 ファイル＋`__init__.py` に分ける。メソッドの中身は変えない（R2）。テストは差し替え先だけ直す（R3）
+- US2：`marue_ferry.py`（1788 行）をパッケージ `marue_ferry/` にし、役割ごとの mixin 5 つと `common.py`・`state.py` の 7 ファイル＋`__init__.py` に分ける。メソッドの中身は変えない（R2）。テストは差し替え先だけ直す（R3）
 - US3：臨時便の処理は両社で決まりが違うので**まとめない**。違いを research R5 に残した
 - 振る舞いが変わらないことは、DB を使う 270 テストの全部の行を前後で比べて確かめる（R4。変更前のコードで3回流して違い 0 を確認済み）
 
@@ -65,6 +65,7 @@ specs/17-scraper-refactor/
 ├── contracts/scraper-interface.md   # 前後で変えないもの
 ├── snapshot_plugin.py           # 比較用（リポジトリのテストには入れない）
 ├── compare_snapshots.py
+├── log_events.py                # ログの出来事の一覧（FR-007）
 ├── checklists/requirements.md
 ├── plan.md                      ← このファイル
 └── tasks.md                     （/speckit.tasks で生成）
@@ -96,7 +97,7 @@ scraper/tests/test_marue_ferry.py                # fixed_now・no_sleep・settin
 
 ### Phase A：比較の土台（R4）
 
-- コードに触る前に、quickstart の 1 で `before1.jsonl`・`before2.jsonl` を取る（270 行）
+- コードに触る前に、quickstart の 1 で `before1.jsonl`・`before2.jsonl`（270 行）とログの出来事の一覧 `events_before.txt` を取る
 - 取っただけではコミットしない（`/tmp` のファイル。プラグインと比較のスクリプトは plan と一緒にコミット済み）
 
 ### Phase B：共通の読み込み（US1・R1・FR-004）

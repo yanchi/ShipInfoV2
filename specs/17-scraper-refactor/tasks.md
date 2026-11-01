@@ -7,12 +7,12 @@
 
 **どのタスクにも共通の決まり**
 - メソッド・定数は**切り取って貼るだけ**。名前・引数・中身・メソッドの並び順を変えない（FR-008）。見つけたバグは直さずメモして、最後に Issue にする（T021）
-- 「確認」は quickstart の 2：`make test-scraper`（336 passed）・`make lint-scraper`・比較（`tests=270 ... diffs=0`）。通らなければ、直すのではなく移し方を戻す
+- 「確認」は quickstart の 2：`make test-scraper`（336 passed）・`make lint-scraper`・`make check-schema`・比較（`tests=270 ... diffs=0`）・ログの出来事の diff（差分なし）。通らなければ、直すのではなく移し方を戻す
 - `docker compose exec -T scraper ruff format scraper/ tests/` で整形してから確認する
 
 ## Phase 1: Setup（比較の土台。plan Phase A）
 
-- [ ] T001 コードに触る前に、quickstart の 1 で specs/17-scraper-refactor/snapshot_plugin.py・specs/17-scraper-refactor/compare_snapshots.py をコンテナの /tmp にコピーし、`PYTHONHASHSEED=0` で /tmp/before1.jsonl・/tmp/before2.jsonl を取る（どちらも 270 行、336 passed）。コミットはしない
+- [ ] T001 コードに触る前に、quickstart の 1 で specs/17-scraper-refactor/snapshot_plugin.py・specs/17-scraper-refactor/compare_snapshots.py をコンテナの /tmp にコピーし、`PYTHONHASHSEED=0` で /tmp/before1.jsonl・/tmp/before2.jsonl を取る（どちらも 270 行、336 passed）。specs/17-scraper-refactor/log_events.py もコピーし、ログの出来事の一覧を /tmp/events_before.txt に取る（49 種類）。コミットはしない
 
 ## Phase 2: Foundational
 
@@ -58,8 +58,9 @@
 ## Phase 6: Polish
 
 - [ ] T019 quickstart の 3：`grep -rn "def _load_routes\|def _load_stops" scraper/scraper/scrapers` が base.py だけ、行数がどれも 600 以下（SC-003・SC-004）
-- [ ] T020 `make test-scraper`・`make lint-scraper`・`make check-schema`・`make verify-prod`（本番用イメージで import が通る）・比較（`diffs=0`）を通す
+- [ ] T020 `make test-scraper`・`make lint-scraper`・`make check-schema`・`make verify-prod`（本番用イメージで import が通る）・比較（`diffs=0`）・ログの出来事の diff（差分なし）を通す
 - [ ] T021 整理中にメモしたバグがあれば GitHub の Issue にする（FR-008）。無ければなにもしない。仕上げの変更があればコミット
+- [ ] T022 **マージ・デプロイのあと**：quickstart の「本番」の SQL で、最初の定期スクレイプが両社とも成功し、公式ページが変わっていない会社の `departure_statuses.scraped_at` が一斉に進んでいないことを見る（SC-005）。PR の段階では未完了のまま残す
 
 ## Dependencies
 
@@ -67,7 +68,7 @@
 - US1（T002–T005）→ US2（T006–T016）：分ける前に重複を消しておく（plan Phase B → C）
 - US2 の中は順番どおり（同じ __init__.py と test_marue_ferry.py を少しずつ切り出すので、並列にしない）
 - US3（T017–T018）は US2 のあと（extra.py が出来てから読み比べる）
-- Polish は最後
+- Polish は最後。T022 だけはマージ・デプロイのあと
 
 ## Parallel
 

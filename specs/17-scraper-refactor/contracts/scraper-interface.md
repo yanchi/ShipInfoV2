@@ -45,6 +45,8 @@ from scraper.scrapers.base import BaseScraper
 - `self._log` の `scraper` のキーは `MarueFerry`・`MarixLine`（`BaseScraper.__init__` がクラス名を使う。mixin に分けてもインスタンスのクラスは `MarueFerry` のまま）
 - 例外の種類と、どこで止まるか
 
+確かめ方：[log_events.py](../log_events.py) でログの出来事（レベル・名前・呼ぶ数）を前後で diff する（quickstart の 2）。キーは呼び出しごと移すので、名前と数が同じなら変わっていないとみなす。
+
 ## 5. 変えてよいもの
 
 - `tests/test_marue_ferry.py` の `patch()`・`monkeypatch.setattr()` の差し替え先（research R3）
