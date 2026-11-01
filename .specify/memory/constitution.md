@@ -1,17 +1,21 @@
 <!--
 Sync Impact Report
-- Version change: 1.1.0 → 2.0.0（MAJOR：原則 III の「変更履歴をすべて保持」を「キーごとの最新状態を保持」に定義し直したため）
-- Modified principles: III. データ品質保証（変更履歴の保持 → 最新状態の保持。履歴は MVP では持たない）
+- Version change: 2.0.0 → 2.1.0（MINOR：ディレクトリ規約で、会社のスクレイパーをパッケージにしてよいとした）
+- Modified principles: なし
+- Modified sections: 開発ワークフロー > ディレクトリ規約（スクレイパー実装の置き場所）
 - Added sections: なし
 - Removed sections: なし
 - Templates:
-  - ✅ .specify/templates/plan-template.md（Constitution Check は constitution から作るので変更なし）
+  - ✅ .specify/templates/plan-template.md（ディレクトリ規約を参照していないので変更なし）
   - ✅ .specify/templates/spec-template.md（変更なし）
   - ✅ .specify/templates/tasks-template.md（変更なし）
 - Dependent artifacts:
-  - ✅ specs/4-departure-port-status/plan.md（Constitution Check の III を「#20 で決める」から更新）
+  - ✅ CLAUDE.md（スクレイパー追加手順）
+  - ✅ README.md（スクレイパー追加手順）
+  - ✅ specs/17-scraper-refactor/plan.md（Constitution Check・Complexity Tracking・Phase E）
+  - ⚠ AGENTS.md（CLAUDE.md から作り直す。リポジトリには入っていない）
 - Follow-up TODOs: なし
-- 理由: https://github.com/yanchi/ShipInfoV2/issues/20
+- 理由: specs/17-scraper-refactor（marue_ferry.py が 1788 行になり、役割ごとに分けるため）
 -->
 
 # ShipInfoV2 Constitution
@@ -79,6 +83,9 @@ AIの暴走を防ぐため、一度に実装するスコープを明確に制限
 ### ディレクトリ規約
 - `specs/<feature-name>/` に仕様・計画・タスクを配置
 - スクレイパー実装は `scraper/scraper/scrapers/<company_name>.py`
+  - 1ファイルが大きくなり役割ごとに分けるときは、`scraper/scraper/scrapers/<company_name>/` のパッケージにしてよい。
+    import の名前（`scraper.scrapers.<company_name>`）と `SCRAPER_REGISTRY` に登録するクラスは変えないこと。
+    パッケージの中も、その会社のコードだけを置く（会社をまたいで使うものは `BaseScraper` か `scraper/scraper/utils/`）
 - Symfony Entityは `app/src/Entity/`
 - APIリソース設定はEntityのAttributeで管理（YAMLファイル不使用）
 
@@ -88,4 +95,4 @@ AIの暴走を防ぐため、一度に実装するスコープを明確に制限
 変更には明文化された理由が必要。
 技術的負債は即日解消することを原則とする。
 
-**Version**: 2.0.0 | **Ratified**: 2026-03-07 | **Last Amended**: 2026-10-01
+**Version**: 2.1.0 | **Ratified**: 2026-03-07 | **Last Amended**: 2026-11-02

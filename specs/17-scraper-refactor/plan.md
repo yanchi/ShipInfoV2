@@ -29,7 +29,7 @@
 - テストの期待値・入力・件数を変えない。差し替え先だけ直す（FR-002）
 - 登録・クラス名・外から import している名前を変えない（FR-003）
 - メソッドの中身を変えない（移すだけ）。見つけたバグは別の Issue（FR-008）
-**Scale/Scope**: `base.py`・`marix_line.py`・`marue_ferry.py`（→ `marue_ferry/` 8 ファイル）、`tests/test_marue_ferry.py` の差し替え先（3 か所）、`CLAUDE.md`
+**Scale/Scope**: `base.py`・`marix_line.py`・`marue_ferry.py`（→ `marue_ferry/` 8 ファイル）、`tests/test_marue_ferry.py` の差し替え先（3 か所）
 
 未解決の NEEDS CLARIFICATION は無い。
 
@@ -45,10 +45,10 @@
 | IV. Docker で完結 | ✅ PASS | 比較の手順もコンテナの中で動く（quickstart） |
 | V. フェーズごとにコミット | ✅ PASS | US1・US2 の区切りごとに、テストと比較を通してからコミット（FR-010） |
 | 技術スタック・コーディング規約 | ✅ PASS | 変更なし。ruff で lint・フォーマット |
-| ディレクトリ規約「スクレイパー実装は `scraper/scraper/scrapers/<company_name>.py`」 | ⚠️ 説明つき | マルエーは `scrapers/marue_ferry/`（パッケージ）になる。import の名前 `scraper.scrapers.marue_ferry` は同じ。Complexity Tracking を参照 |
+| ディレクトリ規約（2.1.0：大きくなったら `scrapers/<company_name>/` のパッケージにしてよい） | ✅ PASS | マルエーは `scrapers/marue_ferry/`。import の名前 `scraper.scrapers.marue_ferry` と登録するクラスは同じ。パッケージの中はマルエーのコードだけ。この機能に合わせて Constitution を 2.0.0 → 2.1.0 に直した |
 | Governance「技術的負債は即日解消」 | ✅ PASS | この機能そのものが負債の解消 |
 
-**Phase 1 設計の後に再チェック**: 違反なし。ディレクトリ規約の1件は Complexity Tracking のとおり。
+**Phase 1 設計の後に再チェック**: 違反なし。
 
 ---
 
@@ -86,7 +86,6 @@ scraper/scraper/scrapers/marue_ferry/
 ├── extra.py
 └── statuses.py
 scraper/tests/test_marue_ferry.py                # fixed_now・no_sleep・settings の差し替え先だけ
-CLAUDE.md                                        # スクレイパー追加手順に「大きくなったらパッケージにしてよい」
 ```
 
 `scrapers/__init__.py`（登録）・`db/`・`utils/`・`tests/test_marix_line.py`・`tests/test_base_*.py`・Web アプリには触らない。
@@ -129,7 +128,6 @@ CLAUDE.md                                        # スクレイパー追加手�
 
 ### Phase E：仕上げ
 
-- `CLAUDE.md` のスクレイパー追加手順に、ファイルが大きくなったら `scrapers/<company_name>/` のパッケージにしてよいこと（例：`marue_ferry/`）を1行足す
 - quickstart の 3（行数・重複が無いこと）
 - `make test-scraper`・`make lint-scraper`・`make check-schema`・`make verify-prod`（本番用イメージで import が通るか）
 - 比較（`diffs=0`）
@@ -140,7 +138,7 @@ CLAUDE.md                                        # スクレイパー追加手�
 
 | 増えるもの | なぜ要るか | もっと簡単な案を採らない理由 |
 |---|---|---|
-| `marue_ferry/` パッケージ（ディレクトリ規約の `<company_name>.py` から外れる） | 1788 行を役割ごとに分けつつ、`scraper.scrapers.marue_ferry` の import と登録を変えないため | `scrapers/` の直下に `marue_ferry_extra.py` などを並べると、どれが登録されたスクレイパーか分かりにくい（R2）。規約の意図（会社ごとに独立した置き場所）はパッケージでも守れる |
+| `marue_ferry/` パッケージ | 1788 行を役割ごとに分けつつ、`scraper.scrapers.marue_ferry` の import と登録を変えないため（Constitution 2.1.0 で許した形） | `scrapers/` の直下に `marue_ferry_extra.py` などを並べると、どれが登録されたスクレイパーか分かりにくい（R2） |
 | mixin 5 つと `MarueState` | 状態を共有した1つのクラスを、メソッドの中身を変えずに分けるため | 委譲・関数に分けると状態を引数で渡すことになり、メソッドをほぼ全部書き換える（振る舞いが変わるリスク・テストの呼び出しも変わる。R2） |
 
 減るもの：`_load_routes()`・`_load_stops()` の重複（2か所 → 1か所）、1788 行のファイル（→ どれも 600 行以下）。
