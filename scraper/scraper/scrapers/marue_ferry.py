@@ -213,6 +213,8 @@ class ExtraParse:
 
 
 class MarueFerry(BaseScraper):
+    ROUTE_ORIGINS = ("鹿児島", "那覇")
+
     def __init__(self, session, company_id: int) -> None:
         # 便検索の POST は読み取り専用の検索（副作用なし）なので、429/5xx でリトライする
         super().__init__(session, company_id, retry_post=True)
@@ -1667,39 +1669,6 @@ class MarueFerry(BaseScraper):
         if not hasattr(self, "_stops"):
             self._stops = self._load_stops([r for r in self._load_routes() if r])
         return self._stops
-
-    def _load_routes(self) -> tuple:
-        """(down_route, up_route) を返す。origin_port で判定。"""
-        routes = (
-            self.session.execute(
-                select(Route).where(
-                    Route.ferry_company_id == self.company_id,
-                    Route.active.is_(True),
-                )
-            )
-            .scalars()
-            .all()
-        )
-        down = next((r for r in routes if r.origin_port == "鹿児島"), None)
-        up = next((r for r in routes if r.origin_port == "那覇"), None)
-        return down, up
-
-    def _load_stops(self, routes: list[Route]) -> dict[int, list[RouteStop]]:
-        if not routes:
-            return {}
-        rows = (
-            self.session.execute(
-                select(RouteStop)
-                .where(RouteStop.route_id.in_([r.id for r in routes]))
-                .order_by(RouteStop.route_id, RouteStop.stop_order)
-            )
-            .scalars()
-            .all()
-        )
-        result: dict[int, list[RouteStop]] = {}
-        for row in rows:
-            result.setdefault(row.route_id, []).append(row)
-        return result
 
     def _load_port_codes(self) -> dict[int, str]:
         rows = (

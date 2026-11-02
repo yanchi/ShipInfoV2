@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 from scraper.db.models import (
     DepartureStatus,
     OperationStatus,
+    Route,
+    RouteStop,
     ScraperLog,
     ScraperStatusEnum,
 )
@@ -23,6 +25,8 @@ class BaseScraper(ABC):
     """Abstract base class for all ferry company scrapers."""
 
     company_id: int
+    # (下りの始発港, 上りの始発港)。_load_routes() を使う会社が決める
+    ROUTE_ORIGINS: tuple[str, str]
 
     def __init__(
         self, session: Session, company_id: int, *, retry_post: bool = False
@@ -361,3 +365,37 @@ class BaseScraper(ABC):
                     self.session.delete(row)
 
         return created, updated
+
+    def _load_stops(self, routes: list[Route]) -> dict[int, list[RouteStop]]:
+        """route_id → 寄港順（stop_order 昇順）。"""
+        if not routes:
+            return {}
+        rows = (
+            self.session.execute(
+                select(RouteStop)
+                .where(RouteStop.route_id.in_([r.id for r in routes]))
+                .order_by(RouteStop.route_id, RouteStop.stop_order)
+            )
+            .scalars()
+            .all()
+        )
+        result: dict[int, list[RouteStop]] = {}
+        for row in rows:
+            result.setdefault(row.route_id, []).append(row)
+        return result
+
+    def _load_routes(self) -> tuple:
+        """(down_route, up_route) を返す。origin_port で判定。"""
+        routes = (
+            self.session.execute(
+                select(Route).where(
+                    Route.ferry_company_id == self.company_id,
+                    Route.active.is_(True),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        down = next((r for r in routes if r.origin_port == self.ROUTE_ORIGINS[0]), None)
+        up = next((r for r in routes if r.origin_port == self.ROUTE_ORIGINS[1]), None)
+        return down, up

@@ -133,6 +133,8 @@ _SKIPPED_PORT_CLASS = "no_status"
 
 
 class MarixLine(BaseScraper):
+    ROUTE_ORIGINS = ("鹿児島", "那覇")
+
     def fetch(self) -> str:
         resp = self.http.get(SOURCE_URL, timeout=30)
         resp.raise_for_status()
@@ -748,24 +750,6 @@ class MarixLine(BaseScraper):
             self._log.warning("detail_time_invalid", text=text[:40])
             return None
 
-    def _load_stops(self, routes: list[Route]) -> dict[int, list[RouteStop]]:
-        """route_id → 寄港順（stop_order 昇順）。"""
-        if not routes:
-            return {}
-        rows = (
-            self.session.execute(
-                select(RouteStop)
-                .where(RouteStop.route_id.in_([r.id for r in routes]))
-                .order_by(RouteStop.route_id, RouteStop.stop_order)
-            )
-            .scalars()
-            .all()
-        )
-        result: dict[int, list[RouteStop]] = {}
-        for row in rows:
-            result.setdefault(row.route_id, []).append(row)
-        return result
-
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -804,22 +788,6 @@ class MarixLine(BaseScraper):
         if stops and all(_EXTRA_CLASS in classes for classes in stops):
             return "extra"
         return "regular"
-
-    def _load_routes(self) -> tuple:
-        """(down_route, up_route) を返す。origin_port で判定。"""
-        routes = (
-            self.session.execute(
-                select(Route).where(
-                    Route.ferry_company_id == self.company_id,
-                    Route.active.is_(True),
-                )
-            )
-            .scalars()
-            .all()
-        )
-        down = next((r for r in routes if r.origin_port == "鹿児島"), None)
-        up = next((r for r in routes if r.origin_port == "那覇"), None)
-        return down, up
 
     def _port_status(
         self, classes: list[str], is_extra: bool

@@ -12,7 +12,7 @@
 
 ## Phase 1: Setup（比較の土台。plan Phase A）
 
-- [ ] T001 quickstart の 1 で、specs/17-scraper-refactor/ の snapshot_plugin.py・compare_snapshots.py・log_events.py をコンテナの /tmp にコピーし、基点のコミットのコードを /tmp/base に展開して /tmp/before1.jsonl・/tmp/before2.jsonl（どちらも 336 行）と /tmp/events_before.txt（53 種類）を取る。日をまたいだら、その日の最初の比較の前にやり直す。コミットはしない
+- [X] T001 quickstart の 1 で、specs/17-scraper-refactor/ の snapshot_plugin.py・compare_snapshots.py・log_events.py をコンテナの /tmp にコピーし、基点のコミットのコードを /tmp/base に展開して /tmp/before1.jsonl・/tmp/before2.jsonl（どちらも 336 行）と /tmp/events_before.txt（53 種類）を取る。日をまたいだら、その日の最初の比較の前にやり直す。コミットはしない
 
 ## Phase 2: Foundational
 
@@ -23,10 +23,10 @@
 **Goal**: `_load_routes()`・`_load_stops()` を `BaseScraper` に1つだけ置く（FR-004・research R1）
 **Independent Test**: `grep -rn "def _load_routes\|def _load_stops" scraper/scraper/scrapers` が base.py だけ。確認が通る
 
-- [ ] T002 [US1] scraper/scraper/scrapers/base.py：`_upsert_departures()` の後ろに、scraper/scraper/scrapers/marix_line.py の `_load_routes()`（808–822 行）と `_load_stops()`（751–767 行、docstring つき）を移す。`_load_routes()` の `"鹿児島"`・`"那覇"` は `self.ROUTE_ORIGINS` の下り・上りに置き換え、`BaseScraper` に `ROUTE_ORIGINS: tuple[str, str]` を型注釈だけで宣言する（値は入れない。docstring に「(下りの始発港, 上りの始発港)。`_load_routes()` を使う会社が決める」）。`Route`・`RouteStop` を `scraper.db.models` から import に足す（base.py が既に import していればそのまま。research R1）
-- [ ] T003 [US1] scraper/scraper/scrapers/marix_line.py：クラスに `ROUTE_ORIGINS = ("鹿児島", "那覇")` を足し、`_load_routes()`・`_load_stops()` を消し、使わなくなった import（`Route`・`RouteStop` など、`ruff check` が F401 で出すもの）を消す
-- [ ] T004 [US1] scraper/scraper/scrapers/marue_ferry.py：クラスに `ROUTE_ORIGINS = ("鹿児島", "那覇")` を足し、`_load_routes()`（1671–1686 行）・`_load_stops()`（1687–1703 行）を消し、使わなくなった import を消す。`_get_stops()`・`_load_port_codes()`・`_marix_company_id()` は残す
-- [ ] T005 [US1] 確認してコミット（`refactor(scraper): 航路と寄港順の読み込みを BaseScraper にまとめる`）
+- [X] T002 [US1] scraper/scraper/scrapers/base.py：`_upsert_departures()` の後ろに、scraper/scraper/scrapers/marix_line.py の `_load_routes()`（808–822 行）と `_load_stops()`（751–767 行、docstring つき）を移す。`_load_routes()` の `"鹿児島"`・`"那覇"` は `self.ROUTE_ORIGINS` の下り・上りに置き換え、`BaseScraper` に `ROUTE_ORIGINS: tuple[str, str]` を型注釈だけで宣言する（値は入れない。docstring に「(下りの始発港, 上りの始発港)。`_load_routes()` を使う会社が決める」）。`Route`・`RouteStop` を `scraper.db.models` から import に足す（base.py が既に import していればそのまま。research R1）
+- [X] T003 [US1] scraper/scraper/scrapers/marix_line.py：クラスに `ROUTE_ORIGINS = ("鹿児島", "那覇")` を足し、`_load_routes()`・`_load_stops()` を消し、使わなくなった import（`Route`・`RouteStop` など、`ruff check` が F401 で出すもの）を消す
+- [X] T004 [US1] scraper/scraper/scrapers/marue_ferry.py：クラスに `ROUTE_ORIGINS = ("鹿児島", "那覇")` を足し、`_load_routes()`（1671–1686 行）・`_load_stops()`（1687–1703 行）を消し、使わなくなった import を消す。`_get_stops()`・`_load_port_codes()`・`_marix_company_id()` は残す
+- [X] T005 [US1] 確認してコミット（`refactor(scraper): 航路と寄港順の読み込みを BaseScraper にまとめる`）
 
 ## Phase 4: User Story 2 - マルエーフェリーを役割ごとに分ける（P1）
 
