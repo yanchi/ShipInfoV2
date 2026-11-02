@@ -50,7 +50,7 @@ make up-tools      # phpMyAdmin も起動（http://localhost:8081）
 
 ## スクレイパーの追加
 
-1. `scraper/scraper/scrapers/<company>.py` を作成（`BaseScraper` 継承）
+1. `scraper/scraper/scrapers/<company>.py` を作成（`BaseScraper` 継承）。大きくなったら `scrapers/<company>/` のパッケージに分けてよい（例: `marue_ferry/`）
 2. `scraper/scraper/scrapers/__init__.py` の `SCRAPER_REGISTRY` に登録
 3. DB の `ferry_companies` テーブルに会社レコードを追加
 
