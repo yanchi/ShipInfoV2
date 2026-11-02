@@ -7,6 +7,7 @@ DBは SQLite in-memory を使用（conftest.py の db_session / marue_ferry_comp
 """
 
 import importlib
+import pkgutil
 import re
 from contextlib import ExitStack, contextmanager
 from datetime import date, datetime, timedelta
@@ -19,6 +20,7 @@ import structlog
 from sqlalchemy import select
 
 from scraper.db.models import DepartureStatus, OperationStatusEnum, Route
+from scraper.scrapers import marue_ferry
 from scraper.scrapers.marue_ferry import (
     KAGOSHIMA_URL,
     SEARCH_URL,
@@ -47,14 +49,10 @@ KAGOSHIMA, NAZE, KAMETOKU, WADOMARI, YORON, MOTOBU, NAHA = (
 # ---------------------------------------------------------------------------
 
 
-# date / datetime を import しているサブモジュール（時計を読むメソッドがあるファイル）
-CLOCK_MODULES = (
-    "scraper.scrapers.marue_ferry.common",
-    "scraper.scrapers.marue_ferry.fetch",
-    "scraper.scrapers.marue_ferry.ships",
-    "scraper.scrapers.marue_ferry.voyages",
-    "scraper.scrapers.marue_ferry.extra",
-    "scraper.scrapers.marue_ferry.statuses",
+# marue_ferry パッケージの全サブモジュール（足したときに直し忘れないよう、手で並べない）
+CLOCK_MODULES = tuple(
+    f"{marue_ferry.__name__}.{m.name}"
+    for m in pkgutil.iter_modules(marue_ferry.__path__)
 )
 
 
