@@ -5,7 +5,8 @@
 before1・before2 は整理の前のコードで2回流した結果、after は整理の後。
 
 - 3つのテストの集合と、取った日（run_date）が全部同じでなければ、比べずに終了コード 2 で止める
-  （テストは date.today() から日付を作るので、日が違うと正しい整理でも違いが出る）
+  （テストは date.today() から日付を作るので、日が違うと正しい整理でも違いが出る）。
+  読めない行・同じテストが2回ある・引数の数が違うときも 2
 - テーブルごとに、before1 と before2 で値の集まりが違う列（datetime.now() から作る時刻と、それで決まる
   content_hash など）を落とし、残りの列で行を多重集合として比べる。行の並び順・位置には頼らない
 - 列を落としても before1 と before2 が合わないテーブル、読めなかったテーブル（error）は、
@@ -16,6 +17,13 @@ before1・before2 は整理の前のコードで2回流した結果、after は�
 import json
 import sys
 from collections import Counter
+from typing import NoReturn
+
+
+def stop(message: str) -> NoReturn:
+    """比べずに止める（終了コード 2。違いがあったときの 1 と分ける）。"""
+    print(message, file=sys.stderr)
+    sys.exit(2)
 
 
 def load(path: str) -> dict[str, dict]:
@@ -25,9 +33,9 @@ def load(path: str) -> dict[str, dict]:
             try:
                 rec = json.loads(line)
             except json.JSONDecodeError as e:
-                sys.exit(f"{path}:{lineno}: JSON として読めない（{e.msg}）。取り直す")
+                stop(f"{path}:{lineno}: JSON として読めない（{e.msg}）。取り直す")
             if rec["test"] in records:
-                sys.exit(
+                stop(
                     f"{path}:{lineno}: {rec['test']} が2回ある。出力先を消してから取り直す"
                 )
             records[rec["test"]] = rec
@@ -88,10 +96,9 @@ def main(before1: str, before2: str, after: str) -> int:
         for table in sorted(set(t1) | set(t2) | set(ta)):
             r1, r2, ra = rows_of(t1, table), rows_of(t2, table), rows_of(ta, table)
             if any(isinstance(r, str) for r in (r1, r2, ra)):
-                if not all(isinstance(r, list) for r in (r1, r2, ra)):
-                    problems.append(
-                        f"{test} {table}: 読めない（前 {r1!r:.40} / 後 {ra!r:.40}）"
-                    )
+                problems.append(
+                    f"{test} {table}: 読めない（前 {r1!r:.40} / 後 {ra!r:.40}）"
+                )
                 continue
             drop = unstable_columns(r1, r2)
             masked.update(f"{table}.{c}" for c in drop)
@@ -115,7 +122,5 @@ def main(before1: str, before2: str, after: str) -> int:
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        sys.exit(
-            f"使い方: python {sys.argv[0]} before1.jsonl before2.jsonl after.jsonl"
-        )
+        stop(f"使い方: python {sys.argv[0]} before1.jsonl before2.jsonl after.jsonl")
     sys.exit(main(*sys.argv[1:]))
