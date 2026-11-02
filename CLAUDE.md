@@ -94,7 +94,7 @@ ShipInfoV2/
 
 ## スクレイパー追加手順
 
-1. `scraper/scraper/scrapers/<company_name>.py` を作成（`BaseScraper`継承）。大きくなったら `scrapers/<company_name>/` のパッケージに分けてよい（例: `marue_ferry/`。import の名前と登録するクラスは変えない）
+1. `scraper/scraper/scrapers/<company_name>.py` を作成（`BaseScraper`継承）。下り・上りの2航路を持つ会社は `TwoWayScraper` を継いで `ROUTE_ORIGINS` を決める（`_routes`・`_stops` が使える）。大きくなったら `scrapers/<company_name>/` のパッケージに分けてよい（例: `marue_ferry/`。import の名前と登録するクラスは変えない）
 2. `scraper/scraper/scrapers/__init__.py` の `SCRAPER_REGISTRY` に登録
 3. DBの `ferry_companies` テーブルに会社レコードを追加（`scraper_class` カラムにクラス名）
 
