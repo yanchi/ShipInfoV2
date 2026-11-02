@@ -20,10 +20,10 @@ from scraper.scrapers.marue_ferry.common import (
     RecordedVoyage,
     ExtraParse,
 )
+from scraper.scrapers.routes import AMAMI_ROUTE_ORIGINS
 from scraper.utils.port_notice import (
     PortNotice,
 )
-from scraper.scrapers.routes import AMAMI_ROUTE_ORIGINS
 
 
 class MarueState(TwoWayScraper):

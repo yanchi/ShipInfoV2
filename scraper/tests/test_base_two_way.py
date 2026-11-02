@@ -5,16 +5,18 @@ TwoWayScraper のテスト。
 - 親（mixin）の ROUTE_ORIGINS を継げば定義できる。中間の抽象クラスは決めなくてよい
 - _routes・_stops はインスタンスごとに1回だけ SELECT する（マルエー・マリックスとも）
 - 同じ始発港の航路が2件以上あれば id の小さいほうを使う
-- _reset_caches() で読み直す
+- run() の頭で _reset_caches() を呼んで読み直す
 """
 
 from datetime import datetime
+from unittest.mock import patch
 
 import pytest
+import structlog
 from sqlalchemy import event
 
 from scraper.db.models import Route, RouteStop
-from scraper.scrapers.base import TwoWayScraper
+from scraper.scrapers.base import BaseScraper, TwoWayScraper
 from scraper.scrapers.marix_line import MarixLine
 from scraper.scrapers.marue_ferry import MarueFerry
 from tests.conftest import setup_port_master
@@ -120,9 +122,15 @@ def test_duplicate_origin_uses_smallest_id(db_session, marue_ferry_company):
     )
     db_session.flush()
 
-    down, _ = MarueFerry(db_session, marue_ferry_company.id)._routes
+    with structlog.testing.capture_logs() as logs:
+        down, _ = MarueFerry(db_session, marue_ferry_company.id)._routes
 
     assert down.id == first.id
+    warnings = [e for e in logs if e["event"] == "route_ambiguous"]
+    assert len(warnings) == 1
+    assert warnings[0]["origin_port"] == "鹿児島"
+    assert warnings[0]["used"] == first.id
+    assert len(warnings[0]["route_ids"]) == 2
 
 
 def test_reset_caches_reloads(db_session, marue_ferry_company):
@@ -136,3 +144,15 @@ def test_reset_caches_reloads(db_session, marue_ferry_company):
 
     assert scraper._routes[0] is None
     assert down.id not in scraper._directions
+
+
+def test_run_resets_caches(db_session, marue_ferry_company):
+    scraper = MarueFerry(db_session, marue_ferry_company.id)
+    down, _ = scraper._routes
+
+    down.active = False
+    db_session.flush()
+    with patch.object(BaseScraper, "run"):  # fetch() 以降は動かさない
+        scraper.run()
+
+    assert scraper._routes[0] is None

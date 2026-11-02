@@ -137,7 +137,6 @@ class MarixLine(TwoWayScraper):
     ROUTE_ORIGINS = AMAMI_ROUTE_ORIGINS
 
     def fetch(self) -> str:
-        self._reset_caches()
         resp = self.http.get(SOURCE_URL, timeout=30)
         resp.raise_for_status()
         resp.encoding = resp.apparent_encoding

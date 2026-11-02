@@ -381,8 +381,8 @@ class TwoWayScraper(BaseScraper):
     ROUTE_ORIGINS を決めないと、具体クラス（抽象メソッドが残っていないクラス）を定義した時点で
     TypeError になる。mixin や中間の抽象クラスは決めなくてよい（具体クラスが継いでいればよい）。
 
-    cached_property のキャッシュは fetch() の頭で _reset_caches() を呼んで捨てる
-    （同じインスタンスで fetch() をもう一度呼んでも、DB を読み直す）。
+    cached_property のキャッシュは run() の頭で _reset_caches() を呼んで捨てる
+    （同じインスタンスで run() をもう一度呼んでも、DB を読み直す）。
     """
 
     # (下りの始発港, 上りの始発港)。routes.origin_port と比べる
@@ -403,6 +403,10 @@ class TwoWayScraper(BaseScraper):
                 f"{cls.__name__}.ROUTE_ORIGINS には (下りの始発港, 上りの始発港) の"
                 f"2つの違う港名を入れること（今は {origins!r}）"
             )
+
+    def run(self) -> None:
+        self._reset_caches()
+        super().run()
 
     def _reset_caches(self) -> None:
         """このクラス（と親）の cached_property のキャッシュを全部捨てる。"""

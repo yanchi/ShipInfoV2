@@ -58,7 +58,6 @@ class FetchMixin(MarueState):
     # ------------------------------------------------------------------
 
     def fetch(self) -> str:
-        self._reset_caches()
         self._valid_date = date.today()
         self._searches: dict[tuple[int, int, date], list[SearchRow] | None] = {}
         self._search_count = 0
