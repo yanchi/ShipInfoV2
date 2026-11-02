@@ -30,9 +30,9 @@ from scraper.db.models import (
     OperationStatusEnum,
 )
 from scraper.scrapers.marue_ferry.common import (
-    _SEARCH_ROWS,
-    _SEVERITY,
-    _SAME_VOYAGE,
+    SEARCH_ROWS,
+    SEVERITY,
+    SAME_VOYAGE,
     SearchRow,
     VoyageStatus,
     ShipInfo,
@@ -127,7 +127,7 @@ class VoyagesMixin(MarueState):
         同じ航路を1日に2回走ることはない）。今回の検索に出てくる便は検索のほうを使い、
         記録した行どうしで時刻が違えば、最後に確認した行の時刻を使う。
         """
-        route_ids = [r.id for r in self._load_routes() if r]
+        route_ids = [r.id for r in self._routes if r]
         if not route_ids:
             return []
         rows = self.session.execute(
@@ -139,7 +139,7 @@ class VoyagesMixin(MarueState):
             )
             .where(
                 DepartureStatus.route_id.in_(route_ids),
-                _SEARCH_ROWS,
+                SEARCH_ROWS,
                 DepartureStatus.ship_name != "",
                 DepartureStatus.scheduled_arrival_at > now,
             )
@@ -157,7 +157,7 @@ class VoyagesMixin(MarueState):
             if any(
                 ship == r.ship_name
                 and route_id == r.route_id
-                and abs(arrival - r.scheduled_arrival_at) < _SAME_VOYAGE
+                and abs(arrival - r.scheduled_arrival_at) < SAME_VOYAGE
                 for ship, route_id, arrival in accepted
             ):
                 continue
@@ -278,7 +278,7 @@ class VoyagesMixin(MarueState):
 
         出港日 ＝ 下船日 −（終点の day_offset − その港の day_offset）。航路や港が分からなければ None。
         """
-        stops = self._get_stops().get(route_id, [])
+        stops = self._stops.get(route_id, [])
         start = (
             stops[0]
             if port_id is None and stops
@@ -326,7 +326,7 @@ class VoyagesMixin(MarueState):
         1. 出港日が同じ行を優先する
         2. 無ければ、途中の港から書いた行だけ、出港日〜下船日の範囲で合わせる（R1・R7）
         """
-        direction = self._route_directions().get(route_id)
+        direction = self._directions.get(route_id)
         same_direction = [v for v in ship.voyages if v.direction == direction]
         exact = next(
             (v for v in same_direction if v.departure_date == origin_date), None
@@ -370,8 +370,8 @@ class VoyagesMixin(MarueState):
                 assumed=assumed,
             )
 
-        worst_line = max(_SEVERITY.get(v.status, 0) for v in ship.voyages)
-        tag_heavier = _SEVERITY.get(ship.status, 0) > worst_line
+        worst_line = max(SEVERITY.get(v.status, 0) for v in ship.voyages)
+        tag_heavier = SEVERITY.get(ship.status, 0) > worst_line
         conditional_missing = ship.conditional and not any(
             v.conditional for v in ship.voyages
         )
@@ -386,7 +386,7 @@ class VoyagesMixin(MarueState):
                 tag=ship.status.value,
                 heaviest_line=max(
                     (v.status for v in ship.voyages),
-                    key=lambda st: _SEVERITY.get(st, 0),
+                    key=lambda st: SEVERITY.get(st, 0),
                 ).value,
                 reason="tag_heavier" if tag_heavier else "conditional_missing",
             )
@@ -458,9 +458,9 @@ class VoyagesMixin(MarueState):
                 ).where(
                     DepartureStatus.ship_name == ship_name,
                     DepartureStatus.route_id == route_id,
-                    DepartureStatus.scheduled_arrival_at > arrival_at - _SAME_VOYAGE,
-                    DepartureStatus.scheduled_arrival_at < arrival_at + _SAME_VOYAGE,
-                    _SEARCH_ROWS,
+                    DepartureStatus.scheduled_arrival_at > arrival_at - SAME_VOYAGE,
+                    DepartureStatus.scheduled_arrival_at < arrival_at + SAME_VOYAGE,
+                    SEARCH_ROWS,
                 )
             ).all()
             ports = {
@@ -471,8 +471,8 @@ class VoyagesMixin(MarueState):
                 for r in rows
                 if r.status is not None
             }
-            known = [(st, detail) for st, detail in ports.values() if st in _SEVERITY]
-            heaviest = max(known, key=lambda x: _SEVERITY[x[0]]) if known else None
+            known = [(st, detail) for st, detail in ports.values() if st in SEVERITY]
+            heaviest = max(known, key=lambda x: SEVERITY[x[0]]) if known else None
             self._recorded_cache[key] = RecordedVoyage(
                 ports=ports,
                 departures=tuple(

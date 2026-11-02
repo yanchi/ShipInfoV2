@@ -96,7 +96,8 @@ from bs4 import BeautifulSoup, Tag
 from sqlalchemy import delete, func, select
 
 from scraper.db.models import DepartureStatus, OperationStatusEnum, Route, RouteStop
-from scraper.scrapers.base import BaseScraper
+from scraper.scrapers.base import TwoWayScraper
+from scraper.scrapers.routes import AMAMI_ROUTE_ORIGINS
 from scraper.utils.ports import PortResolver
 
 SOURCE_URL = "https://marixline.com/service/"
@@ -132,8 +133,8 @@ _LAYOUT_CLASSES = {
 _SKIPPED_PORT_CLASS = "no_status"
 
 
-class MarixLine(BaseScraper):
-    ROUTE_ORIGINS = ("鹿児島", "那覇")
+class MarixLine(TwoWayScraper):
+    ROUTE_ORIGINS = AMAMI_ROUTE_ORIGINS
 
     def fetch(self) -> str:
         resp = self.http.get(SOURCE_URL, timeout=30)
@@ -170,7 +171,7 @@ class MarixLine(BaseScraper):
 
     def parse(self, html: str) -> list[dict]:
         soup = BeautifulSoup(html, "lxml")
-        down_route, up_route = self._load_routes()
+        down_route, up_route = self._routes
         records: list[dict] = []
         seen: set[tuple[int, date]] = set()
         # 種類が分からない便（詳細ページが取れない）。定期便で埋まらなかったときだけ使う（research R8）
@@ -285,9 +286,9 @@ class MarixLine(BaseScraper):
         if not list_html:
             return []
         detail_pages = getattr(self, "_detail_pages", {})
-        resolver = PortResolver.from_session(self.session)
-        down_route, up_route = self._load_routes()
-        stops = self._load_stops([r for r in (down_route, up_route) if r])
+        resolver = self._resolver
+        down_route, up_route = self._routes
+        stops = self._stops
 
         soup = BeautifulSoup(list_html, "lxml")
         records: list[dict] = []

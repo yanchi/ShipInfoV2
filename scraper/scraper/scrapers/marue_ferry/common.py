@@ -11,17 +11,45 @@ from scraper.db.models import (
     OperationStatusEnum,
 )
 
+# marue_ferry パッケージの中で共有する名前（パッケージの外からは __init__.py の名前を使う）
+__all__ = [
+    "SEARCH_URL",
+    "KAGOSHIMA_URL",
+    "SEARCH_ROWS",
+    "SEVERITY",
+    "SAME_VOYAGE",
+    "CONDITIONAL_WORDS",
+    "SearchRow",
+    "VoyageStatus",
+    "ShipInfo",
+    "RecordedVoyage",
+    "ExtraStop",
+    "ExtraVoyage",
+    "ExtraParse",
+    "VOYAGE_LINE",
+    "VOYAGE_STATUS_END",
+    "EXTRA_HEADING",
+    "EXTRA_TIME",
+    "EXTRA_STOP",
+    "EXTRA_TIME_PART",
+    "EXTRA_SKIP_NOTE",
+    "WEEKDAYS",
+    "nearest_date",
+    "parse_search_datetime",
+    "iso_or_none",
+]
+
 SEARCH_URL = "https://www.aline-ferry.com/search/result.php"
 
 KAGOSHIMA_URL = "https://www.aline-ferry.com/kagoshima/"
 
 # 便検索から作った行（臨時便の行は source_url が船の詳細ページ。便の判定には混ぜない。research R5）
-_SEARCH_ROWS = or_(
+SEARCH_ROWS = or_(
     DepartureStatus.source_url.is_(None), DepartureStatus.source_url == SEARCH_URL
 )
 
 # 船ステータスの重さ（検索に失敗したときの安全側の判定に使う）
-_SEVERITY = {
+SEVERITY = {
     OperationStatusEnum.cancelled: 4,
     OperationStatusEnum.suspended: 3,
     OperationStatusEnum.delayed: 2,
@@ -29,10 +57,10 @@ _SEVERITY = {
 }
 
 # 同じ船・同じ航路で下船日時の差がこれ未満なら同じ便とみなす（1往復に2日以上かかるので、同じ航路を1日に2回走ることはない）
-_SAME_VOYAGE = timedelta(hours=24)
+SAME_VOYAGE = timedelta(hours=24)
 
 # 条件付（delayed）として読むタグ・便の行の語。「寄港地変更」は「港変更」を含まない（寄・港・地・変・更）
-_CONDITIONAL_WORDS = ("条件付", "港変更", "寄港地変更", "抜港")
+CONDITIONAL_WORDS = ("条件付", "港変更", "寄港地変更", "抜港")
 
 
 @dataclass(frozen=True)
@@ -126,7 +154,7 @@ class ExtraParse:
 
 # 抜粋の便ごとの行。「■10月20日(火)那覇発上り便…条件付き運航・寄港地変更」
 # 「10/5(月)鹿児島新港18:00発／下り便…スケジュール変更・条件付運航」。次の行の日付の手前まで
-_VOYAGE_LINE = re.compile(
+VOYAGE_LINE = re.compile(
     r"(?P<month>\d{1,2})(?:月|/)(?P<day>\d{1,2})日?\s*[(（][^)）]*[)）]"
     r"(?P<place>[^…■]*?)(?P<direction>上り|下り)便?\s*(?:…|\.{3})+\s*"
     r"(?P<status>.+?)(?=■|\d{1,2}(?:月|/)\d{1,2}日?\s*[(（]|$)",
@@ -134,26 +162,26 @@ _VOYAGE_LINE = re.compile(
 )
 
 # 便の行の状態の語の終わり（この手前までが「条件付き運航・寄港地変更」）
-_VOYAGE_STATUS_END = re.compile(r"[（(※。\s]")
+VOYAGE_STATUS_END = re.compile(r"[（(※。\s]")
 
 # 船の詳細ページの臨時便。「【臨時便(下り)】」で始まり、次の【…】・《…》・終わりで閉じる
-_EXTRA_HEADING = re.compile(r"^【臨時便[(（](?P<direction>上り|下り)[)）]】$")
+EXTRA_HEADING = re.compile(r"^【臨時便[(（](?P<direction>上り|下り)[)）]】$")
 
-_EXTRA_TIME = r"\d{1,2}:\d{2}[(（](?:入港|出港)[)）]"
+EXTRA_TIME = r"\d{1,2}:\d{2}[(（](?:入港|出港)[)）]"
 
-_EXTRA_STOP = re.compile(
+EXTRA_STOP = re.compile(
     r"^(?P<month>\d{1,2})月(?P<day>\d{1,2})日[(（](?P<weekday>[日月火水木金土])[)）]"
-    r"\s*(?P<port>[^\s\d]+?)\s*(?P<times>" + _EXTRA_TIME + "(?:/" + _EXTRA_TIME + ")?)$"
+    r"\s*(?P<port>[^\s\d]+?)\s*(?P<times>" + EXTRA_TIME + "(?:/" + EXTRA_TIME + ")?)$"
 )
 
-_EXTRA_TIME_PART = re.compile(r"(\d{1,2}):(\d{2})[(（](入港|出港)[)）]")
+EXTRA_TIME_PART = re.compile(r"(\d{1,2}):(\d{2})[(（](入港|出港)[)）]")
 
-_EXTRA_SKIP_NOTE = re.compile(r"寄港(?:いたし|致し|し)ません")
+EXTRA_SKIP_NOTE = re.compile(r"寄港(?:いたし|致し|し)ません")
 
-_WEEKDAYS = "月火水木金土日"  # date.weekday() の順
+WEEKDAYS = "月火水木金土日"  # date.weekday() の順
 
 
-def _nearest_date(month: int, day: int, today: date) -> date | None:
+def nearest_date(month: int, day: int, today: date) -> date | None:
     """月日 → 今日にいちばん近い日付になる年の日付。存在しない日付は None。"""
     candidates = []
     for year in (today.year - 1, today.year, today.year + 1):
@@ -166,7 +194,7 @@ def _nearest_date(month: int, day: int, today: date) -> date | None:
     return min(candidates, key=lambda d: abs((d - today).days))
 
 
-def _parse_search_datetime(text: str) -> datetime | None:
+def parse_search_datetime(text: str) -> datetime | None:
     """「2026年10月4日 05:50」→ datetime。「－」などは None。"""
     m = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日\s*(\d{1,2}):(\d{2})", text)
     if not m:
@@ -177,5 +205,5 @@ def _parse_search_datetime(text: str) -> datetime | None:
         return None
 
 
-def _iso(v: datetime | None) -> str | None:
+def iso_or_none(v: datetime | None) -> str | None:
     return v.isoformat() if v else None
