@@ -11,7 +11,7 @@
 - US1：`_load_routes()`・`_load_stops()` を `BaseScraper` に移す（R1）
 - US2：`marue_ferry.py`（1788 行）をパッケージ `marue_ferry/` にし、役割ごとの mixin 5 つと `common.py`・`state.py` の 7 ファイル＋`__init__.py` に分ける。メソッドの中身は変えない（R2）。テストは差し替え先だけ直す（R3）
 - US3：臨時便の処理は両社で決まりが違うので**まとめない**。違いを research R5 に残した
-- 振る舞いが変わらないことは、DB を使う 270 テストの全部の行を前後で比べて確かめる（R4。変更前のコードで3回流して違い 0 を確認済み）
+- 振る舞いが変わらないことは、336 テストすべてでスクレイパーが返したものと DB の行を前後で比べて確かめる（R4。同じコードで違い 0・わざと壊したコードで違いが出ることを確認済み）
 
 ---
 
@@ -97,12 +97,12 @@ scraper/tests/test_marue_ferry.py                # fixed_now・no_sleep・settin
 
 ### Phase A：比較の土台（R4）
 
-- コードに触る前に、quickstart の 1 で `before1.jsonl`・`before2.jsonl`（270 行）とログの出来事の一覧 `events_before.txt` を取る
+- quickstart の 1 で、基点のコミットのコードから `before1.jsonl`・`before2.jsonl`（336 行）とログの出来事の一覧 `events_before.txt` を取る（日をまたいだら取り直す）
 - 取っただけではコミットしない（`/tmp` のファイル。プラグインと比較のスクリプトは plan と一緒にコミット済み）
 
 ### Phase B：共通の読み込み（US1・R1・FR-004）
 
-- `BaseScraper` に `_load_routes()`・`_load_stops()` を足す（マリックスの docstring つきの形）
+- `BaseScraper` に `_load_routes()`・`_load_stops()` を足す（マリックスの docstring つきの形）。始発港は各社の `ROUTE_ORIGINS` から読む（R1）
 - `marix_line.py`・`marue_ferry.py` から同じメソッドを消す。使わなくなった import（`Route`・`RouteStop` など）を消す
 - テスト・lint・`check-schema`・比較（quickstart の 2）→ コミット
 

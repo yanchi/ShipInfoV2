@@ -7,12 +7,12 @@
 
 **どのタスクにも共通の決まり**
 - メソッド・定数は**切り取って貼るだけ**。名前・引数・中身・メソッドの並び順を変えない（FR-008）。見つけたバグは直さずメモして、最後に Issue にする（T021）
-- 「確認」は quickstart の 2：`make test-scraper`（336 passed）・`make lint-scraper`・`make check-schema`・比較（`tests=270 ... diffs=0`）・ログの出来事の diff（差分なし）。通らなければ、直すのではなく移し方を戻す
+- 「確認」は quickstart の 2：`make test-scraper`（336 passed）・`make lint-scraper`・`make check-schema`・比較（`tests=336 diffs=0`）・ログの出来事の diff（差分なし）。通らなければ、直すのではなく移し方を戻す
 - `docker compose exec -T scraper ruff format scraper/ tests/` で整形してから確認する
 
 ## Phase 1: Setup（比較の土台。plan Phase A）
 
-- [ ] T001 コードに触る前に、quickstart の 1 で specs/17-scraper-refactor/snapshot_plugin.py・specs/17-scraper-refactor/compare_snapshots.py をコンテナの /tmp にコピーし、`PYTHONHASHSEED=0` で /tmp/before1.jsonl・/tmp/before2.jsonl を取る（どちらも 270 行、336 passed）。specs/17-scraper-refactor/log_events.py もコピーし、ログの出来事の一覧を /tmp/events_before.txt に取る（49 種類）。コミットはしない
+- [ ] T001 quickstart の 1 で、specs/17-scraper-refactor/ の snapshot_plugin.py・compare_snapshots.py・log_events.py をコンテナの /tmp にコピーし、基点のコミットのコードを /tmp/base に展開して /tmp/before1.jsonl・/tmp/before2.jsonl（どちらも 336 行）と /tmp/events_before.txt（53 種類）を取る。日をまたいだら、その日の最初の比較の前にやり直す。コミットはしない
 
 ## Phase 2: Foundational
 
@@ -23,9 +23,9 @@
 **Goal**: `_load_routes()`・`_load_stops()` を `BaseScraper` に1つだけ置く（FR-004・research R1）
 **Independent Test**: `grep -rn "def _load_routes\|def _load_stops" scraper/scraper/scrapers` が base.py だけ。確認が通る
 
-- [ ] T002 [US1] scraper/scraper/scrapers/base.py：`_upsert_departures()` の後ろに、scraper/scraper/scrapers/marix_line.py の `_load_routes()`（808–822 行）と `_load_stops()`（751–767 行、docstring つき）を移す。`Route`・`RouteStop` を `scraper.db.models` から import に足す（base.py が既に import していればそのまま）
-- [ ] T003 [US1] scraper/scraper/scrapers/marix_line.py から `_load_routes()`・`_load_stops()` を消し、使わなくなった import（`Route`・`RouteStop` など、`ruff check` が F401 で出すもの）を消す
-- [ ] T004 [US1] scraper/scraper/scrapers/marue_ferry.py から `_load_routes()`（1671–1686 行）・`_load_stops()`（1687–1703 行）を消し、使わなくなった import を消す。`_get_stops()`・`_load_port_codes()`・`_marix_company_id()` は残す
+- [ ] T002 [US1] scraper/scraper/scrapers/base.py：`_upsert_departures()` の後ろに、scraper/scraper/scrapers/marix_line.py の `_load_routes()`（808–822 行）と `_load_stops()`（751–767 行、docstring つき）を移す。`_load_routes()` の `"鹿児島"`・`"那覇"` は `self.ROUTE_ORIGINS` の下り・上りに置き換え、`BaseScraper` に `ROUTE_ORIGINS: tuple[str, str]` を型注釈だけで宣言する（値は入れない。docstring に「(下りの始発港, 上りの始発港)。`_load_routes()` を使う会社が決める」）。`Route`・`RouteStop` を `scraper.db.models` から import に足す（base.py が既に import していればそのまま。research R1）
+- [ ] T003 [US1] scraper/scraper/scrapers/marix_line.py：クラスに `ROUTE_ORIGINS = ("鹿児島", "那覇")` を足し、`_load_routes()`・`_load_stops()` を消し、使わなくなった import（`Route`・`RouteStop` など、`ruff check` が F401 で出すもの）を消す
+- [ ] T004 [US1] scraper/scraper/scrapers/marue_ferry.py：クラスに `ROUTE_ORIGINS = ("鹿児島", "那覇")` を足し、`_load_routes()`（1671–1686 行）・`_load_stops()`（1687–1703 行）を消し、使わなくなった import を消す。`_get_stops()`・`_load_port_codes()`・`_marix_company_id()` は残す
 - [ ] T005 [US1] 確認してコミット（`refactor(scraper): 航路と寄港順の読み込みを BaseScraper にまとめる`）
 
 ## Phase 4: User Story 2 - マルエーフェリーを役割ごとに分ける（P1）
@@ -36,9 +36,9 @@
 ファイルとメソッドの対応は research R2 の表。行番号は T004 のあとでずれているので、メソッド名で探す。
 
 - [ ] T006 [US2] `git mv scraper/scraper/scrapers/marue_ferry.py scraper/scraper/scrapers/marue_ferry/__init__.py`（中身は変えない）。確認してコミット（`refactor(scraper): marue_ferry をパッケージにする（移すだけ）`）
-- [ ] T007 [US2] scraper/scraper/scrapers/marue_ferry/common.py を作る：`SEARCH_URL`〜`_CONDITIONAL_WORDS`、dataclass（`SearchRow`・`VoyageStatus`・`ShipInfo`・`RecordedVoyage`・`ExtraStop`・`ExtraVoyage`・`ExtraParse`）、`_VOYAGE_LINE`〜`_WEEKDAYS`、`_nearest_date`・`_parse_search_datetime`・`_iso` を __init__.py から移し、__init__.py は `from scraper.scrapers.marue_ferry.common import ...` で使う。確認してコミット
+- [ ] T007 [US2] scraper/scraper/scrapers/marue_ferry/common.py を作る：`SEARCH_URL`〜`_CONDITIONAL_WORDS`、dataclass（`SearchRow`・`VoyageStatus`・`ShipInfo`・`RecordedVoyage`・`ExtraStop`・`ExtraVoyage`・`ExtraParse`）、`_VOYAGE_LINE`〜`_WEEKDAYS`、`_nearest_date`・`_parse_search_datetime`・`_iso` を __init__.py から移し、__init__.py は `from scraper.scrapers.marue_ferry.common import ...` で使う。common.py は `date`・`datetime` を import するので、scraper/tests/test_marue_ferry.py の `fixed_now()` を、差し替えるモジュールをタプル1つ（`marue_ferry`・`marue_ferry.common`）に持ってループで `patch` する形にする（research R3）。確認してコミット
 - [ ] T008 [US2] scraper/scraper/scrapers/marue_ferry/state.py を作る：`class MarueState(BaseScraper)` に `__init__`、data-model.md の表のインスタンス変数の型注釈（値は入れない）、`_route_directions`・`_get_resolver`・`_get_stops`・`_load_port_codes`・`_marix_company_id` を移す。__init__.py の `MarueFerry` は `MarueState` を継承する。data-model.md の「作る場所・読む場所」を grep で確かめ、違えば表を直す。確認してコミット
-- [ ] T009 [US2] scraper/scraper/scrapers/marue_ferry/fetch.py を作る：`class FetchMixin(MarueState)` に `fetch`〜`_search`（`_voyage_search_keys`・`_recorded_search_keys`・`_needs_far_search`・`_origin_departed`・`_normalized_origin_searches`・`_format_search_date`）を移し、`MarueFerry` の基底に足す。`time`・`settings`・`date`・`datetime` を読むので、scraper/tests/test_marue_ferry.py を直す：`fixed_now()` は差し替えるモジュールをタプル1つに持ってループで `patch` し、`marue_ferry` と `marue_ferry.fetch` を入れる。`no_sleep()` は `scraper.scrapers.marue_ferry.fetch.time.sleep`（research R3）。確認してコミット
+- [ ] T009 [US2] scraper/scraper/scrapers/marue_ferry/fetch.py を作る：`class FetchMixin(MarueState)` に `fetch`〜`_search`（`_voyage_search_keys`・`_recorded_search_keys`・`_needs_far_search`・`_origin_departed`・`_normalized_origin_searches`・`_format_search_date`）を移し、`MarueFerry` の基底に足す。`time`・`settings`・`date`・`datetime` を読むので、scraper/tests/test_marue_ferry.py を直す：`fixed_now()` のタプルに `marue_ferry.fetch` を足す。`no_sleep()` は `scraper.scrapers.marue_ferry.fetch.time.sleep`（research R3）。確認してコミット
 - [ ] T010 [US2] scraper/scraper/scrapers/marue_ferry/ships.py を作る：`class ShipsMixin(MarueState)` に `_require_ship_statuses`・`_ship_detail_text`・`_parse_ships`・`_classify`・`_parse_voyages`・`_is_from_midway`・`_parse_status_text` を移し、基底に足す。`date` を読むので scraper/tests/test_marue_ferry.py の `fixed_now()` のタプルに `marue_ferry.ships` を足す。確認してコミット
 - [ ] T011 [US2] scraper/scraper/scrapers/marue_ferry/voyages.py を作る：`class VoyagesMixin(MarueState)` に `_skipped_record`〜`_recorded_voyage`（`_skipped_on_any_current_voyage`・`_skipped_on_current_voyage`・`_recorded_voyages`・`_future_voyage_status`・`_current_voyage_status`・`_ship_notices`・`_for_current_voyage`・`_departure_date`・`_for_voyage`・`_voyage_line`・`_match_voyage`・`_voyage_departed`）を移し、基底に足す。`fixed_now()` のタプルに `marue_ferry.voyages` を足す。確認してコミット
 - [ ] T012 [US2] scraper/scraper/scrapers/marue_ferry/extra.py を作る：`class ExtraMixin(MarueState)` に `_extra_records`・`_extra_skips_after`・`_warn_extra_arrival_changed`・`_delete_withdrawn_extra_rows`・`_extra_status`・`_has_regular_voyage`・`_recorded_search_keys_of`・`_note_extra_conflict`・`_parse_extra_voyages`・`_build_extra_voyage` を移し、基底に足す（`_upsert_departures` は移さない）。`fixed_now()` のタプルに `marue_ferry.extra` を足し、`test_extra_voyage_rows_respect_search_days_ahead` の `monkeypatch.setattr` を `"scraper.scrapers.marue_ferry.extra.settings.marue_search_days_ahead"` にする。確認してコミット

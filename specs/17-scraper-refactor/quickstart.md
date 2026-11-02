@@ -1,26 +1,32 @@
 # Quickstart: スクレイパーを振る舞いを変えずに整理する
 
-## 1. 整理の前に：DB の行を2回とっておく（research R4）
+## 1. 「前」を取る（research R4）
 
-**コードに触る前に**やる。`/tmp` はコンテナの中（`make up` で立てた scraper）。
+「前」は**基点のコミット**（このブランチが master から分かれたところ）のコードで、コンテナの `/tmp/base` に展開して取る。作業中のコードに関係なく、いつでも取り直せる。
+
+テストは `date.today()` から日付を作るので、**「前」と「後」は同じ日に取る**（`compare_snapshots.py` は日が違うと止まる）。日をまたいだら、その日の最初の比較の前にここをやり直す。コンテナを作り直して `/tmp` が消えたときも同じ。
 
 ```bash
 make up
-docker compose cp specs/17-scraper-refactor/snapshot_plugin.py scraper:/tmp/
-docker compose cp specs/17-scraper-refactor/compare_snapshots.py scraper:/tmp/
-docker compose cp specs/17-scraper-refactor/log_events.py scraper:/tmp/
+for f in snapshot_plugin.py compare_snapshots.py log_events.py; do
+  docker compose cp specs/17-scraper-refactor/$f scraper:/tmp/
+done
+docker compose exec -T scraper sh -c 'rm -rf /tmp/base && mkdir -p /tmp/base'
+git archive "$(git merge-base master HEAD)" scraper | docker compose exec -T scraper tar -x -C /tmp/base
 docker compose exec -T scraper sh -c '
-  rm -f /tmp/before1.jsonl /tmp/before2.jsonl
-  PYTHONHASHSEED=0 PYTHONPATH=/tmp SNAPSHOT_OUT=/tmp/before1.jsonl python -m pytest tests/ -q -p snapshot_plugin
-  PYTHONHASHSEED=0 PYTHONPATH=/tmp SNAPSHOT_OUT=/tmp/before2.jsonl python -m pytest tests/ -q -p snapshot_plugin
-  wc -l /tmp/before1.jsonl     # 270
-  python /tmp/log_events.py scraper/scrapers > /tmp/events_before.txt
-  wc -l /tmp/events_before.txt'  # 49（ログの出来事の種類。FR-007）
+  cd /tmp/base/scraper
+  for n in 1 2; do
+    rm -f /tmp/before$n.jsonl
+    PYTHONHASHSEED=0 PYTHONPATH=/tmp SNAPSHOT_OUT=/tmp/before$n.jsonl python -m pytest tests/ -q -p snapshot_plugin
+  done
+  wc -l < /tmp/before1.jsonl                                   # 336
+  python /tmp/log_events.py scraper > /tmp/events_before.txt
+  wc -l < /tmp/events_before.txt'                              # 53（ログの出来事の種類。FR-007）
 ```
 
-コンテナを作り直すと `/tmp` は消える。消したら master のコードに戻して取り直す（`git stash` か worktree）。
+`/tmp/base/scraper` で流すと、`scraper` パッケージはそこから読まれる（`/app` のものではない）。
 
-## 2. 区切りごとに：テストと DB の行を比べる
+## 2. 区切りごとに：テストと、返したもの・DB の行を比べる
 
 US1・US2 の各コミットの前に毎回やる（spec FR-010：どこで止めても通る）。
 
@@ -32,12 +38,13 @@ docker compose exec -T scraper sh -c '
   rm -f /tmp/after.jsonl
   PYTHONHASHSEED=0 PYTHONPATH=/tmp SNAPSHOT_OUT=/tmp/after.jsonl python -m pytest tests/ -q -p snapshot_plugin
   python /tmp/compare_snapshots.py /tmp/before1.jsonl /tmp/before2.jsonl /tmp/after.jsonl
-  python /tmp/log_events.py scraper/scrapers | diff /tmp/events_before.txt - && echo events-same'
-# → tests=270 masked_cells=95 diffs=0
+  python /tmp/log_events.py scraper | diff /tmp/events_before.txt - && echo events-same'
+# → tests=336 diffs=0
 # → events-same
 ```
 
-`diffs` が 0 でなければ、出た (テスト, 表, 行, 列) を見て、整理で振る舞いが変わったところを戻す（直すのではなく戻す。FR-008）。
+- 終了コード 2（テストの集合・取った日が揃わない）なら、比べていない。1 をやり直してから流す
+- `diffs` が 0 でなければ、出た（テスト・表・行）を見て、整理で振る舞いが変わったところを戻す（直すのではなく戻す。FR-008）
 
 ## 3. 終わったら：大きさを確かめる（SC-003・SC-004）
 

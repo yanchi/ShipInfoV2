@@ -1,8 +1,9 @@
 """スクレイパーのログの出来事（レベル・名前・呼んでいる数）を並べる（17-scraper-refactor の FR-007）。
 
-    python log_events.py scraper/scrapers > /tmp/events_before.txt
+    python log_events.py scraper > /tmp/events_before.txt
 
-整理の前後で出力を diff する。ファイルをまたいで集計するので、メソッドを別のファイルに移しても同じになる。
+整理の前後で出力を diff する。パッケージ `scraper` 全体（scrapers・utils・db など）をファイルをまたいで集計するので、
+メソッドを別のファイル・utils に移しても同じになる。
 """
 
 import collections
@@ -10,7 +11,7 @@ import pathlib
 import re
 import sys
 
-_CALL = re.compile(r"(?:_log|\blog)\.(\w+)\(\s*\"(\w+)\"")
+_CALL = re.compile(r"(?:_log|\blog)\.(\w+)\(\s*[\"'](\w+)[\"']")
 
 
 def main(root: str) -> None:

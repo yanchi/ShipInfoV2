@@ -34,6 +34,7 @@ from scraper.scrapers.base import BaseScraper
 同じ入力（公式ページ・DB の状態・時刻）に対して、前後で次が同じ。
 
 - `operation_statuses`・`departure_statuses`・`scraper_logs` の行（`id` と実行時刻の列を除く全部の列）
+- `fetch()` が返す文字列（`raw_html_hash` の材料）、`parse()`・`parse_departures()` が返す行とその順番
 - `raw_html_hash`・`content_hash` の値
 - 行を消す範囲（取り下げた臨時便・`replace_scope`・`unwritten_sources`）
 

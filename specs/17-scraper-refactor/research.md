@@ -4,9 +4,10 @@
 
 ## R1: 両社の共通処理をどこに置くか（US1・FR-004）
 
-**Decision**: `_load_routes()` と `_load_stops()` を `BaseScraper`（`scraper/scraper/scrapers/base.py`）に移し、両社の同じ名前のメソッドを消す。
+**Decision**: `_load_routes()` と `_load_stops()` を `BaseScraper`（`scraper/scraper/scrapers/base.py`）に移し、両社の同じ名前のメソッドを消す。`_load_routes()` の始発港（下り「鹿児島」・上り「那覇」）は Base に書かず、各社のクラス属性 `ROUTE_ORIGINS = ("鹿児島", "那覇")`（下り・上りの順）から読む（PR #104 レビュー）。
 
 - 両社の `_load_routes()` は1文字も違わない（始発港「鹿児島」が下り・「那覇」が上り、`active` の航路だけ）
+- Base は `ROUTE_ORIGINS: tuple[str, str]` を型注釈だけで宣言する（値を入れない）。決めていない会社が `_load_routes()` を呼ぶと AttributeError で止まり、ほかの会社の港で黙って動くことはない
 - `_load_stops()` もクエリと戻り値が同じ。違いはマリックスの docstring だけ（それを残す）
 - マルエーの `_get_stops()`（キャッシュつき）・`_get_resolver()`・`_load_port_codes()`・`_marix_company_id()` はマルエーだけが使うので動かさない
 
@@ -14,7 +15,8 @@
 
 **Alternatives considered**:
 - `utils/` に関数で置く（`load_routes(session, company_id)`）：呼び出し側を全部書き換えることになり、差分が増える。`BaseScraper` に置けばメソッドのまま。却下
-- 始発港の名前をクラス属性にして会社ごとに変えられるようにする：今の2社は同じで、3社目の形はまだ分からない。使わない口を作らない（spec US3 の「無理な抽象化をしない」と同じ）。却下
+- 始発港を Base に決め打ちで置く（最初の案）：3社目が関係ない港の決め打ちを継承する。各社の航路の事実は各社に置く（Constitution I の疎結合）。却下
+- Base は航路の一覧を返すだけにして、向きは各社で選ぶ：`next(... "鹿児島")`・`next(... "那覇")` の2行が両社にまた残る。クラス属性なら値の違いだけを各社に置ける。却下
 
 ## R2: マルエーフェリーをどう分けるか（US2・FR-005）
 
@@ -65,7 +67,7 @@ scraper/scraper/scrapers/marue_ferry/
 
 | 今 | 後 |
 |---|---|
-| `fixed_now()`：`patch("scraper.scrapers.marue_ferry.date")`・`...datetime` | 時計を読むサブモジュール（`fetch`・`ships`・`voyages`・`extra`・`statuses`）ごとに `date`・`datetime` を差し替える。`base` の `datetime` はそのまま |
+| `fixed_now()`：`patch("scraper.scrapers.marue_ferry.date")`・`...datetime` | `date`・`datetime` を import するサブモジュール全部（`common`・`fetch`・`ships`・`voyages`・`extra`・`statuses`）で差し替える。今 `common` のモジュール関数は今日を引数でもらうが、あとで直接読むようになってもテストが本当の日付で動かないように入れておく（PR #104 レビュー）。`base` の `datetime` はそのまま |
 | `no_sleep()`：`patch("scraper.scrapers.marue_ferry.time.sleep")` | `patch("scraper.scrapers.marue_ferry.fetch.time.sleep")` |
 | `monkeypatch.setattr("scraper.scrapers.marue_ferry.settings.marue_search_days_ahead", 1)` | `"scraper.scrapers.marue_ferry.extra.settings.marue_search_days_ahead"`（`settings` は1つのオブジェクトなので、どの場所からでも同じものを変える） |
 | `from scraper.scrapers.marue_ferry import KAGOSHIMA_URL, SEARCH_URL, ExtraStop, ExtraVoyage, MarueFerry` | 変えない（`__init__.py` が再エクスポート） |
@@ -80,21 +82,25 @@ scraper/scraper/scrapers/marue_ferry/
 - 時計を1つの関数（`common.today()`・`common.now()`）にまとめ、テストはそこだけ差し替える：メソッドの中身を変えることになる（FR-008 の「整理だけ」から外れる）。テストを楽にするためのコードの変更は、この機能ではやらない。却下
 - `__init__.py` で `date`・`datetime`・`time` を import して、今の patch 先を残す：パッケージの属性を差し替えても、サブモジュールが読む名前は変わらないので効かない。却下
 
-## R4: 「DB に書く内容が変わらない」の確かめ方（FR-001・SC-002）
+**Decision**: pytest のプラグイン [snapshot_plugin.py](snapshot_plugin.py) で、全テスト（336 件）ごとに「登録されたスクレイパーの `fetch()`・`parse()`・`parse_departures()` が返したもの」と「DB を使うテストでは全テーブルの行」を JSON Lines に書き出し、[compare_snapshots.py](compare_snapshots.py) で整理の前後を比べる。手順は [quickstart.md](quickstart.md)。
 
-**Decision**: pytest のプラグイン [snapshot_plugin.py](snapshot_plugin.py) で、DB を使うテスト（270 件）ごとに終わったときの全テーブルの行を JSON Lines に書き出し、[compare_snapshots.py](compare_snapshots.py) で整理の前後を比べる。手順は [quickstart.md](quickstart.md)。
-
-- 書き出すのは `pytest_runtest_teardown`（フィクスチャの後片付けより先）。テーブルは `Base.metadata` から取る（`:memory:` の SQLite は接続が1つなので、`inspect()` で別の接続を開くとトランザクションがぶつかる）
-- 書かない列：`id`（挿入順で決まる代理キー）と実行時刻の列（`created_at`・`updated_at`・`scraped_at`・`checked_at`・`started_at`・`finished_at`）。行は中身で並べ替える
-- 整理の前に2回流し、2回で違ったセル（`datetime.now()` から時刻を作るテストの `scheduled_departure_at`・`content_hash` など）は比べない。`PYTHONHASHSEED=0` で流す
-- 確認済み（2026-11-02、変更前のコードで3回）：270 テスト・比べないセル 95・違い 0
+- 返したものも書く理由：マルエーのテストの多くは `parse_departures()` の戻り値を見るだけで DB に書かない。DB の行だけを比べると、その場面の違いを見逃す（わざと臨時便の文を変えたコードで、DB だけの比較は違い 0 だった）。`fetch()` は `raw_html_hash` の材料なので SHA-256 を書く。返したものは呼び出しの回・行の順番つきで書く（Base は同じキーで先の行を使うので、順番も振る舞いのうち）
+- 書き出すのは `pytest_runtest_teardown`（フィクスチャの後片付けより先）。テーブルは `Base.metadata` から取る（`:memory:` の SQLite は接続が1つなので、`inspect()` で別の接続を開くとトランザクションがぶつかる）。読めなくなったらロールバックせず、そこから先のテーブルを error にする（ロールバックするとまだコミットしていない行が消え、前後とも空で一致してしまう。PR #104 レビュー）
+- 書かない列：`id`（挿入順で決まる代理キー）と実行時刻の列（`created_at`・`updated_at`・`scraped_at`・`checked_at`・`started_at`・`finished_at`）
+- 比べ方（PR #104 レビュー）：
+  - 「前」は基点のコミットのコードで2回取る。テーブルごとに、2回で値の集まりが違う列（`datetime.now()` から時刻を作るテストの `scheduled_departure_at`・`scheduled_arrival_at`・`content_hash` など）を落とし、残りの列で行を多重集合として比べる。行の位置では照合しない（毎回変わる列で並び順が変わっても、ほかの列の違いを隠さない）
+  - 列を落としても前の2回が合わないテーブルと、error のテーブルは、確かめられないので違いに数える
+  - 3つのテストの集合が揃っていない（pytest が途中で止まった）、または取った日（`run_date`）が違えば、比べずに止める。テストは `date.today()` から日付を作るので、日が違うと正しい整理でも違いが出る
+  - `PYTHONHASHSEED=0` で流す（set の順で挿入順が変わるため）
+- 確認済み（2026-11-02）：基点のコード2回と今のブランチ（スクレイパーは未変更）で 336 テスト・違い 0。落とした列は `departure_statuses` の3列と `scraper_logs.error_message`。わざと臨時便の文を変えたコードでは違い 4 で止まる
+- 限り：テストが通る場面しか確かめられない。わざと `_REPLACEABLE_BY_EXTRA` を変えたマリックスのコードは、どのテストもその分岐を通らないので違い 0 だった。整理はメソッドを切り取って貼るだけ（FR-008）にして、ここは差分のレビューで見る
 - プラグインはリポジトリのテストに入れない（テストの数を変えない。FR-002）。`specs/17-scraper-refactor/` に置き、コンテナの `/tmp` にコピーして使う
 
-**Rationale**: 既存のテストは個々の値を確かめているが、確かめていない列（`status_detail` の文・`content_hash`・`source_url` など）の変化は見逃す。全部の行を前後で比べれば、テストが書かれている 270 の場面すべてで FR-001 を確かめられる。`content_hash` も比べるので、重複防止のハッシュ（III）が変わらないことも分かる。
+**Rationale**: 既存のテストは個々の値を確かめているが、確かめていない列・キー（`status_detail` の文・`content_hash`・`source_url` など）の変化は見逃す。返したものと全部の行を前後で比べれば、テストが書かれている 336 の場面すべてで FR-001 を確かめられる。`content_hash` も比べるので、重複防止のハッシュ（III）が変わらないことも分かる。
 
 **Alternatives considered**:
 - 本番に近いデータで両社を流して比べる：公式のページが毎回変わるので比べられない（spec Assumptions）。却下
-- 固定ページで両社を1回流すテストを足す：テストの数が変わる（FR-002）。場面も 270 より少ない。却下
+- 固定ページで両社を1回流すテストを足す：テストの数が変わる（FR-002）。場面も 336 より少ない。却下
 
 ## R5: 臨時便の処理を両社でまとめるか（US3・FR-006）
 

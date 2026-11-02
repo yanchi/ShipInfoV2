@@ -32,5 +32,5 @@
 
 | メソッド | 戻り値 | 使う会社 |
 |---|---|---|
-| `_load_routes()` | `(down_route, up_route)`。`origin_port` が「鹿児島」なら下り、「那覇」なら上り。`active` の航路だけ。無ければ `None` | マルエー・マリックス |
+| `_load_routes()` | `(down_route, up_route)`。`origin_port` が `ROUTE_ORIGINS[0]` なら下り、`ROUTE_ORIGINS[1]` なら上り。`active` の航路だけ。無ければ `None` | マルエー・マリックス（どちらも `ROUTE_ORIGINS = ("鹿児島", "那覇")`） |
 | `_load_stops(routes)` | `route_id → list[RouteStop]`（`stop_order` 昇順）。`routes` が空なら `{}` | マルエー・マリックス |
