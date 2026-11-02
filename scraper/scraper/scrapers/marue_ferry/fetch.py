@@ -41,13 +41,13 @@ from scraper.db.models import (
 from scraper.scrapers.marue_ferry.common import (
     SEARCH_URL,
     KAGOSHIMA_URL,
-    _SEARCH_ROWS,
+    SEARCH_ROWS,
     SearchRow,
     ShipInfo,
     RecordedVoyage,
     ExtraParse,
-    _parse_search_datetime,
-    _iso,
+    parse_search_datetime,
+    iso,
 )
 from scraper.scrapers.marue_ferry.state import MarueState
 from scraper.utils.ports import PortResolver
@@ -64,8 +64,7 @@ class FetchMixin(MarueState):
         self._search_count = 0
         self._recorded_cache: dict[tuple[str, int, datetime], RecordedVoyage] = {}
 
-        routes = [r for r in self._load_routes() if r]
-        self._stops = self._load_stops(routes)
+        routes = [r for r in self._routes if r]
         self._resolver = PortResolver.from_session(self.session)
         codes = self._load_port_codes()
         now = datetime.now()
@@ -185,7 +184,7 @@ class FetchMixin(MarueState):
             )
             .where(
                 DepartureStatus.route_id.in_([r.id for r in routes]),
-                _SEARCH_ROWS,
+                SEARCH_ROWS,
                 DepartureStatus.ship_name != "",
                 DepartureStatus.status.in_(
                     [
@@ -213,7 +212,7 @@ class FetchMixin(MarueState):
                 DepartureStatus.route_id == route_id,
                 DepartureStatus.port_id == port_id,
                 DepartureStatus.departure_date == d,
-                _SEARCH_ROWS,
+                SEARCH_ROWS,
             )
         ).scalar()
         if last_checked is None:
@@ -252,8 +251,8 @@ class FetchMixin(MarueState):
                     [
                         r.ship_name,
                         r.company_name,
-                        _iso(r.departure_at),
-                        _iso(r.arrival_at),
+                        iso(r.departure_at),
+                        iso(r.arrival_at),
                     ]
                     for r in rows
                 ]
@@ -313,8 +312,8 @@ class FetchMixin(MarueState):
                 return None
             ship_name, dep_text, arr_text, company_name = tds[1], tds[2], tds[3], tds[5]
             is_other = "マルエー" not in company_name
-            departure_at = _parse_search_datetime(dep_text)
-            arrival_at = _parse_search_datetime(arr_text)
+            departure_at = parse_search_datetime(dep_text)
+            arrival_at = parse_search_datetime(arr_text)
             if not is_other and (departure_at is None or arrival_at is None):
                 # 日時が読めない行も残す。抜港の港なら parse_departures() が skipped の行にする
                 self._log.warning(

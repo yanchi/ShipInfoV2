@@ -9,13 +9,13 @@ from scraper.db.models import (
     OperationStatusEnum,
 )
 from scraper.scrapers.marue_ferry.common import (
-    _SEVERITY,
-    _CONDITIONAL_WORDS,
+    SEVERITY,
+    CONDITIONAL_WORDS,
     VoyageStatus,
     ShipInfo,
-    _VOYAGE_LINE,
-    _VOYAGE_STATUS_END,
-    _nearest_date,
+    VOYAGE_LINE,
+    VOYAGE_STATUS_END,
+    nearest_date,
 )
 from scraper.scrapers.marue_ferry.state import MarueState
 
@@ -79,11 +79,11 @@ class ShipsMixin(MarueState):
         parsed = [(t, self._parse_status_text(t)) for t in texts]
         known = [(t, st) for t, st in parsed if st is not None]
         status = (
-            max((st for _, st in known), key=lambda s: _SEVERITY.get(s, 0))
+            max((st for _, st in known), key=lambda s: SEVERITY.get(s, 0))
             if known
             else None
         )
-        conditional = any(w in t for t, _ in known for w in _CONDITIONAL_WORDS)
+        conditional = any(w in t for t, _ in known for w in CONDITIONAL_WORDS)
         schedule_changed = any("遅延" in t or "スケジュール変更" in t for t, _ in known)
         return status, conditional, schedule_changed
 
@@ -91,14 +91,14 @@ class ShipsMixin(MarueState):
         """抜粋の便ごとの行を読む。年は今日にいちばん近い日付になる年。"""
         today = getattr(self, "_valid_date", None) or date.today()
         voyages: list[VoyageStatus] = []
-        for m in _VOYAGE_LINE.finditer(excerpt):
-            departure_date = _nearest_date(
+        for m in VOYAGE_LINE.finditer(excerpt):
+            departure_date = nearest_date(
                 int(m.group("month")), int(m.group("day")), today
             )
             if departure_date is None:
                 continue
             # 状態の語だけを見る。補足（「（与論港は欠航の可能性あり）」「※…欠航となる場合が…」）は捨てる
-            words = _VOYAGE_STATUS_END.split(m.group("status"), maxsplit=1)[0]
+            words = VOYAGE_STATUS_END.split(m.group("status"), maxsplit=1)[0]
             status, conditional, schedule_changed = self._classify(
                 re.split(r"[・、]", words)
             )
@@ -136,14 +136,14 @@ class ShipsMixin(MarueState):
             ),
             None,
         )
-        stops = self._get_stops().get(route_id, [])
+        stops = self._stops.get(route_id, [])
         return any(s.port_id == port.id for s in stops[1:-1])
 
     def _parse_status_text(self, text: str) -> OperationStatusEnum | None:
         """鹿児島ページの div.tag-list 内の span テキストからステータスを判定。"""
         if "欠航" in text:
             return OperationStatusEnum.cancelled
-        if any(w in text for w in _CONDITIONAL_WORDS):
+        if any(w in text for w in CONDITIONAL_WORDS):
             return OperationStatusEnum.delayed
         if "遅延" in text or "スケジュール変更" in text:
             return OperationStatusEnum.delayed

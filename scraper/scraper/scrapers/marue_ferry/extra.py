@@ -6,7 +6,7 @@
     - 出港時刻のある港ごとに、状態 extra の行を作る（終点の行は作らない）。今日〜MARUE_SEARCH_DAYS_AHEAD 日先だけ。
       抜粋に同じ臨時便の行（始発港から書いた・日付が始発港の出港日と同じ）が欠航・運休・条件付ならその状態と抜粋の文
     - 臨時便の行の目印は source_url（船の詳細ページの URL）。状態では見分けない。便検索から作る行は SEARCH_URL。
-      定期便の今の便・出港済み・前回の記録・2日先以降の検索間隔は、DB を読むとき _SEARCH_ROWS で臨時便の行を除く
+      定期便の今の便・出港済み・前回の記録・2日先以降の検索間隔は、DB を読むとき SEARCH_ROWS で臨時便の行を除く
     - 便検索の行と同じキー（航路・港・出港日・船）は便検索を優先して作らない。出港時刻が違えば便検索の行の詳細に
       「臨時便 HH:MM発あり」を足す（extra_voyage_key_conflict）
     - 臨時便の告知は港別情報に使わない（utils/port_notice.py の _detail_body が読み飛ばす）
@@ -27,18 +27,18 @@ from scraper.db.models import (
 )
 from scraper.scrapers.marue_ferry.common import (
     SEARCH_URL,
-    _SEARCH_ROWS,
-    _SAME_VOYAGE,
+    SEARCH_ROWS,
+    SAME_VOYAGE,
     ExtraStop,
     ExtraVoyage,
     ExtraParse,
-    _EXTRA_HEADING,
-    _EXTRA_STOP,
-    _EXTRA_TIME_PART,
-    _EXTRA_SKIP_NOTE,
-    _WEEKDAYS,
-    _nearest_date,
-    _iso,
+    EXTRA_HEADING,
+    EXTRA_STOP,
+    EXTRA_TIME_PART,
+    EXTRA_SKIP_NOTE,
+    WEEKDAYS,
+    nearest_date,
+    iso,
 )
 from scraper.scrapers.marue_ferry.state import MarueState
 
@@ -94,7 +94,7 @@ class ExtraMixin(MarueState):
                             route_id=key[0],
                             port_id=key[1],
                             date=str(key[2]),
-                            skipped_departure=_iso(departure_at),
+                            skipped_departure=iso(departure_at),
                         )
                         continue
                     seen.add(key)
@@ -122,7 +122,7 @@ class ExtraMixin(MarueState):
         寄らない港は、航路の寄港順にあって【臨時便】の並びに無い港。並びは寄港順に読んでいる（_build_extra_voyage）。
         便検索とぶつかって行を作らない港も並びにあるので寄港に数える。
         """
-        order = [s.port_id for s in self._get_stops().get(voyage.route_id, [])]
+        order = [s.port_id for s in self._stops.get(voyage.route_id, [])]
         called = {s.port_id for s in voyage.stops}
         last = order.index(voyage.stops[-1].port_id)
         return [
@@ -139,8 +139,8 @@ class ExtraMixin(MarueState):
                 DepartureStatus.route_id == voyage.route_id,
                 DepartureStatus.source_url == self._ships[voyage.ship_name].detail_url,
                 DepartureStatus.scheduled_arrival_at != arrival,
-                DepartureStatus.scheduled_arrival_at > arrival - _SAME_VOYAGE,
-                DepartureStatus.scheduled_arrival_at < arrival + _SAME_VOYAGE,
+                DepartureStatus.scheduled_arrival_at > arrival - SAME_VOYAGE,
+                DepartureStatus.scheduled_arrival_at < arrival + SAME_VOYAGE,
             )
         ).scalar()
         if before is not None:
@@ -148,8 +148,8 @@ class ExtraMixin(MarueState):
                 "extra_voyage_arrival_changed",
                 ship=voyage.ship_name,
                 route_id=voyage.route_id,
-                before=_iso(before),
-                after=_iso(arrival),
+                before=iso(before),
+                after=iso(arrival),
             )
 
     def _delete_withdrawn_extra_rows(self, records: list[dict]) -> None:
@@ -163,10 +163,8 @@ class ExtraMixin(MarueState):
         now = getattr(self, "_parse_now", None) or datetime.now()
         today = getattr(self, "_valid_date", None) or date.today()
         last = today + timedelta(days=settings.marue_search_days_ahead)
-        route_ids = [r.id for r in self._load_routes() if r]
-        origins = {
-            rid: stops[0].port_id for rid, stops in self._get_stops().items() if stops
-        }
+        route_ids = [r.id for r in self._routes if r]
+        origins = {rid: stops[0].port_id for rid, stops in self._stops.items() if stops}
         written = {
             (r["route_id"], r["port_id"], r["departure_date"], r["ship_name"])
             for r in records
@@ -256,7 +254,7 @@ class ExtraMixin(MarueState):
                 and self._departure_date(voyage.route_id, arrival) == origin_date
             ):
                 return True
-        stops = self._get_stops().get(voyage.route_id, [])
+        stops = self._stops.get(voyage.route_id, [])
         if not stops:
             return False
         arrival_date = origin_date + timedelta(
@@ -269,7 +267,7 @@ class ExtraMixin(MarueState):
                 .where(
                     DepartureStatus.ship_name == voyage.ship_name,
                     DepartureStatus.route_id == voyage.route_id,
-                    _SEARCH_ROWS,
+                    SEARCH_ROWS,
                     DepartureStatus.scheduled_arrival_at >= start,
                     DepartureStatus.scheduled_arrival_at < start + timedelta(days=1),
                 )
@@ -286,7 +284,7 @@ class ExtraMixin(MarueState):
             select(DepartureStatus.port_id, DepartureStatus.departure_date).where(
                 DepartureStatus.ship_name == voyage.ship_name,
                 DepartureStatus.route_id == voyage.route_id,
-                _SEARCH_ROWS,
+                SEARCH_ROWS,
                 DepartureStatus.departure_date >= first,
                 DepartureStatus.departure_date <= last,
             )
@@ -309,8 +307,8 @@ class ExtraMixin(MarueState):
             route_id=voyage.route_id,
             port_id=searched["port_id"],
             date=str(searched["departure_date"]),
-            search_departure=_iso(recorded_at),
-            extra_departure=_iso(departure_at),
+            search_departure=iso(recorded_at),
+            extra_departure=iso(departure_at),
         )
 
     def _parse_extra_voyages(
@@ -332,7 +330,7 @@ class ExtraMixin(MarueState):
         current: tuple[str, str, list[str]] | None = None
         for p in archive.find_all("p"):
             text = p.get_text(" ", strip=True).replace("\xa0", " ").strip()
-            heading = _EXTRA_HEADING.match(text)
+            heading = EXTRA_HEADING.match(text)
             if heading:
                 current = (text, heading.group("direction"), [])
                 blocks.append(current)
@@ -363,9 +361,7 @@ class ExtraMixin(MarueState):
             ),
             None,
         )
-        order = {
-            s.port_id: i for i, s in enumerate(self._get_stops().get(route_id, []))
-        }
+        order = {s.port_id: i for i, s in enumerate(self._stops.get(route_id, []))}
 
         def unreadable(line: str) -> None:
             self._log.warning(
@@ -384,12 +380,12 @@ class ExtraMixin(MarueState):
             if not line:
                 continue
             if line.startswith("※"):
-                if _EXTRA_SKIP_NOTE.search(line):
+                if EXTRA_SKIP_NOTE.search(line):
                     skip_note = line
                 continue
-            m = _EXTRA_STOP.match(line)
+            m = EXTRA_STOP.match(line)
             day = (
-                _nearest_date(int(m.group("month")), int(m.group("day")), today)
+                nearest_date(int(m.group("month")), int(m.group("day")), today)
                 if m
                 else None
             )
@@ -397,7 +393,7 @@ class ExtraMixin(MarueState):
             if (
                 m is None
                 or day is None
-                or _WEEKDAYS[day.weekday()] != m.group("weekday")
+                or WEEKDAYS[day.weekday()] != m.group("weekday")
                 or port is None
                 or order.get(port.id, -1) <= last_order
             ):
@@ -405,7 +401,7 @@ class ExtraMixin(MarueState):
                 return None
             times = {
                 kind: datetime(day.year, day.month, day.day, int(h), int(mi))
-                for h, mi, kind in _EXTRA_TIME_PART.findall(m.group("times"))
+                for h, mi, kind in EXTRA_TIME_PART.findall(m.group("times"))
             }
             arrival, departure = times.get("入港"), times.get("出港")
             if (

@@ -11,9 +11,8 @@ from sqlalchemy import select
 from scraper.db.models import (
     FerryCompany,
     PortCompanyCode,
-    RouteStop,
 )
-from scraper.scrapers.base import BaseScraper
+from scraper.scrapers.base import AMAMI_ROUTE_ORIGINS, TwoWayScraper
 from scraper.scrapers.marue_ferry.common import (
     SearchRow,
     ShipInfo,
@@ -26,15 +25,14 @@ from scraper.utils.port_notice import (
 from scraper.utils.ports import PortResolver
 
 
-class MarueState(BaseScraper):
-    ROUTE_ORIGINS = ("鹿児島", "那覇")
+class MarueState(TwoWayScraper):
+    ROUTE_ORIGINS = AMAMI_ROUTE_ORIGINS
 
     # fetch()・parse_departures() などで代入する（代入するまで属性は無い）
     _search_count: int
     _valid_date: date
     _searches: dict[tuple[int, int, date], list[SearchRow] | None]
     _recorded_cache: dict[tuple[str, int, datetime], RecordedVoyage]
-    _stops: dict[int, list[RouteStop]]
     _resolver: PortResolver
     _ships: dict[str, ShipInfo]
     _voyage_cache: dict[tuple[str, int, date, datetime | None], ShipInfo]
@@ -52,7 +50,7 @@ class MarueState(BaseScraper):
 
     def _route_directions(self) -> dict[int, str]:
         if not hasattr(self, "_directions"):
-            down, up = self._load_routes()
+            down, up = self._routes
             self._directions = {
                 r.id: label for r, label in ((down, "下り"), (up, "上り")) if r
             }
@@ -62,11 +60,6 @@ class MarueState(BaseScraper):
         if not hasattr(self, "_resolver"):
             self._resolver = PortResolver.from_session(self.session)
         return self._resolver
-
-    def _get_stops(self) -> dict[int, list[RouteStop]]:
-        if not hasattr(self, "_stops"):
-            self._stops = self._load_stops([r for r in self._load_routes() if r])
-        return self._stops
 
     def _load_port_codes(self) -> dict[int, str]:
         rows = (

@@ -25,7 +25,7 @@ from scraper.db.models import (
 from scraper.scrapers.marue_ferry.common import (
     SEARCH_URL,
     KAGOSHIMA_URL,
-    _SEVERITY,
+    SEVERITY,
     ShipInfo,
 )
 from scraper.scrapers.marue_ferry.state import MarueState
@@ -40,7 +40,7 @@ class StatusesMixin(MarueState):
     # ------------------------------------------------------------------
 
     def parse(self, html: str) -> list[dict]:
-        down_route, up_route = self._load_routes()
+        down_route, up_route = self._routes
         if down_route is None:
             self._log.warning("route_not_found", direction="down")
         if up_route is None:
@@ -71,7 +71,7 @@ class StatusesMixin(MarueState):
         self, route: Route, ships: dict[str, ShipInfo], valid_date: date
     ) -> tuple[OperationStatusEnum, str | None, str]:
         """(status, status_detail, source_url)。今日の始発港の検索結果で方向ごとに判定する（research R10）。"""
-        stops = getattr(self, "_stops", {}).get(route.id, [])
+        stops = self._stops.get(route.id, [])
         rows = None
         if stops:
             rows = getattr(self, "_searches", {}).get(
@@ -114,7 +114,7 @@ class StatusesMixin(MarueState):
             self._log.warning(
                 "mixed_ship_statuses", statuses=sorted({s.status.value for s in known})
             )
-        worst = max(known, key=lambda s: _SEVERITY.get(s.status, 0))
+        worst = max(known, key=lambda s: SEVERITY.get(s.status, 0))
         return worst.status, self._ship_detail_text(worst)
 
     # ------------------------------------------------------------------

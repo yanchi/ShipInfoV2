@@ -3,6 +3,7 @@ import hashlib
 import json
 from abc import ABC, abstractmethod
 from datetime import datetime
+from functools import cached_property
 
 import structlog
 from sqlalchemy import delete, or_, select
@@ -25,8 +26,6 @@ class BaseScraper(ABC):
     """Abstract base class for all ferry company scrapers."""
 
     company_id: int
-    # (下りの始発港, 上りの始発港)。_load_routes() を使う会社が決める
-    ROUTE_ORIGINS: tuple[str, str]
 
     def __init__(
         self, session: Session, company_id: int, *, retry_post: bool = False
@@ -366,26 +365,38 @@ class BaseScraper(ABC):
 
         return created, updated
 
-    def _load_stops(self, routes: list[Route]) -> dict[int, list[RouteStop]]:
-        """route_id → 寄港順（stop_order 昇順）。"""
-        if not routes:
-            return {}
-        rows = (
-            self.session.execute(
-                select(RouteStop)
-                .where(RouteStop.route_id.in_([r.id for r in routes]))
-                .order_by(RouteStop.route_id, RouteStop.stop_order)
-            )
-            .scalars()
-            .all()
-        )
-        result: dict[int, list[RouteStop]] = {}
-        for row in rows:
-            result.setdefault(row.route_id, []).append(row)
-        return result
 
-    def _load_routes(self) -> tuple:
-        """(down_route, up_route) を返す。origin_port で判定。"""
+# 鹿児島〜那覇（奄美航路）の (下りの始発港, 上りの始発港)。マルエーとマリックスが同じ航路を走る
+AMAMI_ROUTE_ORIGINS = ("鹿児島", "那覇")
+
+
+class TwoWayScraper(BaseScraper):
+    """下り・上りの2航路を持つ会社のスクレイパー。航路と寄港順をインスタンスごとに1回だけ読む。
+
+    ROUTE_ORIGINS を決めないとクラスを定義した時点で TypeError になる
+    （mixin が親のを継いでいればよい）。
+    """
+
+    # (下りの始発港, 上りの始発港)。routes.origin_port と比べる
+    ROUTE_ORIGINS: tuple[str, str]
+
+    def __init_subclass__(cls, **kwargs) -> None:
+        super().__init_subclass__(**kwargs)
+        origins = getattr(cls, "ROUTE_ORIGINS", None)
+        if (
+            not isinstance(origins, tuple)
+            or len(origins) != 2
+            or not all(isinstance(o, str) and o for o in origins)
+            or origins[0] == origins[1]
+        ):
+            raise TypeError(
+                f"{cls.__name__}.ROUTE_ORIGINS には (下りの始発港, 上りの始発港) の"
+                f"2つの違う港名を入れること（今は {origins!r}）"
+            )
+
+    @cached_property
+    def _routes(self) -> tuple[Route | None, Route | None]:
+        """(down_route, up_route)。origin_port で判定。無い方向は None。"""
         routes = (
             self.session.execute(
                 select(Route).where(
@@ -399,3 +410,23 @@ class BaseScraper(ABC):
         down = next((r for r in routes if r.origin_port == self.ROUTE_ORIGINS[0]), None)
         up = next((r for r in routes if r.origin_port == self.ROUTE_ORIGINS[1]), None)
         return down, up
+
+    @cached_property
+    def _stops(self) -> dict[int, list[RouteStop]]:
+        """route_id → 寄港順（stop_order 昇順）。_routes の航路だけ。"""
+        route_ids = [r.id for r in self._routes if r]
+        if not route_ids:
+            return {}
+        rows = (
+            self.session.execute(
+                select(RouteStop)
+                .where(RouteStop.route_id.in_(route_ids))
+                .order_by(RouteStop.route_id, RouteStop.stop_order)
+            )
+            .scalars()
+            .all()
+        )
+        result: dict[int, list[RouteStop]] = {}
+        for row in rows:
+            result.setdefault(row.route_id, []).append(row)
+        return result
