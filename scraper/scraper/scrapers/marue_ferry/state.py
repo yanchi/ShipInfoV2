@@ -1,4 +1,8 @@
-"""マルエーフェリーの状態（インスタンス変数）と、マルエーだけの読み込み。"""
+"""マルエーフェリーの状態（インスタンス変数）と、マルエーだけの読み込み。
+
+fetch・ships・voyages・extra・statuses の mixin は、互いのメソッドを self. で呼ぶ。
+mixin を1つだけ使わず、必ず MarueFerry（__init__.py）で全部組んで使うこと。
+"""
 
 from datetime import date, datetime
 
