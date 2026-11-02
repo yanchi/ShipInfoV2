@@ -6,8 +6,10 @@ MarueFerry スクレイパーのユニットテスト。
 DBは SQLite in-memory を使用（conftest.py の db_session / marue_ferry_company フィクスチャ）。
 """
 
+import importlib
+import pkgutil
 import re
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from datetime import date, datetime, timedelta
 from unittest.mock import patch
 from urllib.parse import parse_qs
@@ -18,6 +20,7 @@ import structlog
 from sqlalchemy import select
 
 from scraper.db.models import DepartureStatus, OperationStatusEnum, Route
+from scraper.scrapers import marue_ferry
 from scraper.scrapers.marue_ferry import (
     KAGOSHIMA_URL,
     SEARCH_URL,
@@ -46,6 +49,13 @@ KAGOSHIMA, NAZE, KAMETOKU, WADOMARI, YORON, MOTOBU, NAHA = (
 # ---------------------------------------------------------------------------
 
 
+# marue_ferry パッケージの全サブモジュール（足したときに直し忘れないよう、手で並べない）
+CLOCK_MODULES = tuple(
+    f"{marue_ferry.__name__}.{m.name}"
+    for m in pkgutil.iter_modules(marue_ferry.__path__)
+)
+
+
 @contextmanager
 def fixed_now(now: datetime = NOW):
     """marue_ferry と base の date.today() / datetime.now() を固定する。"""
@@ -60,17 +70,19 @@ def fixed_now(now: datetime = NOW):
         def now(cls, tz=None):
             return now
 
-    with (
-        patch("scraper.scrapers.marue_ferry.date", _Date),
-        patch("scraper.scrapers.marue_ferry.datetime", _DateTime),
-        patch("scraper.scrapers.base.datetime", _DateTime),
-    ):
+    with ExitStack() as stack:
+        for module in CLOCK_MODULES:
+            # そのファイルが import している名前だけ差し替える
+            for name, fake in (("date", _Date), ("datetime", _DateTime)):
+                if hasattr(importlib.import_module(module), name):
+                    stack.enter_context(patch(f"{module}.{name}", fake))
+        stack.enter_context(patch("scraper.scrapers.base.datetime", _DateTime))
         yield
 
 
 @pytest.fixture(autouse=True)
 def no_sleep():
-    with patch("scraper.scrapers.marue_ferry.time.sleep") as sleep:
+    with patch("scraper.scrapers.marue_ferry.fetch.time.sleep") as sleep:
         yield sleep
 
 
@@ -3018,7 +3030,7 @@ def test_extra_voyage_rows_respect_search_days_ahead(
     """FR-009：MARUE_SEARCH_DAYS_AHEAD の外の日付は作らない。"""
     company, _ = marue_with_ports
     monkeypatch.setattr(
-        "scraper.scrapers.marue_ferry.settings.marue_search_days_ahead", 1
+        "scraper.scrapers.marue_ferry.extra.settings.marue_search_days_ahead", 1
     )
 
     _, _, departures, _ = run_1026(db_session, company.id, down_1025_rows())
