@@ -18,6 +18,7 @@ from scraper.db.models import (
     ScraperStatusEnum,
 )
 from scraper.utils.http import create_session
+from scraper.utils.ports import PortResolver
 
 log = structlog.get_logger()
 
@@ -366,15 +367,22 @@ class BaseScraper(ABC):
         return created, updated
 
 
-# 鹿児島〜那覇（奄美航路）の (下りの始発港, 上りの始発港)。マルエーとマリックスが同じ航路を走る
-AMAMI_ROUTE_ORIGINS = ("鹿児島", "那覇")
+def _is_abstract(cls: type) -> bool:
+    """抽象メソッドが残っているか。__init_subclass__ の時点では __abstractmethods__ がまだ親のままなので自前で見る。"""
+    return any(
+        getattr(getattr(cls, name, None), "__isabstractmethod__", False)
+        for name in dir(cls)
+    )
 
 
 class TwoWayScraper(BaseScraper):
-    """下り・上りの2航路を持つ会社のスクレイパー。航路と寄港順をインスタンスごとに1回だけ読む。
+    """下り・上りの2航路を持つ会社のスクレイパー。航路・寄港順・港名の引き当てを遅延ロードする。
 
-    ROUTE_ORIGINS を決めないとクラスを定義した時点で TypeError になる
-    （mixin が親のを継いでいればよい）。
+    ROUTE_ORIGINS を決めないと、具体クラス（抽象メソッドが残っていないクラス）を定義した時点で
+    TypeError になる。mixin や中間の抽象クラスは決めなくてよい（具体クラスが継いでいればよい）。
+
+    cached_property のキャッシュは fetch() の頭で _reset_caches() を呼んで捨てる
+    （同じインスタンスで fetch() をもう一度呼んでも、DB を読み直す）。
     """
 
     # (下りの始発港, 上りの始発港)。routes.origin_port と比べる
@@ -382,6 +390,8 @@ class TwoWayScraper(BaseScraper):
 
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
+        if _is_abstract(cls):
+            return
         origins = getattr(cls, "ROUTE_ORIGINS", None)
         if (
             not isinstance(origins, tuple)
@@ -394,22 +404,43 @@ class TwoWayScraper(BaseScraper):
                 f"2つの違う港名を入れること（今は {origins!r}）"
             )
 
+    def _reset_caches(self) -> None:
+        """このクラス（と親）の cached_property のキャッシュを全部捨てる。"""
+        for klass in type(self).__mro__:
+            for name, attr in vars(klass).items():
+                if isinstance(attr, cached_property):
+                    self.__dict__.pop(name, None)
+
     @cached_property
     def _routes(self) -> tuple[Route | None, Route | None]:
-        """(down_route, up_route)。origin_port で判定。無い方向は None。"""
+        """(down_route, up_route)。origin_port で判定。無い方向は None。
+
+        同じ始発港の有効な航路が2件以上あれば、id がいちばん小さい航路を使って警告を出す。
+        """
         routes = (
             self.session.execute(
-                select(Route).where(
+                select(Route)
+                .where(
                     Route.ferry_company_id == self.company_id,
                     Route.active.is_(True),
                 )
+                .order_by(Route.id)
             )
             .scalars()
             .all()
         )
-        down = next((r for r in routes if r.origin_port == self.ROUTE_ORIGINS[0]), None)
-        up = next((r for r in routes if r.origin_port == self.ROUTE_ORIGINS[1]), None)
-        return down, up
+        picked: list[Route | None] = []
+        for origin in self.ROUTE_ORIGINS:
+            matched = [r for r in routes if r.origin_port == origin]
+            if len(matched) > 1:
+                self._log.warning(
+                    "route_ambiguous",
+                    origin_port=origin,
+                    route_ids=[r.id for r in matched],
+                    used=matched[0].id,
+                )
+            picked.append(matched[0] if matched else None)
+        return picked[0], picked[1]
 
     @cached_property
     def _stops(self) -> dict[int, list[RouteStop]]:
@@ -430,3 +461,8 @@ class TwoWayScraper(BaseScraper):
         for row in rows:
             result.setdefault(row.route_id, []).append(row)
         return result
+
+    @cached_property
+    def _resolver(self) -> PortResolver:
+        """港名 → 港（ports の名前・別名）。"""
+        return PortResolver.from_session(self.session)

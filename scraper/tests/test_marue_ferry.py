@@ -2803,7 +2803,7 @@ def test_extra_voyages_are_read_from_detail_page(db_session, marue_with_ports):
         "※ 亀徳港(徳之島)、和泊港(沖永良部島)、与論港(与論島)には寄港いたしません。"
     )
     assert up.skip_note is None
-    routes = scraper._route_directions()
+    routes = scraper._directions
     assert routes[down.route_id] == "下り" and routes[up.route_id] == "上り"
     # 【欠航】の「9月27日(火)」は臨時便ではないので警告も出ない
     assert not [log for log in logs if log["log_level"] == "warning"]

@@ -11,6 +11,34 @@ from scraper.db.models import (
     OperationStatusEnum,
 )
 
+# marue_ferry パッケージの中で共有する名前（パッケージの外からは __init__.py の名前を使う）
+__all__ = [
+    "SEARCH_URL",
+    "KAGOSHIMA_URL",
+    "SEARCH_ROWS",
+    "SEVERITY",
+    "SAME_VOYAGE",
+    "CONDITIONAL_WORDS",
+    "SearchRow",
+    "VoyageStatus",
+    "ShipInfo",
+    "RecordedVoyage",
+    "ExtraStop",
+    "ExtraVoyage",
+    "ExtraParse",
+    "VOYAGE_LINE",
+    "VOYAGE_STATUS_END",
+    "EXTRA_HEADING",
+    "EXTRA_TIME",
+    "EXTRA_STOP",
+    "EXTRA_TIME_PART",
+    "EXTRA_SKIP_NOTE",
+    "WEEKDAYS",
+    "nearest_date",
+    "parse_search_datetime",
+    "iso_or_none",
+]
+
 SEARCH_URL = "https://www.aline-ferry.com/search/result.php"
 
 KAGOSHIMA_URL = "https://www.aline-ferry.com/kagoshima/"
@@ -177,5 +205,5 @@ def parse_search_datetime(text: str) -> datetime | None:
         return None
 
 
-def iso(v: datetime | None) -> str | None:
+def iso_or_none(v: datetime | None) -> str | None:
     return v.isoformat() if v else None

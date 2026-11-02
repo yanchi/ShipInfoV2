@@ -124,16 +124,12 @@ class ShipsMixin(MarueState):
         # 「発」があれば最後の「発」より前、無ければ方向の手前の全部。最後に出てくる港が出発港
         # （「名瀬経由 那覇港発」のように先に別の港名があっても、発の港を取る）
         head = place.rpartition("発")[0] if "発" in place else place
-        occurrences = self._get_resolver().find_occurrences(head)
+        occurrences = self._resolver.find_occurrences(head)
         if not occurrences:
             return False
         port = occurrences[-1][2]
         route_id = next(
-            (
-                rid
-                for rid, label in self._route_directions().items()
-                if label == direction
-            ),
+            (rid for rid, label in self._directions.items() if label == direction),
             None,
         )
         stops = self._stops.get(route_id, [])

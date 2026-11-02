@@ -131,7 +131,6 @@ class StatusesMixin(MarueState):
         self._parse_now = (
             now  # 臨時便の削除（_upsert_departures）も同じ「今」で判断する
         )
-        self._get_resolver()
         self._notices: dict[str, list[PortNotice]] = {}
 
         # 船ごとに「まだ着いていない一番早い便」(route_id, arrival_at) を決める（research R9）

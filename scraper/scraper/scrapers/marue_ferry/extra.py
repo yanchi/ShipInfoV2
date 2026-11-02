@@ -38,7 +38,7 @@ from scraper.scrapers.marue_ferry.common import (
     EXTRA_SKIP_NOTE,
     WEEKDAYS,
     nearest_date,
-    iso,
+    iso_or_none,
 )
 from scraper.scrapers.marue_ferry.state import MarueState
 
@@ -94,7 +94,7 @@ class ExtraMixin(MarueState):
                             route_id=key[0],
                             port_id=key[1],
                             date=str(key[2]),
-                            skipped_departure=iso(departure_at),
+                            skipped_departure=iso_or_none(departure_at),
                         )
                         continue
                     seen.add(key)
@@ -148,8 +148,8 @@ class ExtraMixin(MarueState):
                 "extra_voyage_arrival_changed",
                 ship=voyage.ship_name,
                 route_id=voyage.route_id,
-                before=iso(before),
-                after=iso(arrival),
+                before=iso_or_none(before),
+                after=iso_or_none(arrival),
             )
 
     def _delete_withdrawn_extra_rows(self, records: list[dict]) -> None:
@@ -220,7 +220,7 @@ class ExtraMixin(MarueState):
         if ship is None or not ship.voyages:
             return extra
         origin_date = voyage.stops[0].departure_at.date()
-        direction = self._route_directions().get(voyage.route_id)
+        direction = self._directions.get(voyage.route_id)
         line = next(
             (
                 v
@@ -307,8 +307,8 @@ class ExtraMixin(MarueState):
             route_id=voyage.route_id,
             port_id=searched["port_id"],
             date=str(searched["departure_date"]),
-            search_departure=iso(recorded_at),
-            extra_departure=iso(departure_at),
+            search_departure=iso_or_none(recorded_at),
+            extra_departure=iso_or_none(departure_at),
         )
 
     def _parse_extra_voyages(
@@ -354,11 +354,7 @@ class ExtraMixin(MarueState):
     ) -> ExtraVoyage | None:
         """臨時便1つの行 → ExtraVoyage。読めなければ警告を出して None。"""
         route_id = next(
-            (
-                rid
-                for rid, label in self._route_directions().items()
-                if label == direction
-            ),
+            (rid for rid, label in self._directions.items() if label == direction),
             None,
         )
         order = {s.port_id: i for i, s in enumerate(self._stops.get(route_id, []))}
@@ -389,7 +385,7 @@ class ExtraMixin(MarueState):
                 if m
                 else None
             )
-            port = self._get_resolver().resolve(m.group("port")) if m else None
+            port = self._resolver.resolve(m.group("port")) if m else None
             if (
                 m is None
                 or day is None

@@ -47,10 +47,9 @@ from scraper.scrapers.marue_ferry.common import (
     RecordedVoyage,
     ExtraParse,
     parse_search_datetime,
-    iso,
+    iso_or_none,
 )
 from scraper.scrapers.marue_ferry.state import MarueState
-from scraper.utils.ports import PortResolver
 
 
 class FetchMixin(MarueState):
@@ -59,13 +58,13 @@ class FetchMixin(MarueState):
     # ------------------------------------------------------------------
 
     def fetch(self) -> str:
+        self._reset_caches()
         self._valid_date = date.today()
         self._searches: dict[tuple[int, int, date], list[SearchRow] | None] = {}
         self._search_count = 0
         self._recorded_cache: dict[tuple[str, int, datetime], RecordedVoyage] = {}
 
         routes = [r for r in self._routes if r]
-        self._resolver = PortResolver.from_session(self.session)
         codes = self._load_port_codes()
         now = datetime.now()
 
@@ -142,7 +141,7 @@ class FetchMixin(MarueState):
         途中の港から書いた行（from_midway）は始発の出港日が1日前のこともあるので、行の日付と前日の両方を
         始発の出港日とみなす。始発港の行は行の日付だけ（前日の存在しない便は検索しない）。
         """
-        directions = self._route_directions()
+        directions = self._directions
         first = self._valid_date + timedelta(days=2)
         last = self._valid_date + timedelta(days=settings.marue_search_days_ahead)
         keys: set[tuple[int, int, date]] = set()
@@ -251,8 +250,8 @@ class FetchMixin(MarueState):
                     [
                         r.ship_name,
                         r.company_name,
-                        iso(r.departure_at),
-                        iso(r.arrival_at),
+                        iso_or_none(r.departure_at),
+                        iso_or_none(r.arrival_at),
                     ]
                     for r in rows
                 ]

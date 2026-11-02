@@ -326,7 +326,7 @@ class VoyagesMixin(MarueState):
         1. 出港日が同じ行を優先する
         2. 無ければ、途中の港から書いた行だけ、出港日〜下船日の範囲で合わせる（R1・R7）
         """
-        direction = self._route_directions().get(route_id)
+        direction = self._directions.get(route_id)
         same_direction = [v for v in ship.voyages if v.direction == direction]
         exact = next(
             (v for v in same_direction if v.departure_date == origin_date), None

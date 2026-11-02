@@ -96,7 +96,8 @@ from bs4 import BeautifulSoup, Tag
 from sqlalchemy import delete, func, select
 
 from scraper.db.models import DepartureStatus, OperationStatusEnum, Route, RouteStop
-from scraper.scrapers.base import AMAMI_ROUTE_ORIGINS, TwoWayScraper
+from scraper.scrapers.base import TwoWayScraper
+from scraper.scrapers.routes import AMAMI_ROUTE_ORIGINS
 from scraper.utils.ports import PortResolver
 
 SOURCE_URL = "https://marixline.com/service/"
@@ -136,6 +137,7 @@ class MarixLine(TwoWayScraper):
     ROUTE_ORIGINS = AMAMI_ROUTE_ORIGINS
 
     def fetch(self) -> str:
+        self._reset_caches()
         resp = self.http.get(SOURCE_URL, timeout=30)
         resp.raise_for_status()
         resp.encoding = resp.apparent_encoding
@@ -285,7 +287,7 @@ class MarixLine(TwoWayScraper):
         if not list_html:
             return []
         detail_pages = getattr(self, "_detail_pages", {})
-        resolver = PortResolver.from_session(self.session)
+        resolver = self._resolver
         down_route, up_route = self._routes
         stops = self._stops
 
