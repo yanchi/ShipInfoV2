@@ -1,7 +1,7 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}{{ currentPort ? currentPort.displayName ~ '発 フェリー運航状況（今日・明日）' : '港別運航情報' }}{% endblock %}
-{% block description %}{% if currentPort %}{{ currentPort.displayName }}を出るフェリーの今日・明日の運航状況と出港時刻。マルエーフェリー・マリックスラインの欠航・遅延を4日分、毎時更新でお知らせします。{% else %}鹿児島〜那覇・奄美大島間の各港を出るフェリーの出港時刻と運航状況。マルエーフェリー・マリックスラインの今日から4日分の欠航・遅延情報を港ごとに確認できます。{% endif %}{% endblock %}
+{% block title %}{{ currentPort ? currentPort.displayName ~ '発 フェリー運航状況（今日・明日）' : '港別 フェリー運航状況（今日・明日）' }}{% endblock %}
+{% block description %}{% if currentPort %}{{ currentPort.displayName }}を出るフェリーの今日・明日の運航状況と出港時刻。マルエーフェリー・マリックスラインの欠航・遅延を4日分、毎時更新でお知らせします。{% else %}鹿児島〜奄美・沖縄の各港を出るフェリーの出港時刻と運航状況。マルエーフェリー・マリックスラインの今日・明日から4日分の欠航・遅延を、港ごとに毎時更新でお知らせします。{% endif %}{% endblock %}
 
 {% block body %}
 <div class="container pt-3 pb-4">

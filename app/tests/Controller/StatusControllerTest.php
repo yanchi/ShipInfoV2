@@ -613,9 +613,9 @@ class StatusControllerTest extends WebTestCase
     {
         $crawler = $this->client->request('GET', '/');
 
-        $this->assertSame('鹿児島〜沖縄・奄美大島フェリー運航情報', $crawler->filter('title')->text());
+        $this->assertSame('鹿児島〜奄美・沖縄 フェリー運航状況（今日・明日）| 欠航・遅延をリアルタイム確認', $crawler->filter('title')->text());
         $this->assertSame(
-            'マルエーフェリー・マリックスラインの鹿児島〜那覇・奄美大島間フェリーの最新運航状況。欠航・遅延情報を毎時更新。旅行前に出発港・到着港の運航状況をご確認ください。',
+            '鹿児島〜奄美大島・徳之島・沖永良部・与論・沖縄（奄美航路）のフェリー運航状況。マルエーフェリー・マリックスラインの今日・明日の欠航・遅延を毎時更新し、リアルタイムで確認できます。',
             $crawler->filter('meta[name="description"]')->attr('content'),
         );
     }
@@ -623,13 +623,25 @@ class StatusControllerTest extends WebTestCase
     public function testPageTitleFormat(): void
     {
         $crawler = $this->client->request('GET', '/ports');
-        $this->assertSame('港別運航情報 | 鹿児島〜沖縄フェリー運航状況', $crawler->filter('title')->text());
+        $this->assertSame('港別 フェリー運航状況（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報', $crawler->filter('title')->text());
 
         $this->createPortBoardData();
         $id      = $this->companyId('港別テスト運航会社');
         $crawler = $this->client->request('GET', "/company/{$id}");
-        $this->assertSame('港別テスト運航会社 運航状況 | 鹿児島〜沖縄フェリー運航状況', $crawler->filter('title')->text());
+        $this->assertSame('港別テスト運航会社 運航状況（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報', $crawler->filter('title')->text());
         $this->assertStringContainsString('港別テスト運航会社', $crawler->filter('meta[name="description"]')->attr('content'));
+    }
+
+    /** 表記は「運航」。「運行」はどのページにも出さない（18-port-seo-pages SC-005） */
+    public function testNoUnkoSpellingOnAnyPage(): void
+    {
+        $this->createPortBoardData();
+        $id = $this->companyId('港別テスト運航会社');
+        foreach (['/', '/ports', '/ports/naze', "/company/{$id}"] as $url) {
+            $this->client->request('GET', $url);
+            $this->assertResponseIsSuccessful($url);
+            $this->assertStringNotContainsString('運行', (string) $this->client->getResponse()->getContent(), $url);
+        }
     }
 
     /** 社名に & < " ' を含んでも og タグが二重にエスケープされない */
@@ -639,7 +651,7 @@ class StatusControllerTest extends WebTestCase
 
         $crawler = $this->client->request('GET', "/company/{$id}");
 
-        $this->assertSame("A&B<汽船>\"' 運航状況 | 鹿児島〜沖縄フェリー運航状況", $crawler->filter('title')->text());
+        $this->assertSame("A&B<汽船>\"' 運航状況（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報", $crawler->filter('title')->text());
         $this->assertSame($crawler->filter('title')->text(), $crawler->filter('meta[property="og:title"]')->attr('content'));
         $this->assertSame($crawler->filter('meta[name="description"]')->attr('content'), $crawler->filter('meta[property="og:description"]')->attr('content'));
         $this->assertStringContainsString('A&B<汽船>"\'', $crawler->filter('meta[property="og:description"]')->attr('content'));
@@ -1091,7 +1103,7 @@ class StatusControllerTest extends WebTestCase
             $this->assertStringStartsWith('名瀬発', trim((new Crawler($row))->filter('.fw-bold')->text()));
         }
         $this->assertSelectorTextContains('h1', '奄美大島（名瀬港）発の運航状況');
-        $this->assertStringStartsWith('奄美大島（名瀬港）発 フェリー運航状況（今日・明日）', trim($crawler->filter('title')->text()));
+        $this->assertSame('奄美大島（名瀬港）発 フェリー運航状況（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報', trim($crawler->filter('title')->text()));
         $this->assertStringContainsString('奄美大島（名瀬港）を出るフェリー', $crawler->filter('meta[name="description"]')->attr('content'));
         // canonical はクエリ無し
         $this->assertSame('http://localhost/ports/naze', $crawler->filter('link[rel="canonical"]')->attr('href'));

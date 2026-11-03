@@ -37,11 +37,11 @@
 **Goal**: トップ・港別・会社別・既定のタイトルと説明文を contracts/seo-meta.md にする（FR-014〜FR-021）
 **Independent Test**: 各ページの `<title>`・`meta description` が contracts のとおりで、HTML に「運行」が 0 件
 
-- [ ] T015 [P] [US2] app/config/packages/twig.yaml：`site_top_title`・`title_suffix` を contracts/seo-meta.md の値にし、コメントを「18-port-seo-pages で検索向けに変えた（それ以外は V1 のまま）」に直す
-- [ ] T016 [P] [US2] app/templates/base.html.twig・app/templates/status/index.html.twig・app/templates/status/company.html.twig・app/templates/status/ports.html.twig（全港）：説明文と会社別・全港のタイトルを contracts/seo-meta.md にする
-- [ ] T017 [US2] app/tests/Controller/StatusControllerTest.php・app/tests/Controller/ErrorPageTest.php：タイトルの期待値を直し、トップ・港別・会社別・港のページ・エラーページ（404）で description と「運行」が 0 件であることを確かめるテストを足す（SC-005）
-- [ ] T018 [P] [US2] specs/7-v1-branding/spec.md の FR-004 の下に「18-port-seo-pages で置き換えた」と書く。CLAUDE.md の「サイト名・タイトル・OG の文言は V1 を引き継ぎ」を「サイト名・OG は V1 を引き継ぎ、タイトル・説明文は 18-port-seo-pages で検索向けにした」に直す
-- [ ] T019 [US2] `make test-php`・`make lint-php` を通してコミット
+- [X] T015 [P] [US2] app/config/packages/twig.yaml：`site_top_title`・`title_suffix` を contracts/seo-meta.md の値にし、コメントを「18-port-seo-pages で検索向けに変えた（それ以外は V1 のまま）」に直す
+- [X] T016 [P] [US2] app/templates/base.html.twig・app/templates/status/index.html.twig・app/templates/status/company.html.twig・app/templates/status/ports.html.twig（全港）：説明文と会社別・全港のタイトルを contracts/seo-meta.md にする
+- [X] T017 [US2] app/tests/Controller/StatusControllerTest.php・app/tests/Controller/ErrorPageTest.php：タイトルの期待値を直し、トップ・港別・会社別・港のページ・エラーページ（404）で description と「運行」が 0 件であることを確かめるテストを足す（SC-005）
+- [X] T018 [P] [US2] specs/7-v1-branding/spec.md の FR-004 の下に「18-port-seo-pages で置き換えた」と書く。CLAUDE.md の「サイト名・タイトル・OG の文言は V1 を引き継ぎ」を「サイト名・OG は V1 を引き継ぎ、タイトル・説明文は 18-port-seo-pages で検索向けにした」に直す
+- [X] T019 [US2] `make test-php`・`make lint-php` を通してコミット
 
 ## Phase 5: User Story 3 - 今まで使っていた港別ページ・保存した港がそのまま使える（P2）
 
