@@ -1075,6 +1075,85 @@ class StatusControllerTest extends WebTestCase
     }
 
     // ------------------------------------------------------------------
+    // /ports/{slug}（18-port-seo-pages）
+    // ------------------------------------------------------------------
+
+    public function testPortPageShowsOnlyThatPort(): void
+    {
+        $this->createPortBoardData();
+
+        $crawler = $this->client->request('GET', '/ports/naze?dir=down');
+
+        $this->assertResponseIsSuccessful();
+        $rows = $crawler->filter('li.port-row');
+        $this->assertCount(4, $rows);
+        foreach ($rows as $row) {
+            $this->assertStringStartsWith('名瀬発', trim((new Crawler($row))->filter('.fw-bold')->text()));
+        }
+        $this->assertSelectorTextContains('h1', '奄美大島（名瀬港）発の運航状況');
+        $this->assertStringStartsWith('奄美大島（名瀬港）発 フェリー運航状況（今日・明日）', trim($crawler->filter('title')->text()));
+        $this->assertStringContainsString('奄美大島（名瀬港）を出るフェリー', $crawler->filter('meta[name="description"]')->attr('content'));
+        // canonical はクエリ無し
+        $this->assertSame('http://localhost/ports/naze', $crawler->filter('link[rel="canonical"]')->attr('href'));
+        $this->assertSame('http://localhost/ports/naze', $crawler->filter('meta[property="og:url"]')->attr('content'));
+        // ナビの「港別」がいまいるページ
+        $this->assertCount(1, $crawler->filter('nav a.active[href="/ports"][aria-current="page"]'));
+    }
+
+    public function testPortPageLinksToOtherPorts(): void
+    {
+        $this->createPortBoardData();
+
+        $crawler = $this->client->request('GET', '/ports/naze');
+
+        $nav = $crawler->filter('nav.port-links');
+        $this->assertCount(1, $nav);
+        $this->assertSame('港ごとのページ', $nav->attr('aria-label'));
+        $this->assertSame('奄美大島（名瀬港）', trim($nav->filter('span[aria-current="page"]')->text()));
+        $this->assertCount(0, $nav->filter('a[href="/ports/naze"]'));
+        $this->assertSame('鹿児島', trim($nav->filter('a[href="/ports/kagoshima"]')->text()));
+
+        // 全港のページでは全部リンク
+        $crawler = $this->client->request('GET', '/ports');
+        $this->assertCount(0, $crawler->filter('nav.port-links span[aria-current]'));
+        $this->assertCount(1, $crawler->filter('nav.port-links a[href="/ports/naze"]'));
+    }
+
+    public function testPortPageIgnoresSavedCookieButOffersToClearIt(): void
+    {
+        $this->createPortBoardData();
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('鹿児島')));
+
+        $crawler = $this->client->request('GET', '/ports/naze');
+
+        $this->assertResponseIsSuccessful();
+        foreach ($crawler->filter('li.port-row > .fw-bold') as $name) {
+            $this->assertStringStartsWith('名瀬発', trim($name->textContent));
+        }
+        $this->assertCount(1, $crawler->selectButton('保存を解除'));
+        $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+    }
+
+    public function testPortPageReturns404ForUnknownSlug(): void
+    {
+        $this->createPortBoardData();
+
+        foreach (['/ports/xxx', '/ports/naha', '/ports/filter'] as $url) {
+            $this->client->request('GET', $url);
+            $this->assertResponseStatusCodeSame(404, $url);
+        }
+    }
+
+    public function testPortPageIsPrivateAndVariesByCookie(): void
+    {
+        $this->createPortBoardData();
+        $this->client->request('GET', '/ports/naze');
+
+        $this->assertTrue($this->client->getResponse()->headers->hasCacheControlDirective('private'));
+        $this->assertContains('Cookie', $this->client->getResponse()->getVary());
+    }
+
+    // ------------------------------------------------------------------
     // /ports の異常の要約（US2）
     // ------------------------------------------------------------------
 

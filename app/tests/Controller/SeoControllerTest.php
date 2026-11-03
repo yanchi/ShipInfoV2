@@ -3,6 +3,10 @@
 namespace App\Tests\Controller;
 
 use App\Entity\FerryCompany;
+use App\Entity\Port;
+use App\Entity\Route;
+use App\Entity\RouteStop;
+use App\Enum\RouteDirectionEnum;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -23,7 +27,14 @@ class SeoControllerTest extends WebTestCase
     protected function tearDown(): void
     {
         if ($this->createdCompanyIds !== []) {
-            $this->entityManager()->createQuery('DELETE FROM App\Entity\FerryCompany c WHERE c.id IN (:ids)')
+            $em = $this->entityManager();
+            $em->createQuery('DELETE FROM App\Entity\RouteStop s WHERE s.route IN (SELECT r.id FROM App\Entity\Route r WHERE r.ferryCompany IN (:ids))')
+                ->setParameter('ids', $this->createdCompanyIds)
+                ->execute();
+            $em->createQuery('DELETE FROM App\Entity\Route r WHERE r.ferryCompany IN (:ids)')
+                ->setParameter('ids', $this->createdCompanyIds)
+                ->execute();
+            $em->createQuery('DELETE FROM App\Entity\FerryCompany c WHERE c.id IN (:ids)')
                 ->setParameter('ids', $this->createdCompanyIds)
                 ->execute();
             $this->createdCompanyIds = [];
@@ -80,9 +91,46 @@ class SeoControllerTest extends WebTestCase
         $this->assertArrayNotHasKey("http://localhost/company/{$inactive}", $urls);
     }
 
+    /** 港のページが、出発港（終点だけの港を除く）の数だけ載る */
+    public function testSitemapListsPortPages(): void
+    {
+        $this->persistRoute();
+
+        $this->client->request('GET', '/sitemap.xml');
+
+        $xml = new \SimpleXMLElement((string) $this->client->getResponse()->getContent());
+        $xml->registerXPathNamespace('s', 'http://www.sitemaps.org/schemas/sitemap/0.9');
+        $urls = [];
+        foreach ($xml->xpath('//s:url') ?: [] as $url) {
+            $children                      = $url->children('http://www.sitemaps.org/schemas/sitemap/0.9');
+            $urls[(string) $children->loc] = (string) $children->priority;
+        }
+
+        $this->assertSame('0.9', $urls['http://localhost/ports/kagoshima'] ?? null);
+        $this->assertSame('0.9', $urls['http://localhost/ports/naze'] ?? null);
+        $this->assertArrayNotHasKey('http://localhost/ports/naha', $urls);
+    }
+
     private function location(): string
     {
         return (string) $this->client->getResponse()->headers->get('Location');
+    }
+
+    /** 鹿児島→名瀬→那覇の下りの航路を作る（会社ごと tearDown で消える） */
+    private function persistRoute(): void
+    {
+        $em      = $this->entityManager();
+        $company = (new FerryCompany())->setName('サイトマップ港会社')->setActive(true);
+        $route   = (new Route())->setFerryCompany($company)->setName('サイトマップ港航路')->setDirection(RouteDirectionEnum::Down)->setActive(true);
+        $em->persist($route);
+        foreach (['鹿児島', '名瀬', '那覇'] as $i => $name) {
+            $port = $em->getRepository(Port::class)->findOneBy(['name' => $name]);
+            $em->persist((new RouteStop())->setRoute($route)->setPort($port)->setStopOrder($i + 1));
+        }
+        $em->persist($company);
+        $em->flush();
+        $this->createdCompanyIds[] = $company->getId();
+        $em->clear();
     }
 
     private function persistCompany(string $name, bool $active): int

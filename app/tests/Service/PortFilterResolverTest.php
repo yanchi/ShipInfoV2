@@ -14,6 +14,8 @@ use Symfony\Component\HttpFoundation\Request;
  */
 class PortFilterResolverTest extends TestCase
 {
+    private const SLUGS = [1 => 'kagoshima', 3 => 'naze', 5 => 'wadomari', 7 => 'naha'];
+
     private PortFilterResolver $resolver;
 
     /** @var list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> */
@@ -26,7 +28,7 @@ class PortFilterResolverTest extends TestCase
         // 鹿児島(1)・名瀬(3)・和泊(5)・那覇(7)
         $p = [];
         foreach ([1 => '鹿児島', 3 => '名瀬', 5 => '和泊', 7 => '那覇'] as $id => $name) {
-            $p[$id] = (new Port())->setName($name);
+            $p[$id] = (new Port())->setName($name)->setSlug(self::SLUGS[$id]);
             (new \ReflectionProperty($p[$id], 'id'))->setValue($p[$id], $id);
         }
         $this->boardStops = [
@@ -218,7 +220,58 @@ class PortFilterResolverTest extends TestCase
         return $this->resolver->submit($request, $this->boardStops, $tokenValid);
     }
 
+    // ------------------------------------------------------------------
+    // GET /ports/{slug}（18-port-seo-pages）
+    // ------------------------------------------------------------------
+
+    public function testResolveForPortUsesPortAndDirectionQuery(): void
+    {
+        $r = $this->resolveForPort('wadomari', ['dir' => 'up', 'port' => '3'], 'port=3');
+
+        $this->assertSame(5, $r->filter->portId);
+        $this->assertSame(RouteDirectionEnum::Up, $r->filter->direction);
+        $this->assertTrue($r->filter->hasSaved);
+        $this->assertNull($r->redirectTo);
+        $this->assertNull($r->cookie);
+    }
+
+    public function testResolveForPortInvalidDirectionMeansBothDirections(): void
+    {
+        $r = $this->resolveForPort('naze', ['dir' => 'xx']);
+
+        $this->assertSame(3, $r->filter->portId);
+        $this->assertNull($r->filter->direction);
+        $this->assertFalse($r->filter->hasSaved);
+        $this->assertNull($r->cookie);
+    }
+
+    public function testResolveForPortClearsInvalidCookie(): void
+    {
+        $r = $this->resolveForPort('naze', [], 'port=999');
+
+        $this->assertSame(3, $r->filter->portId);
+        $this->assertFalse($r->filter->hasSaved);
+        $this->assertNotNull($r->cookie);
+        $this->assertTrue($r->cookie->isCleared());
+    }
+
+    public function testFindDeparturePortBySlug(): void
+    {
+        $this->assertSame(5, $this->resolver->findDeparturePortBySlug($this->boardStops, 'wadomari')?->getId());
+        $this->assertNull($this->resolver->findDeparturePortBySlug($this->boardStops, 'xxx'));
+        $this->assertNull($this->resolver->findDeparturePortBySlug($this->boardStops, 'filter'));
+    }
+
     /** @param array<string, string> $query */
+    private function resolveForPort(string $slug, array $query, ?string $cookie = null): PortFilterResolution
+    {
+        $request = new Request($query, [], [], $cookie !== null ? ['port_filter' => $cookie] : []);
+        $port    = $this->resolver->findDeparturePortBySlug($this->boardStops, $slug);
+        $this->assertNotNull($port);
+
+        return $this->resolver->resolveForPort($request, $this->boardStops, $port);
+    }
+
     private function resolve(array $query, ?string $cookie = null): PortFilterResolution
     {
         $request = new Request($query, [], [], $cookie !== null ? ['port_filter' => $cookie] : []);

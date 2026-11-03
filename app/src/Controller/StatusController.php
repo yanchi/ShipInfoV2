@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\FerryCompany;
 use App\Entity\OperationStatus;
+use App\Entity\Port;
 use App\Enum\DepartureDisplayStateEnum;
 use App\Enum\OperationStatusEnum;
 use App\Enum\RouteDirectionEnum;
@@ -20,6 +21,7 @@ use App\View\PortBoardDay;
 use App\View\PortBoardEntry;
 use App\View\PortBoardExtraDeparture;
 use App\View\PortFilter;
+use App\View\PortFilterResolution;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -282,8 +284,38 @@ class StatusController extends AbstractController
         PortAlertSummaryBuilder $portAlertSummaryBuilder,
     ): Response {
         $boardStops = $routeStopRepository->findBoardStops();
-        $resolution = $portFilterResolver->resolve($request, $boardStops);
 
+        return $this->renderPorts($portFilterResolver->resolve($request, $boardStops), null, $boardStops, $portFilterResolver, $portAlertSummaryBuilder);
+    }
+
+    /** 港ごとのページ（検索で島の名前から来る人向け。18-port-seo-pages） */
+    #[Route('/ports/{slug}', name: 'app_status_port', requirements: ['slug' => '[a-z][a-z0-9-]*'], methods: ['GET'])]
+    public function port(
+        string $slug,
+        Request $request,
+        RouteStopRepository $routeStopRepository,
+        PortFilterResolver $portFilterResolver,
+        PortAlertSummaryBuilder $portAlertSummaryBuilder,
+    ): Response {
+        $boardStops = $routeStopRepository->findBoardStops();
+        $port       = $portFilterResolver->findDeparturePortBySlug($boardStops, $slug);
+        if ($port === null) {
+            throw $this->createNotFoundException("港 {$slug} は存在しません。");
+        }
+
+        return $this->renderPorts($portFilterResolver->resolveForPort($request, $boardStops, $port), $port, $boardStops, $portFilterResolver, $portAlertSummaryBuilder);
+    }
+
+    /**
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     */
+    private function renderPorts(
+        PortFilterResolution $resolution,
+        ?Port $currentPort,
+        array $boardStops,
+        PortFilterResolver $portFilterResolver,
+        PortAlertSummaryBuilder $portAlertSummaryBuilder,
+    ): Response {
         $today     = new \DateTimeImmutable('today');
         $fullBoard = $this->buildFullBoard($boardStops, $today);
 
@@ -291,6 +323,7 @@ class StatusController extends AbstractController
             'board'       => $fullBoard->filter($resolution->filter),
             'fullBoard'   => $fullBoard,
             'portFilter'  => $resolution->filter,
+            'currentPort' => $currentPort,
             'summary'     => $portAlertSummaryBuilder->build($fullBoard, $resolution->filter),
             'portOptions' => $portFilterResolver->departurePorts($boardStops),
             'today'       => $today,
@@ -328,7 +361,7 @@ class StatusController extends AbstractController
     /**
      * 全港・今日〜3日先のボード。$statuses を渡せばそれで作る（会社別ページは同じ行を日付の状態の判定にも使うため）。
      *
-     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<\App\Entity\Port>, arrivalPort: \App\Entity\Port}> $boardStops
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
      * @param list<\App\Entity\DepartureStatus>|null $statuses
      */
     private function buildFullBoard(array $boardStops, \DateTimeImmutable $today, ?array $statuses = null): PortBoard

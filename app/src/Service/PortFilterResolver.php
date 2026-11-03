@@ -49,6 +49,40 @@ class PortFilterResolver
     }
 
     /**
+     * GET /ports/{slug}。港は URL のもの、方向は dir クエリ（不正なら両方向）。
+     * Cookie は読むだけで（「保存を解除」を出すかの判定）、書き換えない。不正な値は消す。
+     *
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     */
+    public function resolveForPort(Request $request, array $boardStops, Port $port): PortFilterResolution
+    {
+        [$saved, $cookieInvalid] = $this->readCookie($request, $this->validPortIds($boardStops));
+        $dir                     = $this->parseDirection((string) $request->query->get('dir', ''));
+
+        return new PortFilterResolution(
+            new PortFilter($port->getId(), $dir['value'], $saved !== null),
+            null,
+            $cookieInvalid ? $this->clearCookie() : null,
+        );
+    }
+
+    /**
+     * slug に合う出発港。出発港の一覧に無ければ null。
+     *
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     */
+    public function findDeparturePortBySlug(array $boardStops, string $slug): ?Port
+    {
+        foreach ($this->departurePorts($boardStops) as $port) {
+            if ($port->getSlug() === $slug) {
+                return $port;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * POST /ports/filter（絞り込みフォーム）。どの操作も GET /ports へリダイレクトする（PRG）。
      *
      * - show:  条件の URL へ。Cookie は変えない

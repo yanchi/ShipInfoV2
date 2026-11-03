@@ -21,16 +21,16 @@
 **Goal**: `GET /ports/{slug}` に港の呼び名入りのタイトル・h1・説明文で 1 港分のボードを出し、sitemap と港別ページ内のリンクからたどれるようにする（FR-001〜FR-008・FR-013a・FR-013b）
 **Independent Test**: `/ports/kametoku` が亀徳の便だけを出し、title・h1・canonical が contracts のとおり。`/ports/xxx` は 404。sitemap に 7 港
 
-- [ ] T005 [US1] app/src/Service/PortFilterResolver.php：`resolveForPort(Request, array $boardStops, Port $port): PortFilterResolution` を足す。港は引数、方向は `dir` クエリ（不正なら両方向）、`hasSaved` は Cookie が正しく読めたか。Cookie が不正なら消す Cookie を返す。Cookie は書かない（research R4）。あわせて `findDeparturePortBySlug(array $boardStops, string $slug): ?Port` を足す
-- [ ] T006 [P] [US1] app/tests/Service/PortFilterResolverTest.php：`resolveForPort()` の URL 優先・Cookie を書き換えない・`dir` 不正で両方向・Cookie 不正で消す、`findDeparturePortBySlug()` の一致・不一致
-- [ ] T007 [US1] app/src/Controller/StatusController.php：`#[Route('/ports/{slug}', name: 'app_status_port', requirements: ['slug' => '[a-z][a-z0-9-]*'], methods: ['GET'])]` の `port()` を足す。出発港に無ければ `createNotFoundException`。描画は `ports()` と同じ変数に `currentPort` を足して `status/ports.html.twig`、Cookie・`varyByCookie()` も同じ。`ports()` と重なる組み立ては private メソッドにまとめる。`ports()` 側は `currentPort: null`
-- [ ] T008 [P] [US1] app/templates/status/_port_links.html.twig（新規）：`portOptions` と `currentPort` を受け、contracts/seo-meta.md の `<nav class="port-links" aria-label="港ごとのページ">` を出す（文字は `port.displayName`、いまの港は `<span aria-current="page">`）。折り返すスタイルを app/templates/_site_styles.html.twig に足す
-- [ ] T009 [US1] app/templates/status/ports.html.twig：`currentPort` があれば title `<呼び名>発 フェリー運航状況（今日・明日）`・h1 `<呼び名>発の運航状況`・港の説明文（contracts/seo-meta.md）。日付ボタンの下・フォームの上に `_port_links` を入れる
-- [ ] T010 [US1] app/templates/base.html.twig：ナビの「港別」の active・`aria-current` を `currentRoute in ['app_status_ports', 'app_status_port']` で判定する
-- [ ] T011 [US1] app/src/Controller/SeoController.php：`RouteStopRepository::findBoardStops()` の出発港（`PortFilterResolver::departurePorts()`）ごとに `app_status_port` の URL（priority 0.9）を、港別の次・各社の前に足す
-- [ ] T012 [US1] app/tests/Controller/StatusControllerTest.php：`/ports/kametoku` の 200・亀徳の行だけ・title・h1・canonical（`?dir=up` 付きでもクエリ無し）・ナビの aria-current・港リンク（亀徳は span で「徳之島（亀徳港）」、6 港は a で文字が呼び名）、Cookie に別の港があっても URL の港を出し「保存を解除」が出る、`/ports/xxx` と `/ports/filter`（GET）の 404、`Cache-Control: private`・`Vary: Cookie`
-- [ ] T013 [P] [US1] app/tests/Controller/SeoControllerTest.php：sitemap に `/ports/<slug>` が出発港の数だけ載る
-- [ ] T014 [US1] `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` を通してコミット
+- [X] T005 [US1] app/src/Service/PortFilterResolver.php：`resolveForPort(Request, array $boardStops, Port $port): PortFilterResolution` を足す。港は引数、方向は `dir` クエリ（不正なら両方向）、`hasSaved` は Cookie が正しく読めたか。Cookie が不正なら消す Cookie を返す。Cookie は書かない（research R4）。あわせて `findDeparturePortBySlug(array $boardStops, string $slug): ?Port` を足す
+- [X] T006 [P] [US1] app/tests/Service/PortFilterResolverTest.php：`resolveForPort()` の URL 優先・Cookie を書き換えない・`dir` 不正で両方向・Cookie 不正で消す、`findDeparturePortBySlug()` の一致・不一致
+- [X] T007 [US1] app/src/Controller/StatusController.php：`#[Route('/ports/{slug}', name: 'app_status_port', requirements: ['slug' => '[a-z][a-z0-9-]*'], methods: ['GET'])]` の `port()` を足す。出発港に無ければ `createNotFoundException`。描画は `ports()` と同じ変数に `currentPort` を足して `status/ports.html.twig`、Cookie・`varyByCookie()` も同じ。`ports()` と重なる組み立ては private メソッドにまとめる。`ports()` 側は `currentPort: null`
+- [X] T008 [P] [US1] app/templates/status/_port_links.html.twig（新規）：`portOptions` と `currentPort` を受け、contracts/seo-meta.md の `<nav class="port-links" aria-label="港ごとのページ">` を出す（文字は `port.displayName`、いまの港は `<span aria-current="page">`）。折り返すスタイルを app/templates/_site_styles.html.twig に足す
+- [X] T009 [US1] app/templates/status/ports.html.twig：`currentPort` があれば title `<呼び名>発 フェリー運航状況（今日・明日）`・h1 `<呼び名>発の運航状況`・港の説明文（contracts/seo-meta.md）。日付ボタンの下・フォームの上に `_port_links` を入れる
+- [X] T010 [US1] app/templates/base.html.twig：ナビの「港別」の active・`aria-current` を `currentRoute in ['app_status_ports', 'app_status_port']` で判定する
+- [X] T011 [US1] app/src/Controller/SeoController.php：`RouteStopRepository::findBoardStops()` の出発港（`PortFilterResolver::departurePorts()`）ごとに `app_status_port` の URL（priority 0.9）を、港別の次・各社の前に足す
+- [X] T012 [US1] app/tests/Controller/StatusControllerTest.php：`/ports/kametoku` の 200・亀徳の行だけ・title・h1・canonical（`?dir=up` 付きでもクエリ無し）・ナビの aria-current・港リンク（亀徳は span で「徳之島（亀徳港）」、6 港は a で文字が呼び名）、Cookie に別の港があっても URL の港を出し「保存を解除」が出る、`/ports/xxx` と `/ports/filter`（GET）の 404、`Cache-Control: private`・`Vary: Cookie`
+- [X] T013 [P] [US1] app/tests/Controller/SeoControllerTest.php：sitemap に `/ports/<slug>` が出発港の数だけ載る
+- [X] T014 [US1] `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` を通してコミット
 
 ## Phase 4: User Story 2 - 検索結果のタイトルを見て「今日・明日の運航状況が分かる」と思える（P1）
 
