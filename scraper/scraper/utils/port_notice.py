@@ -6,7 +6,10 @@
 - 対象は鹿児島航路ページの抜粋と、船別詳細ページの h4 の後〜定型の注意書き（「台風の影響や」の段落）の手前
 - 臨時便の告知（【臨時便(上り/下り)】から次の【…】の手前まで）は読まない。臨時便の「寄港いたしません」を
   定期便の抜港と取り違えないため。定型の注意書きの確かめは読み飛ばしている間も続ける（12-marue-extra-voyages R8）
-- 文（「。」と改行）ごとに見る。港名・キーワードは、括弧書き（「和泊港(沖永良部島)」の島名など）を取り除いた文で探す
+- 文（「。」と改行）ごとに見る。ただし「:」で終わる行（「・条件付寄港地 :」）は見出しなので、
+  次の行とつなげて1つの文にする（つなぐのは次の1行だけ。2行目からはキーワードの無い文になり拾えない）。
+  見出しのすぐ後ろがまた見出しなら、前の見出しは捨てる（中身が空の見出し）
+- 港名・キーワードは、括弧書き（「和泊港(沖永良部島)」の島名など）を取り除いた文で探す
   （括弧の中の島名が港の別名に当たったり、列挙が切れたりするため）。ただし括弧の中が港名だけなら
   （「徳之島(亀徳港)」のように島名の後ろに港名を書く場合）、直前の島名ごと括弧の中の港名に置き換える。
   根拠として残す文（sentence）は元の文のまま。仮定・案内の文（「場合」「ことがあります」「可能性」「問い合わせ」）は除外
@@ -18,7 +21,7 @@
   - 港名だけの節（「和泊港、与論港は条件付寄港」の「和泊港」）：隣のキーワードの節にまとめる
   - それ以外の節（「鹿児島新港を出港し」など）の港は対象にしない
   - 「鹿児島新港発の便は」「鹿児島航路は」のように、すぐ後ろに発・着・向け・行き・航路が付く港は
-    便・航路の説明なので対象にしない
+    便・航路の説明なので対象にしない。「那覇港07：00発」のように時刻を挟んでいても同じ
 - 1つの港に複数あれば skip > change > conditional
 """
 
@@ -48,8 +51,10 @@ _PARENTHESES_WITH_ISLAND = re.compile(
     r"((?:[一-龥々ァ-ヶー]*島)?)(?:\(([^()]*)\)|（([^（）]*)）)"
 )
 _PRIORITY = {"skip": 3, "change": 2, "conditional": 1}
-# 港名の直後にこれが付いていたら、便・航路の説明（「鹿児島新港発の便」「鹿児島航路」）
-_VOYAGE_SUFFIXES = ("発", "着", "向け", "行き", "行", "航路")
+# 港名の直後にこれが付いていたら、便・航路の説明（「鹿児島新港発の便」「鹿児島航路」「那覇港07：00発」）
+_VOYAGE_DESCRIPTION = re.compile(
+    r"\s*(?:\d{1,2}[:：]\d{2}\s*|\d{1,2}時(?:\d{1,2}分)?\s*)?(?:発|着|向け|行き|行|航路)"
+)
 # 港名を取り除いたあとにこれしか残らない節は「港名だけの節」
 _PORT_LIST_REST = re.compile(r"^[\s・と及び]*$")
 # 並んだ港名のあいだにこれしか無ければ、同じ扱いの港の列挙（「和泊港・与論港」）
@@ -108,7 +113,22 @@ def extract_port_notices(text: str, resolver: PortResolver) -> list[PortNotice]:
 
 
 def _sentences(text: str) -> list[str]:
-    return [s.strip() for s in re.split(r"[。\n]", text or "") if s.strip()]
+    sentences: list[str] = []
+    # 「:」で終わる行。次の1行の頭につなげる（2行目以降はつながらない）。
+    # 次の行も見出しなら前の見出しは捨てる（つなぐと別のキーワードが混ざり、節ごと捨てられるため）
+    heading = ""
+    for s in re.split(r"[。\n]", text or ""):
+        s = s.strip()
+        if not s:
+            continue
+        if s.endswith((":", "：")):
+            heading = s
+            continue
+        sentences.append(f"{heading} {s}" if heading else s)
+        heading = ""
+    if heading:
+        sentences.append(heading)
+    return sentences
 
 
 def _kinds(text: str) -> list[str]:
@@ -207,7 +227,7 @@ def _port_hits(clause: str, resolver: PortResolver) -> list[tuple[int, int, Port
     return [
         (start, end, port)
         for start, end, port in resolver.find_occurrences(clause)
-        if not clause.startswith(_VOYAGE_SUFFIXES, end)
+        if not _VOYAGE_DESCRIPTION.match(clause, end)
     ]
 
 
@@ -218,6 +238,8 @@ def _keyword_ports(
 
     「鹿児島新港を出港後与論港は抜港」の鹿児島のように、あいだに別の言葉が入る港は含めない。
     キーワードより前に港が無ければ、直後の港から同じようにたどる（「条件付寄港地: 和泊港・与論港」）。
+    直後の最初の港が便の説明（「07:00那覇港出港/上り便　与論港、…」の那覇）だと、その港だけが対象になり
+    続く港は落ちる。「〇〇港発」の形なら _port_hits で除いているので起きない。
     """
     before = [h for h in hits if h[1] <= pos]
     if before:

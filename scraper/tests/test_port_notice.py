@@ -121,6 +121,10 @@ def test_ports_not_on_route_only(resolver):
         ("本日那覇港発の便は名瀬港から古仁屋港へ変更", {"名瀬": "change"}),
         ("那覇港向けの便は和泊港に条件付寄港します", {"和泊": "conditional"}),
         ("鹿児島行きの便は与論港は抜港", {"与論": "skip"}),
+        # 港名と「発」のあいだに時刻があっても便の説明（保存版 2026-11-04 の抜粋）
+        ("■11月4日(水)那覇港07：00発/上り便…条件付き運航", {}),
+        ("那覇港 07:00発の便は与論港に条件付寄港", {"与論": "conditional"}),
+        ("那覇港7時発の便は与論港に条件付寄港", {"与論": "conditional"}),
     ],
 )
 def test_voyage_description_ports_are_not_targets(resolver, text, expected):
@@ -294,3 +298,42 @@ def test_extra_voyage_skipping_does_not_hide_the_boilerplate_marker():
     )
 
     assert extract_notice_text("", html) == "本文です。"
+
+
+def test_heading_line_is_joined_with_next_line(resolver):
+    """「・条件付寄港地 :」の見出しの行は、次の行（港の列挙）とつなげて読む。"""
+    text = "・条件付寄港地 :\n11月4日(水)07:00那覇発/上り便　与論港(与論島)、和泊港(沖永良部島)、亀徳港(徳之島)"
+
+    notices = _names(extract_port_notices(text, resolver), resolver)
+
+    assert set(notices) == {"与論", "和泊", "亀徳"}
+    assert all(n.kind == "conditional" for n in notices.values())
+    assert all(n.sentence.startswith("・条件付寄港地 :") for n in notices.values())
+
+
+def test_empty_heading_followed_by_heading_is_dropped(resolver):
+    """中身が空の見出し（「・抜港地 :」）のすぐ後ろが見出しなら、前の見出しはつながない。"""
+    text = "・抜港地 :\n・条件付寄港地 :\n与論港、和泊港"
+
+    notices = _names(extract_port_notices(text, resolver), resolver)
+
+    assert {name: n.kind for name, n in notices.items()} == {
+        "与論": "conditional",
+        "和泊": "conditional",
+    }
+
+
+def test_conditional_ports_on_detail_page_20261104(resolver):
+    """保存版 2026-11-04：波之上の 11/4 那覇発上りは与論・和泊・亀徳が条件付寄港（那覇は便の説明）。"""
+    text = extract_notice_text(
+        "■11月4日(水)那覇港07：00発/上り便…条件付き運航",
+        read_fixture("marue/ship_detail_naminoue_20261104.html"),
+    )
+
+    notices = _names(extract_port_notices(text, resolver), resolver)
+
+    assert {name: n.kind for name, n in notices.items()} == {
+        "与論": "conditional",
+        "和泊": "conditional",
+        "亀徳": "conditional",
+    }
