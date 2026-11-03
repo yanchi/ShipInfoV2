@@ -57,8 +57,8 @@
 
 ## Phase 6: Polish
 
-- [ ] T026 quickstart.md の手順をローカル（`make up`）で通す。375px 幅で港リンクに横スクロールが出ないことも見る
-- [ ] T027 `make test-php`・`make phpstan`・`make cs-php`・`make lint-php`・`make verify-prod` を通し、tasks.md のチェックを付けてコミット
+- [X] T026 quickstart.md の手順をローカル（`make up`）で通す。375px 幅で港リンクに横スクロールが出ないことも見る
+- [X] T027 `make test-php`・`make phpstan`・`make cs-php`・`make lint-php`・`make verify-prod` を通し、tasks.md のチェックを付けてコミット
 
 ## Dependencies & Execution Order
 
