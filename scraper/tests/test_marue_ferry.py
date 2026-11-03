@@ -3726,3 +3726,77 @@ def test_withdrawn_rows_use_the_time_of_parsing(db_session, marue_with_ports):
     )  # 上りの始発港(10/28 05:00)は upsert 時点では出港済み
 
     assert extra_rows_in_db(db_session, up) == []
+
+
+# ---------------------------------------------------------------------------
+# 条件付寄港地（保存版 2026-11-04：波之上の 11/4 那覇発上り＝条件付運航、条件付寄港地は与論・和泊・亀徳）
+# ---------------------------------------------------------------------------
+
+NOW_1104 = datetime(2026, 11, 4, 1, 50)
+
+
+@resp_mock.activate
+def test_conditional_ports_from_detail_page_heading_20261104(
+    db_session, marue_with_ports
+):
+    """詳細ページの「・条件付寄港地 :」の次の行の港だけ条件付。抜粋の「那覇港07：00発」の那覇は対象にしない。"""
+    company, ports = marue_with_ports
+    _, up = routes_of(db_session, company)
+    mock_search(
+        _voyage_searches(
+            "フェリー波之上",
+            {
+                NAHA: "2026年11月04日 07:00",
+                MOTOBU: "2026年11月04日 09:20",
+                YORON: "2026年11月04日 12:10",
+                WADOMARI: "2026年11月04日 14:40",
+                KAMETOKU: "2026年11月04日 17:00",
+                NAZE: "2026年11月04日 21:20",
+            },
+            KAGOSHIMA,
+            "2026年11月04日",
+            "2026年11月05日 08:30",
+        )
+    )
+    mock_kagoshima_1104()
+    scraper = MarueFerry(db_session, company.id)
+
+    with structlog.testing.capture_logs() as logs, fixed_now(NOW_1104):
+        scraper.parse(scraper.fetch())
+        departures = scraper.parse_departures()
+
+    assert not [log for log in logs if log["event"] == "ship_detail_fetch_failed"]
+    statuses = {
+        name: find(departures, up, ports[name], date(2026, 11, 4))["status"]
+        for name in UP_PORTS
+    }
+    assert statuses == {
+        "那覇": OperationStatusEnum.operating,
+        "本部": OperationStatusEnum.operating,
+        "与論": OperationStatusEnum.delayed,
+        "和泊": OperationStatusEnum.delayed,
+        "亀徳": OperationStatusEnum.delayed,
+        "名瀬": OperationStatusEnum.operating,
+    }
+    assert (
+        "条件付寄港地"
+        in find(departures, up, ports["与論"], date(2026, 11, 4))["status_detail"]
+    )
+
+
+def mock_kagoshima_1104():
+    resp_mock.add(
+        resp_mock.GET,
+        KAGOSHIMA_URL,
+        body=read_fixture("marue/kagoshima_20261104.html"),
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        "https://www.aline-ferry.com/status/route-kagoshima/ferry-akebono/27749/",
+        body=read_fixture("marue/ship_detail_akebono_20261104.html"),
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        "https://www.aline-ferry.com/status/route-kagoshima/ferry-naminoue/24606/",
+        body=read_fixture("marue/ship_detail_naminoue_20261104.html"),
+    )
