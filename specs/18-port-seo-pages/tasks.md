@@ -11,10 +11,10 @@
 
 ## Phase 2: Foundational（港の slug・呼び名）
 
-- [ ] T001 app/migrations/Version20261104000000.php：`ports` に `slug VARCHAR(32) NULL`・`display_name VARCHAR(64) NULL` を足す → 7 港に data-model.md の値を入れる → 残った行を `CONCAT('port-', id)` で埋める → `slug` を NOT NULL にして UNIQUE（`UNIQ_PORTS_SLUG`）を付ける。down は 2 列を消す
-- [ ] T002 app/src/Entity/Port.php：`slug`（`#[ORM\Column(length: 32, unique: true)]`、string）・`displayName`（`#[ORM\Column(length: 64, nullable: true)]`）と getter/setter、`getDisplayName(): string`（`displayName ?? name`）を足す
-- [ ] T003 `grep -rn "new Port()" app/tests` で港を作っているテストを確かめる。今は app/tests/View/PortFilterTest.php だけで DB に保存しないので、slug は既定の `''` のままでよい。T004 のテストが落ちたときだけ `setSlug()` を足す
-- [ ] T004 `make migrate`・`make lint-php`（Doctrine スキーマの検証）・`make test-php` を通してコミット
+- [X] T001 app/migrations/Version20261104000000.php：`ports` に `slug VARCHAR(32) NULL`・`display_name VARCHAR(64) NULL` を足す → 7 港に data-model.md の値を入れる → 残った行を `CONCAT('port-', id)` で埋める → `slug` を NOT NULL にして UNIQUE（`UNIQ_PORTS_SLUG`）を付ける。down は 2 列を消す
+- [X] T002 app/src/Entity/Port.php：`slug`（`#[ORM\Column(length: 32, unique: true)]`、string）・`displayName`（`#[ORM\Column(length: 64, nullable: true)]`）と getter/setter、`getDisplayName(): string`（`displayName ?? name`）を足す
+- [X] T003 `grep -rn "new Port()" app/tests` で港を作っているテストを確かめる。今は app/tests/View/PortFilterTest.php だけで DB に保存しないので、slug は既定の `''` のままでよい。T004 のテストが落ちたときだけ `setSlug()` を足す
+- [X] T004 `make migrate`・`make lint-php`（Doctrine スキーマの検証）・`make test-php` を通してコミット
 
 ## Phase 3: User Story 1 - 島の名前で検索して、その港を出る便がすぐ分かる（P1）🎯 MVP
 
