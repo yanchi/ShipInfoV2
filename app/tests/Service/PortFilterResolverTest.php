@@ -272,6 +272,7 @@ class PortFilterResolverTest extends TestCase
         return $this->resolver->resolveForPort($request, $this->boardStops, $port);
     }
 
+    /** @param array<string, string> $query */
     private function resolve(array $query, ?string $cookie = null): PortFilterResolution
     {
         $request = new Request($query, [], [], $cookie !== null ? ['port_filter' => $cookie] : []);
