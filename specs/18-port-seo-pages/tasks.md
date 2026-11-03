@@ -13,7 +13,7 @@
 
 - [ ] T001 app/migrations/Version20261104000000.php：`ports` に `slug VARCHAR(32) NULL`・`display_name VARCHAR(64) NULL` を足す → 7 港に data-model.md の値を入れる → 残った行を `CONCAT('port-', id)` で埋める → `slug` を NOT NULL にして UNIQUE（`UNIQ_PORTS_SLUG`）を付ける。down は 2 列を消す
 - [ ] T002 app/src/Entity/Port.php：`slug`（`#[ORM\Column(length: 32, unique: true)]`、string）・`displayName`（`#[ORM\Column(length: 64, nullable: true)]`）と getter/setter、`getDisplayName(): string`（`displayName ?? name`）を足す
-- [ ] T003 app/tests/View/PortFilterTest.php など `new Port()` を作っているテストで、slug が要るところに `setSlug()` を足す（`grep -rn "new Port()" app/tests`）
+- [ ] T003 `grep -rn "new Port()" app/tests` で港を作っているテストを確かめる。今は app/tests/View/PortFilterTest.php だけで DB に保存しないので、slug は既定の `''` のままでよい。T004 のテストが落ちたときだけ `setSlug()` を足す
 - [ ] T004 `make migrate`・`make lint-php`（Doctrine スキーマの検証）・`make test-php` を通してコミット
 
 ## Phase 3: User Story 1 - 島の名前で検索して、その港を出る便がすぐ分かる（P1）🎯 MVP
@@ -24,11 +24,11 @@
 - [ ] T005 [US1] app/src/Service/PortFilterResolver.php：`resolveForPort(Request, array $boardStops, Port $port): PortFilterResolution` を足す。港は引数、方向は `dir` クエリ（不正なら両方向）、`hasSaved` は Cookie が正しく読めたか。Cookie が不正なら消す Cookie を返す。Cookie は書かない（research R4）。あわせて `findDeparturePortBySlug(array $boardStops, string $slug): ?Port` を足す
 - [ ] T006 [P] [US1] app/tests/Service/PortFilterResolverTest.php：`resolveForPort()` の URL 優先・Cookie を書き換えない・`dir` 不正で両方向・Cookie 不正で消す、`findDeparturePortBySlug()` の一致・不一致
 - [ ] T007 [US1] app/src/Controller/StatusController.php：`#[Route('/ports/{slug}', name: 'app_status_port', requirements: ['slug' => '[a-z][a-z0-9-]*'], methods: ['GET'])]` の `port()` を足す。出発港に無ければ `createNotFoundException`。描画は `ports()` と同じ変数に `currentPort` を足して `status/ports.html.twig`、Cookie・`varyByCookie()` も同じ。`ports()` と重なる組み立ては private メソッドにまとめる。`ports()` 側は `currentPort: null`
-- [ ] T008 [P] [US1] app/templates/status/_port_links.html.twig（新規）：`portOptions` と `currentPort` を受け、contracts/seo-meta.md の `<nav class="port-links" aria-label="港ごとのページ">` を出す（いまの港は `<span aria-current="page">`）。折り返すスタイルを app/templates/_site_styles.html.twig に足す
+- [ ] T008 [P] [US1] app/templates/status/_port_links.html.twig（新規）：`portOptions` と `currentPort` を受け、contracts/seo-meta.md の `<nav class="port-links" aria-label="港ごとのページ">` を出す（文字は `port.displayName`、いまの港は `<span aria-current="page">`）。折り返すスタイルを app/templates/_site_styles.html.twig に足す
 - [ ] T009 [US1] app/templates/status/ports.html.twig：`currentPort` があれば title `<呼び名>発 フェリー運航状況（今日・明日）`・h1 `<呼び名>発の運航状況`・港の説明文（contracts/seo-meta.md）。日付ボタンの下・フォームの上に `_port_links` を入れる
 - [ ] T010 [US1] app/templates/base.html.twig：ナビの「港別」の active・`aria-current` を `currentRoute in ['app_status_ports', 'app_status_port']` で判定する
 - [ ] T011 [US1] app/src/Controller/SeoController.php：`RouteStopRepository::findBoardStops()` の出発港（`PortFilterResolver::departurePorts()`）ごとに `app_status_port` の URL（priority 0.9）を、港別の次・各社の前に足す
-- [ ] T012 [US1] app/tests/Controller/StatusControllerTest.php：`/ports/kametoku` の 200・亀徳の行だけ・title・h1・canonical（`?dir=up` 付きでもクエリ無し）・ナビの aria-current・港リンク（亀徳は span、6 港は a）、Cookie に別の港があっても URL の港を出し「保存を解除」が出る、`/ports/xxx` と `/ports/filter`（GET）の 404、`Cache-Control: private`・`Vary: Cookie`
+- [ ] T012 [US1] app/tests/Controller/StatusControllerTest.php：`/ports/kametoku` の 200・亀徳の行だけ・title・h1・canonical（`?dir=up` 付きでもクエリ無し）・ナビの aria-current・港リンク（亀徳は span で「徳之島（亀徳港）」、6 港は a で文字が呼び名）、Cookie に別の港があっても URL の港を出し「保存を解除」が出る、`/ports/xxx` と `/ports/filter`（GET）の 404、`Cache-Control: private`・`Vary: Cookie`
 - [ ] T013 [P] [US1] app/tests/Controller/SeoControllerTest.php：sitemap に `/ports/<slug>` が出発港の数だけ載る
 - [ ] T014 [US1] `make test-php`・`make phpstan`・`make cs-php`・`make lint-php` を通してコミット
 
@@ -39,7 +39,7 @@
 
 - [ ] T015 [P] [US2] app/config/packages/twig.yaml：`site_top_title`・`title_suffix` を contracts/seo-meta.md の値にし、コメントを「18-port-seo-pages で検索向けに変えた（それ以外は V1 のまま）」に直す
 - [ ] T016 [P] [US2] app/templates/base.html.twig・app/templates/status/index.html.twig・app/templates/status/company.html.twig・app/templates/status/ports.html.twig（全港）：説明文と会社別・全港のタイトルを contracts/seo-meta.md にする
-- [ ] T017 [US2] app/tests/Controller/StatusControllerTest.php・app/tests/Controller/ErrorPageTest.php：タイトルの期待値を直し、トップ・港別・会社別・港のページで description と「運行」が 0 件であることを確かめるテストを足す
+- [ ] T017 [US2] app/tests/Controller/StatusControllerTest.php・app/tests/Controller/ErrorPageTest.php：タイトルの期待値を直し、トップ・港別・会社別・港のページ・エラーページ（404）で description と「運行」が 0 件であることを確かめるテストを足す（SC-005）
 - [ ] T018 [P] [US2] specs/7-v1-branding/spec.md の FR-004 の下に「18-port-seo-pages で置き換えた」と書く。CLAUDE.md の「サイト名・タイトル・OG の文言は V1 を引き継ぎ」を「サイト名・OG は V1 を引き継ぎ、タイトル・説明文は 18-port-seo-pages で検索向けにした」に直す
 - [ ] T019 [US2] `make test-php`・`make lint-php` を通してコミット
 
@@ -50,7 +50,7 @@
 
 - [ ] T020 [US3] app/src/Service/PortFilterResolver.php：`resolve()` で `port` が出発港の ID なら `redirectTo = /ports/<slug>`（`dir` が正しければ `?dir=`）を返す。`url()` を、港があれば `/ports/<slug>`（＋`?dir=`）、無ければ今までどおりにする（research R5・R6）
 - [ ] T021 [US3] app/src/Controller/StatusController.php：`ports()` で `redirectTo` があれば 301 の `RedirectResponse`（消す Cookie があれば付け、`varyByCookie()`）を返す
-- [ ] T022 [US3] app/templates/status/index.html.twig：「4日分を見る」を、保存した港があれば `path('app_status_port', {slug: …, dir: …})`、方向だけの保存なら `path('app_status_ports')` にする（港の Port は `portOptions` から引くか、コントローラーで渡す）
+- [ ] T022 [US3] app/templates/status/index.html.twig：「4日分を見る」を、保存した港があれば `path('app_status_port', {slug: …, dir: …})`、方向だけの保存なら `path('app_status_ports')` にする。港の Port は、トップに渡している `portOptions` から `portFilter.portId` で引く（コントローラーは変えない）
 - [ ] T023 [US3] app/tests/Service/PortFilterResolverTest.php：`resolve()` の転送先（港あり・dir あり・dir 不正・`all`・不正な番号・dir だけ）と `submit()` の移り先を contracts/http-routes.md の表どおりに直す・足す
 - [ ] T024 [US3] app/tests/Controller/StatusControllerTest.php：`/ports?port=<id>&dir=down` の 301 と Location、`/ports?port=all`・`/ports?port=999`・`/ports`（Cookie あり）の 200、フォームの 303 の Location、トップの「4日分を見る」の href。今の `/ports?port=<id>` を開いて中身を見ているテストは `/ports/<slug>` に直す
 - [ ] T025 [US3] `make test-php`・`make phpstan` を通してコミット

@@ -86,11 +86,11 @@ CLAUDE.md                               # 「サイト名・タイトル…は V
 
 1. **基盤**: マイグレーション・Port エンティティ（slug・displayName）
 2. **US1（港のページ）**: `GET /ports/{slug}`・`resolveForPort()`・テンプレートのタイトル・h1・説明文・canonical・港へのリンク・ナビの判定・sitemap
-3. **US3（今の使い方を保つ）**: 古い URL の 301・フォームの移り先・トップの「4日分を見る」
-4. **US2（タイトル・説明文）**: twig.yaml の globals・各テンプレートの説明文・既存テストのタイトルの期待値・7-v1-branding と CLAUDE.md の追記
+3. **US2（タイトル・説明文）**: twig.yaml の globals・各テンプレートの説明文・既存テストのタイトルの期待値・7-v1-branding と CLAUDE.md の追記
+4. **US3（今の使い方を保つ）**: 古い URL の 301・フォームの移り先・トップの「4日分を見る」
 5. **仕上げ**: quickstart の手順で確かめる・`make test-php phpstan cs-php lint-php verify-prod`
 
-US1 と US3 は `PortFilterResolver` を両方触るので、この順にする（US3 は slug が要る）。
+守る順番は US1 → US3 だけ（US3 は US1 の slug・ルートを使い、どちらも `PortFilterResolver` を触る）。US2 は独立していて、優先度（P1）が US3（P2）より高いので先にする。
 
 ## Complexity Tracking
 
