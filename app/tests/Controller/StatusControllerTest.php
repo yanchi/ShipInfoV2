@@ -958,9 +958,8 @@ class StatusControllerTest extends WebTestCase
     public function testPortsFilterByPortAndDirection(): void
     {
         $this->createPortBoardData();
-        $naze = $this->portId('名瀬');
 
-        $crawler = $this->client->request('GET', "/ports?port={$naze}&dir=down");
+        $crawler = $this->client->request('GET', '/ports/naze?dir=down');
 
         $this->assertResponseIsSuccessful();
         $rows = $crawler->filter('li.port-row');
@@ -987,7 +986,7 @@ class StatusControllerTest extends WebTestCase
 
         $this->assertResponseStatusCodeSame(303);
         $response = $this->client->getResponse();
-        $this->assertSame("/ports?port={$naze}&dir=down", $response->headers->get('Location'));
+        $this->assertSame('/ports/naze?dir=down', $response->headers->get('Location'));
         $cookies = $response->headers->getCookies();
         $this->assertCount(1, $cookies);
         $this->assertSame('port_filter', $cookies[0]->getName());
@@ -1009,7 +1008,7 @@ class StatusControllerTest extends WebTestCase
         $this->client->submit($crawler->selectButton('表示')->form(['port' => (string) $naze, 'dir' => 'down']), [], self::SAME_ORIGIN);
 
         $this->assertResponseStatusCodeSame(303);
-        $this->assertSame("/ports?port={$naze}&dir=down", $this->client->getResponse()->headers->get('Location'));
+        $this->assertSame('/ports/naze?dir=down', $this->client->getResponse()->headers->get('Location'));
         $this->assertSame([], $this->client->getResponse()->headers->getCookies());
     }
 
@@ -1033,7 +1032,8 @@ class StatusControllerTest extends WebTestCase
     /** GET の save=1・clear=1 では Cookie を変えない（リンクで書き換えられないように） */
     public function testPortsGetSaveAndClearAreIgnored(): void
     {
-        foreach (['/ports?port=' . $this->portId('名瀬') . '&save=1', '/ports?clear=1'] as $url) {
+        $this->createPortBoardData();
+        foreach (['/ports/naze?save=1', '/ports?port=all&save=1', '/ports?clear=1'] as $url) {
             $this->client->request('GET', $url);
             $this->assertResponseIsSuccessful($url);
             $this->assertSame([], $this->client->getResponse()->headers->getCookies(), $url);
@@ -1067,6 +1067,58 @@ class StatusControllerTest extends WebTestCase
         $this->assertCount(1, $cookies);
         $this->assertSame('port_filter', $cookies[0]->getName());
         $this->assertTrue($cookies[0]->isCleared());
+    }
+
+    /** 古い URL（/ports?port=<id>）は港のページへ 301（検索エンジンとブックマークを移す） */
+    public function testPortsOldUrlRedirectsToPortPage(): void
+    {
+        $this->createPortBoardData();
+        $naze = $this->portId('名瀬');
+
+        foreach (["/ports?port={$naze}" => '/ports/naze', "/ports?port={$naze}&dir=down" => '/ports/naze?dir=down', "/ports?port={$naze}&dir=xx" => '/ports/naze'] as $url => $location) {
+            $this->client->request('GET', $url);
+            $this->assertResponseStatusCodeSame(301, $url);
+            $this->assertSame($location, $this->client->getResponse()->headers->get('Location'), $url);
+            $this->assertTrue($this->client->getResponse()->headers->hasCacheControlDirective('private'), $url);
+            $this->assertContains('Cookie', $this->client->getResponse()->getVary(), $url);
+        }
+    }
+
+    public function testPortsOldUrlWithInvalidCookieClearsIt(): void
+    {
+        $this->createPortBoardData();
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=999'));
+
+        $this->client->request('GET', '/ports?port=' . $this->portId('名瀬'));
+
+        $this->assertResponseStatusCodeSame(301);
+        $cookies = $this->client->getResponse()->headers->getCookies();
+        $this->assertCount(1, $cookies);
+        $this->assertTrue($cookies[0]->isCleared());
+    }
+
+    public function testPortsKeepsShowingWithoutValidPort(): void
+    {
+        $this->createPortBoardData();
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('名瀬')));
+
+        foreach (['/ports?port=all', '/ports?port=999', '/ports'] as $url) {
+            $this->client->request('GET', $url);
+            $this->assertResponseIsSuccessful($url);
+        }
+    }
+
+    public function testIndexMoreLinkPointsToSavedPortPage(): void
+    {
+        $this->createPortBoardData();
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('名瀬') . '&dir=down'));
+
+        $crawler = $this->client->request('GET', '/');
+        $this->assertSame('/ports/naze?dir=down', $crawler->filter('a.saved-today-more')->attr('href'));
+
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('名瀬')));
+        $crawler = $this->client->request('GET', '/');
+        $this->assertSame('/ports/naze', $crawler->filter('a.saved-today-more')->attr('href'));
     }
 
     public function testPortsInvalidParamsReturn200(): void
@@ -1188,7 +1240,7 @@ class StatusControllerTest extends WebTestCase
     {
         $this->createPortBoardData(OperationStatusEnum::Cancelled);
 
-        $crawler = $this->client->request('GET', '/ports?port=' . $this->portId('鹿児島') . '&dir=down');
+        $crawler = $this->client->request('GET', '/ports/kagoshima?dir=down');
 
         $this->assertResponseIsSuccessful();
         $this->assertMatchesRegularExpression('/絞り込みの外にも欠航・条件付などがあります（[1-9]\d*件）/u', $crawler->filter('.alert-summary')->text());
@@ -1246,7 +1298,7 @@ class StatusControllerTest extends WebTestCase
         $rows = $saved->filter('li.port-row');
         $this->assertCount(1, $rows);
         $this->assertStringContainsString('05:50発', $rows->text());
-        $this->assertCount(1, $saved->filter('a[href="/ports"]'));
+        $this->assertCount(1, $saved->filter('a[href="/ports/naze?dir=down"]'));
         $this->assertCount(0, $crawler->filter('a.ports-cta'));
     }
 

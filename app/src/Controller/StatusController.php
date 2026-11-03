@@ -284,8 +284,19 @@ class StatusController extends AbstractController
         PortAlertSummaryBuilder $portAlertSummaryBuilder,
     ): Response {
         $boardStops = $routeStopRepository->findBoardStops();
+        $resolution = $portFilterResolver->resolve($request, $boardStops);
 
-        return $this->renderPorts($portFilterResolver->resolve($request, $boardStops), null, $boardStops, $portFilterResolver, $portAlertSummaryBuilder);
+        // 古い URL（/ports?port=<id>）は港のページへ。検索エンジンとブックマークを新しい URL に移す
+        if ($resolution->redirectTo !== null) {
+            $response = new RedirectResponse($resolution->redirectTo, Response::HTTP_MOVED_PERMANENTLY);
+            if ($resolution->cookie !== null) {
+                $response->headers->setCookie($resolution->cookie);
+            }
+
+            return $this->varyByCookie($response);
+        }
+
+        return $this->renderPorts($resolution, null, $boardStops, $portFilterResolver, $portAlertSummaryBuilder);
     }
 
     /** 港ごとのページ（検索で島の名前から来る人向け。18-port-seo-pages） */

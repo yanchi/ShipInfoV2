@@ -63,7 +63,7 @@ class PortFilterResolverTest extends TestCase
 
         $this->assertSame(['port' => 5, 'dir' => 'down'], $r->filter->toQuery());
         $this->assertTrue($r->filter->hasSaved);
-        $this->assertNull($r->redirectTo);
+        $this->assertSame('/ports/wadomari?dir=down', $r->redirectTo);
         $this->assertNull($r->cookie);
     }
 
@@ -81,8 +81,36 @@ class PortFilterResolverTest extends TestCase
         $r = $this->resolve(['port' => '5', 'dir' => 'down', 'save' => '1', 'clear' => '1'], 'port=3');
 
         $this->assertSame(['port' => 5, 'dir' => 'down'], $r->filter->toQuery());
-        $this->assertNull($r->redirectTo);
+        $this->assertSame('/ports/wadomari?dir=down', $r->redirectTo);
         $this->assertNull($r->cookie);
+    }
+
+    // ------------------------------------------------------------------
+    // GET /ports の古い URL（port=<id>）の転送先
+
+    public function testResolveRedirectsPortIdToPortPage(): void
+    {
+        $this->assertSame('/ports/wadomari', $this->resolve(['port' => '5'])->redirectTo);
+        $this->assertSame('/ports/wadomari?dir=down', $this->resolve(['port' => '5', 'dir' => 'down'])->redirectTo);
+        // 不正な dir は捨てる
+        $this->assertSame('/ports/wadomari', $this->resolve(['port' => '5', 'dir' => 'xx'])->redirectTo);
+    }
+
+    public function testResolveDoesNotRedirectWithoutValidPort(): void
+    {
+        foreach ([['port' => 'all'], ['port' => 'all', 'dir' => 'up'], ['port' => '999'], ['dir' => 'up'], []] as $query) {
+            $this->assertNull($this->resolve($query)->redirectTo, (string) json_encode($query));
+        }
+        // 保存した港があっても /ports は転送しない
+        $this->assertNull($this->resolve([], 'port=5')->redirectTo);
+    }
+
+    public function testResolveRedirectKeepsClearingInvalidCookie(): void
+    {
+        $r = $this->resolve(['port' => '5'], 'port=999');
+
+        $this->assertSame('/ports/wadomari', $r->redirectTo);
+        $this->assertTrue($r->cookie?->isCleared());
     }
 
     // ------------------------------------------------------------------
@@ -92,7 +120,7 @@ class PortFilterResolverTest extends TestCase
     {
         $r = $this->submit(['action' => 'show', 'port' => '5', 'dir' => 'down'], 'port=3');
 
-        $this->assertSame('/ports?port=5&dir=down', $r->redirectTo);
+        $this->assertSame('/ports/wadomari?dir=down', $r->redirectTo);
         $this->assertNull($r->cookie);
     }
 
@@ -108,7 +136,7 @@ class PortFilterResolverTest extends TestCase
     {
         $r = $this->submit(['action' => 'save', 'port' => '5', 'dir' => 'down']);
 
-        $this->assertSame('/ports?port=5&dir=down', $r->redirectTo);
+        $this->assertSame('/ports/wadomari?dir=down', $r->redirectTo);
         $this->assertNotNull($r->cookie);
         $this->assertSame('port_filter', $r->cookie->getName());
         $this->assertSame('port=5&dir=down', $r->cookie->getValue());
@@ -123,7 +151,7 @@ class PortFilterResolverTest extends TestCase
     {
         $r = $this->submit(['action' => 'save', 'port' => '5', 'dir' => 'down'], 'port=3', tokenValid: false);
 
-        $this->assertSame('/ports?port=5&dir=down', $r->redirectTo);
+        $this->assertSame('/ports/wadomari?dir=down', $r->redirectTo);
         $this->assertNull($r->cookie);
     }
 

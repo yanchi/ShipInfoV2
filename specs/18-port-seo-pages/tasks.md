@@ -48,12 +48,12 @@
 **Goal**: 古い `/ports?port=<id>` を 301、フォームの移り先を `/ports/{slug}`、トップの「4日分を見る」を港のページにする（FR-009〜FR-013）。US1 の slug・ルートが前提
 **Independent Test**: contracts/http-routes.md の GET /ports と POST /ports/filter の表がすべてテストで通る
 
-- [ ] T020 [US3] app/src/Service/PortFilterResolver.php：`resolve()` で `port` が出発港の ID なら `redirectTo = /ports/<slug>`（`dir` が正しければ `?dir=`）を返す。`url()` を、港があれば `/ports/<slug>`（＋`?dir=`）、無ければ今までどおりにする（research R5・R6）
-- [ ] T021 [US3] app/src/Controller/StatusController.php：`ports()` で `redirectTo` があれば 301 の `RedirectResponse`（消す Cookie があれば付け、`varyByCookie()`）を返す
-- [ ] T022 [US3] app/templates/status/index.html.twig：「4日分を見る」を、保存した港があれば `path('app_status_port', {slug: …, dir: …})`、方向だけの保存なら `path('app_status_ports')` にする。港の Port は、トップに渡している `portOptions` から `portFilter.portId` で引く（コントローラーは変えない）
-- [ ] T023 [US3] app/tests/Service/PortFilterResolverTest.php：`resolve()` の転送先（港あり・dir あり・dir 不正・`all`・不正な番号・dir だけ）と `submit()` の移り先を contracts/http-routes.md の表どおりに直す・足す
-- [ ] T024 [US3] app/tests/Controller/StatusControllerTest.php：`/ports?port=<id>&dir=down` の 301 と Location、`/ports?port=all`・`/ports?port=999`・`/ports`（Cookie あり）の 200、フォームの 303 の Location、トップの「4日分を見る」の href。今の `/ports?port=<id>` を開いて中身を見ているテストは `/ports/<slug>` に直す
-- [ ] T025 [US3] `make test-php`・`make phpstan` を通してコミット
+- [X] T020 [US3] app/src/Service/PortFilterResolver.php：`resolve()` で `port` が出発港の ID なら `redirectTo = /ports/<slug>`（`dir` が正しければ `?dir=`）を返す。`url()` を、港があれば `/ports/<slug>`（＋`?dir=`）、無ければ今までどおりにする（research R5・R6）
+- [X] T021 [US3] app/src/Controller/StatusController.php：`ports()` で `redirectTo` があれば 301 の `RedirectResponse`（消す Cookie があれば付け、`varyByCookie()`）を返す
+- [X] T022 [US3] app/templates/status/index.html.twig：「4日分を見る」を、保存した港があれば `path('app_status_port', {slug: …, dir: …})`、方向だけの保存なら `path('app_status_ports')` にする。港の Port は、トップに渡している `portOptions` から `portFilter.portId` で引く（コントローラーは変えない）
+- [X] T023 [US3] app/tests/Service/PortFilterResolverTest.php：`resolve()` の転送先（港あり・dir あり・dir 不正・`all`・不正な番号・dir だけ）と `submit()` の移り先を contracts/http-routes.md の表どおりに直す・足す
+- [X] T024 [US3] app/tests/Controller/StatusControllerTest.php：`/ports?port=<id>&dir=down` の 301 と Location、`/ports?port=all`・`/ports?port=999`・`/ports`（Cookie あり）の 200、フォームの 303 の Location、トップの「4日分を見る」の href。今の `/ports?port=<id>` を開いて中身を見ているテストは `/ports/<slug>` に直す
+- [X] T025 [US3] `make test-php`・`make phpstan` を通してコミット
 
 ## Phase 6: Polish
 
