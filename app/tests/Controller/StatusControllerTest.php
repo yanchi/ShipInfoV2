@@ -1181,7 +1181,19 @@ class StatusControllerTest extends WebTestCase
         $crawler = $this->client->request('GET', '/ports');
         $this->assertCount(0, $crawler->filter('nav.port-links span[aria-current]'));
         $this->assertCount(1, $crawler->filter('nav.port-links a[href="/ports/naze"]'));
-        $this->assertSame('沖縄（那覇港）', trim($crawler->filter('nav.port-links a[href="/ports/naha"]')->text()));
+    }
+
+    /** マイグレーションで入れた呼び名（那覇・本部は「沖縄（〇〇港）」） */
+    public function testSeededDisplayNames(): void
+    {
+        $names = [];
+        foreach ($this->entityManager()->getRepository(Port::class)->findAll() as $port) {
+            $names[$port->getSlug()] = $port->getDisplayName();
+        }
+
+        $this->assertSame('沖縄（那覇港）', $names['naha'] ?? null);
+        $this->assertSame('沖縄（本部港）', $names['motobu'] ?? null);
+        $this->assertSame('鹿児島', $names['kagoshima'] ?? null);
     }
 
     public function testPortPageIgnoresSavedCookieButOffersToClearIt(): void
