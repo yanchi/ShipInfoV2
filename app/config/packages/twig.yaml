@@ -1,10 +1,10 @@
 twig:
     file_name_pattern: '*.twig'
     globals:
-        # V1 の文言を引き継ぐ（specs/7-v1-branding/data-model.md）。「ShipInfo」は画面に出さない
+        # サイト名・OG は V1 の文言を引き継ぐ（specs/7-v1-branding/data-model.md）。タイトルは 18-port-seo-pages で検索向けに変えた。「ShipInfo」は画面に出さない
         site_name: '鹿児島〜沖縄・奄美大島 フェリー運航情報'
-        site_top_title: '鹿児島〜沖縄・奄美大島フェリー運航情報'
-        title_suffix: ' | 鹿児島〜沖縄フェリー運航状況'
+        site_top_title: '鹿児島〜奄美・沖縄 フェリー運航状況（今日・明日）| 欠航・遅延をリアルタイム確認'
+        title_suffix: ' | 鹿児島〜奄美・沖縄フェリー運航情報'
         og_site_name: '鹿児島〜沖縄フェリー運航情報サービス'
         copyright: '© 2025 鹿児島〜沖縄・奄美大島 フェリー運航情報サービス'
         # OG 画像（public/og-image.png）の代わりの文（specs/10-og-image/data-model.md）

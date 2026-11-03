@@ -6,7 +6,7 @@
         {#- canonical・og:url はクエリ無しの URL（全ページ同じ式）。og:image も同じスキーム＋ホスト。title・description は og でも同じ値を使う -#}
         {%- set canonical_url = app.request.schemeAndHttpHost ~ app.request.pathInfo -%}
         <title>{% block full_title %}{% block title %}{% endblock %}{{ title_suffix }}{% endblock %}</title>
-        <meta name="description" content="{% block description %}鹿児島〜沖縄・奄美大島を結ぶマルエーフェリー・マリックスラインのリアルタイム運航状況。欠航・遅延・通常運航を毎時更新でお知らせします。{% endblock %}">
+        <meta name="description" content="{% block description %}鹿児島〜奄美・沖縄を結ぶマルエーフェリー・マリックスラインの今日・明日の運航状況。欠航・遅延を毎時更新でリアルタイムにお知らせします。{% endblock %}">
         <link rel="canonical" href="{{ canonical_url }}">
         <meta property="og:title" content="{{ block('full_title')|trim|raw }}">
         <meta property="og:description" content="{{ block('description')|trim|raw }}">
@@ -43,7 +43,7 @@
             <a class="site-name" href="{{ path('app_status_index') }}">{% for part in site_name|split(' ') %}<span>{{ part }}</span>{% if not loop.last %} {% endif %}{% endfor %}</a>
             <nav class="site-nav" aria-label="サイト">
                 <a href="{{ path('app_status_index') }}" class="{{ currentRoute == 'app_status_index' ? 'active' }}"{% if currentRoute == 'app_status_index' %} aria-current="page"{% endif %}>トップ</a>
-                <a href="{{ path('app_status_ports') }}" class="{{ currentRoute == 'app_status_ports' ? 'active' }}"{% if currentRoute == 'app_status_ports' %} aria-current="page"{% endif %}>港別</a>
+                <a href="{{ path('app_status_ports') }}" class="{{ currentRoute in ['app_status_ports', 'app_status_port'] ? 'active' }}"{% if currentRoute in ['app_status_ports', 'app_status_port'] %} aria-current="page"{% endif %}>港別</a>
                 {% block site_companies_menu %}
                 <details class="site-companies">
                     <summary class="{{ currentRoute == 'app_status_company' ? 'active' }}">各社</summary>

@@ -1,0 +1,10 @@
+{#- 港ごとのページへのリンク（検索エンジンがたどれるように。文字は呼び名＝検索で使われる島の名前）。currentPort は見ている港（全港なら null） -#}
+<nav class="port-links d-flex flex-wrap column-gap-3 row-gap-1 small mb-2" aria-label="港ごとのページ">
+    {% for port in portOptions %}
+        {% if currentPort and currentPort.id == port.id %}
+            <span aria-current="page" class="fw-bold">{{ port.displayName }}</span>
+        {% else %}
+            <a href="{{ path('app_status_port', {slug: port.slug}) }}">{{ port.displayName }}</a>
+        {% endif %}
+    {% endfor %}
+</nav>

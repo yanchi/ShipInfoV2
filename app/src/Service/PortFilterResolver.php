@@ -29,6 +29,7 @@ class PortFilterResolver
 
     /**
      * GET /ports。Cookie は読むだけで、書くのは不正な値を消すときだけ。
+     * クエリの port が出発港の ID なら、その港のページ（/ports/{slug}）への転送先を返す（古い URL のため）。
      *
      * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
      */
@@ -42,10 +43,64 @@ class PortFilterResolver
             return new PortFilterResolution($saved ?? PortFilter::none(), null, $clearCookie);
         }
 
-        $port = $this->parsePort((string) $request->query->get('port', ''), $validPortIds);
-        $dir  = $this->parseDirection((string) $request->query->get('dir', ''));
+        $port   = $this->parsePort((string) $request->query->get('port', ''), $validPortIds);
+        $dir    = $this->parseDirection((string) $request->query->get('dir', ''));
+        $filter = new PortFilter($port['value'], $dir['value'], $saved !== null);
 
-        return new PortFilterResolution(new PortFilter($port['value'], $dir['value'], $saved !== null), null, $clearCookie);
+        return new PortFilterResolution($filter, $port['value'] !== null ? $this->url($filter, $boardStops) : null, $clearCookie);
+    }
+
+    /**
+     * GET /ports/{slug}。港は URL のもの、方向は dir クエリ（不正なら両方向）。
+     * Cookie は読むだけで（「保存を解除」を出すかの判定）、書き換えない。不正な値は消す。
+     *
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     */
+    public function resolveForPort(Request $request, array $boardStops, Port $port): PortFilterResolution
+    {
+        [$saved, $cookieInvalid] = $this->readCookie($request, $this->validPortIds($boardStops));
+        $dir                     = $this->parseDirection((string) $request->query->get('dir', ''));
+
+        return new PortFilterResolution(
+            new PortFilter($port->getId(), $dir['value'], $saved !== null),
+            null,
+            $cookieInvalid ? $this->clearCookie() : null,
+        );
+    }
+
+    /**
+     * slug に合う出発港。出発港の一覧に無ければ null。
+     *
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     */
+    public function findDeparturePortBySlug(array $boardStops, string $slug): ?Port
+    {
+        return $this->findDeparturePort($boardStops, static fn (Port $port) => $port->getSlug() === $slug);
+    }
+
+    /**
+     * トップの「4日分を見る」の移り先。保存した港があればその港のページ、無ければ /ports。
+     *
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     */
+    public function moreUrl(PortFilter $filter, array $boardStops): string
+    {
+        return $this->portPageUrl($filter, $boardStops) ?? self::PATH;
+    }
+
+    /**
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     * @param callable(Port): bool $matches
+     */
+    private function findDeparturePort(array $boardStops, callable $matches): ?Port
+    {
+        foreach ($this->departurePorts($boardStops) as $port) {
+            if ($matches($port)) {
+                return $port;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -75,14 +130,14 @@ class PortFilterResolver
 
         if ($action !== self::ACTION_SAVE || !$tokenValid || !$port['valid'] || !$dir['valid']) {
             // 表示だけ、またはトークン・値が不正なら保存しない（もとの Cookie は残す）
-            return new PortFilterResolution($filter, $this->url($filter), $clearCookie);
+            return new PortFilterResolution($filter, $this->url($filter, $boardStops), $clearCookie);
         }
         if (!$filter->isActive()) {
             // 「全港・両方向」を保存する = 保存した条件を消す
             return new PortFilterResolution($filter, self::PATH, $this->clearCookie());
         }
 
-        return new PortFilterResolution($filter, $this->url($filter), $this->writeCookie($filter));
+        return new PortFilterResolution($filter, $this->url($filter, $boardStops), $this->writeCookie($filter));
     }
 
     /**
@@ -181,13 +236,39 @@ class PortFilterResolver
     }
 
     /**
-     * 表示する GET の URL。条件が空なら、Cookie の条件で表示されないよう port=all を付ける。
+     * 表示する GET の URL。港があればその港のページ（/ports/{slug}、方向があれば ?dir=）。
+     * 港が無く条件も空なら、Cookie の条件で表示されないよう port=all を付ける。
+     *
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
      */
-    private function url(PortFilter $filter): string
+    private function url(PortFilter $filter, array $boardStops): string
     {
+        $pageUrl = $this->portPageUrl($filter, $boardStops);
+        if ($pageUrl !== null) {
+            return $pageUrl;
+        }
+
         $query = $filter->toQuery() ?: ['port' => 'all'];
 
         return self::PATH . '?' . http_build_query($query);
+    }
+
+    /**
+     * 港のページの URL（/ports/{slug}、方向があれば ?dir=）。港が無い・出発港の一覧に無ければ null。
+     *
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     */
+    private function portPageUrl(PortFilter $filter, array $boardStops): ?string
+    {
+        $port = $filter->portId !== null
+            ? $this->findDeparturePort($boardStops, static fn (Port $p) => $p->getId() === $filter->portId)
+            : null;
+        if ($port === null) {
+            return null;
+        }
+        $dir = $filter->direction !== null ? '?' . http_build_query(['dir' => $filter->direction->value]) : '';
+
+        return self::PATH . '/' . $port->getSlug() . $dir;
     }
 
     private function writeCookie(PortFilter $filter): Cookie

@@ -613,9 +613,9 @@ class StatusControllerTest extends WebTestCase
     {
         $crawler = $this->client->request('GET', '/');
 
-        $this->assertSame('鹿児島〜沖縄・奄美大島フェリー運航情報', $crawler->filter('title')->text());
+        $this->assertSame('鹿児島〜奄美・沖縄 フェリー運航状況（今日・明日）| 欠航・遅延をリアルタイム確認', $crawler->filter('title')->text());
         $this->assertSame(
-            'マルエーフェリー・マリックスラインの鹿児島〜那覇・奄美大島間フェリーの最新運航状況。欠航・遅延情報を毎時更新。旅行前に出発港・到着港の運航状況をご確認ください。',
+            '鹿児島〜奄美大島・徳之島・沖永良部・与論・沖縄（奄美航路）のフェリー運航状況。マルエーフェリー・マリックスラインの今日・明日の欠航・遅延を毎時更新し、リアルタイムで確認できます。',
             $crawler->filter('meta[name="description"]')->attr('content'),
         );
     }
@@ -623,13 +623,25 @@ class StatusControllerTest extends WebTestCase
     public function testPageTitleFormat(): void
     {
         $crawler = $this->client->request('GET', '/ports');
-        $this->assertSame('港別運航情報 | 鹿児島〜沖縄フェリー運航状況', $crawler->filter('title')->text());
+        $this->assertSame('港別 フェリー運航状況（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報', $crawler->filter('title')->text());
 
         $this->createPortBoardData();
         $id      = $this->companyId('港別テスト運航会社');
         $crawler = $this->client->request('GET', "/company/{$id}");
-        $this->assertSame('港別テスト運航会社 運航状況 | 鹿児島〜沖縄フェリー運航状況', $crawler->filter('title')->text());
+        $this->assertSame('港別テスト運航会社 運航状況（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報', $crawler->filter('title')->text());
         $this->assertStringContainsString('港別テスト運航会社', $crawler->filter('meta[name="description"]')->attr('content'));
+    }
+
+    /** 表記は「運航」。「運行」はどのページにも出さない（18-port-seo-pages SC-005） */
+    public function testNoUnkoSpellingOnAnyPage(): void
+    {
+        $this->createPortBoardData();
+        $id = $this->companyId('港別テスト運航会社');
+        foreach (['/', '/ports', '/ports/naze', "/company/{$id}"] as $url) {
+            $this->client->request('GET', $url);
+            $this->assertResponseIsSuccessful($url);
+            $this->assertStringNotContainsString('運行', (string) $this->client->getResponse()->getContent(), $url);
+        }
     }
 
     /** 社名に & < " ' を含んでも og タグが二重にエスケープされない */
@@ -639,7 +651,7 @@ class StatusControllerTest extends WebTestCase
 
         $crawler = $this->client->request('GET', "/company/{$id}");
 
-        $this->assertSame("A&B<汽船>\"' 運航状況 | 鹿児島〜沖縄フェリー運航状況", $crawler->filter('title')->text());
+        $this->assertSame("A&B<汽船>\"' 運航状況（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報", $crawler->filter('title')->text());
         $this->assertSame($crawler->filter('title')->text(), $crawler->filter('meta[property="og:title"]')->attr('content'));
         $this->assertSame($crawler->filter('meta[name="description"]')->attr('content'), $crawler->filter('meta[property="og:description"]')->attr('content'));
         $this->assertStringContainsString('A&B<汽船>"\'', $crawler->filter('meta[property="og:description"]')->attr('content'));
@@ -946,9 +958,8 @@ class StatusControllerTest extends WebTestCase
     public function testPortsFilterByPortAndDirection(): void
     {
         $this->createPortBoardData();
-        $naze = $this->portId('名瀬');
 
-        $crawler = $this->client->request('GET', "/ports?port={$naze}&dir=down");
+        $crawler = $this->client->request('GET', '/ports/naze?dir=down');
 
         $this->assertResponseIsSuccessful();
         $rows = $crawler->filter('li.port-row');
@@ -975,7 +986,7 @@ class StatusControllerTest extends WebTestCase
 
         $this->assertResponseStatusCodeSame(303);
         $response = $this->client->getResponse();
-        $this->assertSame("/ports?port={$naze}&dir=down", $response->headers->get('Location'));
+        $this->assertSame('/ports/naze?dir=down', $response->headers->get('Location'));
         $cookies = $response->headers->getCookies();
         $this->assertCount(1, $cookies);
         $this->assertSame('port_filter', $cookies[0]->getName());
@@ -997,7 +1008,7 @@ class StatusControllerTest extends WebTestCase
         $this->client->submit($crawler->selectButton('表示')->form(['port' => (string) $naze, 'dir' => 'down']), [], self::SAME_ORIGIN);
 
         $this->assertResponseStatusCodeSame(303);
-        $this->assertSame("/ports?port={$naze}&dir=down", $this->client->getResponse()->headers->get('Location'));
+        $this->assertSame('/ports/naze?dir=down', $this->client->getResponse()->headers->get('Location'));
         $this->assertSame([], $this->client->getResponse()->headers->getCookies());
     }
 
@@ -1021,7 +1032,8 @@ class StatusControllerTest extends WebTestCase
     /** GET の save=1・clear=1 では Cookie を変えない（リンクで書き換えられないように） */
     public function testPortsGetSaveAndClearAreIgnored(): void
     {
-        foreach (['/ports?port=' . $this->portId('名瀬') . '&save=1', '/ports?clear=1'] as $url) {
+        $this->createPortBoardData();
+        foreach (['/ports/naze?save=1', '/ports?port=all&save=1', '/ports?clear=1'] as $url) {
             $this->client->request('GET', $url);
             $this->assertResponseIsSuccessful($url);
             $this->assertSame([], $this->client->getResponse()->headers->getCookies(), $url);
@@ -1057,6 +1069,58 @@ class StatusControllerTest extends WebTestCase
         $this->assertTrue($cookies[0]->isCleared());
     }
 
+    /** 古い URL（/ports?port=<id>）は港のページへ 301（検索エンジンとブックマークを移す） */
+    public function testPortsOldUrlRedirectsToPortPage(): void
+    {
+        $this->createPortBoardData();
+        $naze = $this->portId('名瀬');
+
+        foreach (["/ports?port={$naze}" => '/ports/naze', "/ports?port={$naze}&dir=down" => '/ports/naze?dir=down', "/ports?port={$naze}&dir=xx" => '/ports/naze'] as $url => $location) {
+            $this->client->request('GET', $url);
+            $this->assertResponseStatusCodeSame(301, $url);
+            $this->assertSame($location, $this->client->getResponse()->headers->get('Location'), $url);
+            $this->assertTrue($this->client->getResponse()->headers->hasCacheControlDirective('private'), $url);
+            $this->assertContains('Cookie', $this->client->getResponse()->getVary(), $url);
+        }
+    }
+
+    public function testPortsOldUrlWithInvalidCookieClearsIt(): void
+    {
+        $this->createPortBoardData();
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=999'));
+
+        $this->client->request('GET', '/ports?port=' . $this->portId('名瀬'));
+
+        $this->assertResponseStatusCodeSame(301);
+        $cookies = $this->client->getResponse()->headers->getCookies();
+        $this->assertCount(1, $cookies);
+        $this->assertTrue($cookies[0]->isCleared());
+    }
+
+    public function testPortsKeepsShowingWithoutValidPort(): void
+    {
+        $this->createPortBoardData();
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('名瀬')));
+
+        foreach (['/ports?port=all', '/ports?port=999', '/ports'] as $url) {
+            $this->client->request('GET', $url);
+            $this->assertResponseIsSuccessful($url);
+        }
+    }
+
+    public function testIndexMoreLinkPointsToSavedPortPage(): void
+    {
+        $this->createPortBoardData();
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('名瀬') . '&dir=down'));
+
+        $crawler = $this->client->request('GET', '/');
+        $this->assertSame('/ports/naze?dir=down', $crawler->filter('a.saved-today-more')->attr('href'));
+
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('名瀬')));
+        $crawler = $this->client->request('GET', '/');
+        $this->assertSame('/ports/naze', $crawler->filter('a.saved-today-more')->attr('href'));
+    }
+
     public function testPortsInvalidParamsReturn200(): void
     {
         foreach (['/ports?port=999', '/ports?dir=xxx'] as $url) {
@@ -1071,6 +1135,98 @@ class StatusControllerTest extends WebTestCase
 
         $headers = $this->client->getResponse()->headers;
         $this->assertTrue($headers->hasCacheControlDirective('private'));
+        $this->assertContains('Cookie', $this->client->getResponse()->getVary());
+    }
+
+    // ------------------------------------------------------------------
+    // /ports/{slug}（18-port-seo-pages）
+    // ------------------------------------------------------------------
+
+    public function testPortPageShowsOnlyThatPort(): void
+    {
+        $this->createPortBoardData();
+
+        $crawler = $this->client->request('GET', '/ports/naze?dir=down');
+
+        $this->assertResponseIsSuccessful();
+        $rows = $crawler->filter('li.port-row');
+        $this->assertCount(4, $rows);
+        foreach ($rows as $row) {
+            $this->assertStringStartsWith('名瀬発', trim((new Crawler($row))->filter('.fw-bold')->text()));
+        }
+        $this->assertSelectorTextContains('h1', '奄美大島（名瀬港）発の運航状況');
+        $this->assertSame('奄美大島（名瀬港）発 フェリー運航状況（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報', trim($crawler->filter('title')->text()));
+        $this->assertStringContainsString('奄美大島（名瀬港）を出るフェリー', $crawler->filter('meta[name="description"]')->attr('content'));
+        // canonical はクエリ無し
+        $this->assertSame('http://localhost/ports/naze', $crawler->filter('link[rel="canonical"]')->attr('href'));
+        $this->assertSame('http://localhost/ports/naze', $crawler->filter('meta[property="og:url"]')->attr('content'));
+        // ナビの「港別」がいまいるページ
+        $this->assertCount(1, $crawler->filter('nav a.active[href="/ports"][aria-current="page"]'));
+    }
+
+    public function testPortPageLinksToOtherPorts(): void
+    {
+        $this->createPortBoardData();
+
+        $crawler = $this->client->request('GET', '/ports/naze');
+
+        $nav = $crawler->filter('nav.port-links');
+        $this->assertCount(1, $nav);
+        $this->assertSame('港ごとのページ', $nav->attr('aria-label'));
+        $this->assertSame('奄美大島（名瀬港）', trim($nav->filter('span[aria-current="page"]')->text()));
+        $this->assertCount(0, $nav->filter('a[href="/ports/naze"]'));
+        $this->assertSame('鹿児島', trim($nav->filter('a[href="/ports/kagoshima"]')->text()));
+
+        // 全港のページでは全部リンク
+        $crawler = $this->client->request('GET', '/ports');
+        $this->assertCount(0, $crawler->filter('nav.port-links span[aria-current]'));
+        $this->assertCount(1, $crawler->filter('nav.port-links a[href="/ports/naze"]'));
+    }
+
+    /** マイグレーションで入れた呼び名（那覇・本部は「沖縄（〇〇港）」） */
+    public function testSeededDisplayNames(): void
+    {
+        $names = [];
+        foreach ($this->entityManager()->getRepository(Port::class)->findAll() as $port) {
+            $names[$port->getSlug()] = $port->getDisplayName();
+        }
+
+        $this->assertSame('沖縄（那覇港）', $names['naha'] ?? null);
+        $this->assertSame('沖縄（本部港）', $names['motobu'] ?? null);
+        $this->assertSame('鹿児島', $names['kagoshima'] ?? null);
+    }
+
+    public function testPortPageIgnoresSavedCookieButOffersToClearIt(): void
+    {
+        $this->createPortBoardData();
+        $this->client->getCookieJar()->set(new BrowserCookie('port_filter', 'port=' . $this->portId('鹿児島')));
+
+        $crawler = $this->client->request('GET', '/ports/naze');
+
+        $this->assertResponseIsSuccessful();
+        foreach ($crawler->filter('li.port-row > .fw-bold') as $name) {
+            $this->assertStringStartsWith('名瀬発', trim($name->textContent));
+        }
+        $this->assertCount(1, $crawler->selectButton('保存を解除'));
+        $this->assertSame([], $this->client->getResponse()->headers->getCookies());
+    }
+
+    public function testPortPageReturns404ForUnknownSlug(): void
+    {
+        $this->createPortBoardData();
+
+        foreach (['/ports/xxx', '/ports/naha', '/ports/filter'] as $url) {
+            $this->client->request('GET', $url);
+            $this->assertResponseStatusCodeSame(404, $url);
+        }
+    }
+
+    public function testPortPageIsPrivateAndVariesByCookie(): void
+    {
+        $this->createPortBoardData();
+        $this->client->request('GET', '/ports/naze');
+
+        $this->assertTrue($this->client->getResponse()->headers->hasCacheControlDirective('private'));
         $this->assertContains('Cookie', $this->client->getResponse()->getVary());
     }
 
@@ -1097,7 +1253,7 @@ class StatusControllerTest extends WebTestCase
     {
         $this->createPortBoardData(OperationStatusEnum::Cancelled);
 
-        $crawler = $this->client->request('GET', '/ports?port=' . $this->portId('鹿児島') . '&dir=down');
+        $crawler = $this->client->request('GET', '/ports/kagoshima?dir=down');
 
         $this->assertResponseIsSuccessful();
         $this->assertMatchesRegularExpression('/絞り込みの外にも欠航・条件付などがあります（[1-9]\d*件）/u', $crawler->filter('.alert-summary')->text());
@@ -1155,7 +1311,7 @@ class StatusControllerTest extends WebTestCase
         $rows = $saved->filter('li.port-row');
         $this->assertCount(1, $rows);
         $this->assertStringContainsString('05:50発', $rows->text());
-        $this->assertCount(1, $saved->filter('a[href="/ports"]'));
+        $this->assertCount(1, $saved->filter('a[href="/ports/naze?dir=down"]'));
         $this->assertCount(0, $crawler->filter('a.ports-cta'));
     }
 
