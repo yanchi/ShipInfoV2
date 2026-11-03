@@ -75,8 +75,27 @@ class PortFilterResolver
      */
     public function findDeparturePortBySlug(array $boardStops, string $slug): ?Port
     {
+        return $this->findDeparturePort($boardStops, static fn (Port $port) => $port->getSlug() === $slug);
+    }
+
+    /**
+     * トップの「4日分を見る」の移り先。保存した港があればその港のページ、無ければ /ports。
+     *
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     */
+    public function moreUrl(PortFilter $filter, array $boardStops): string
+    {
+        return $this->portPageUrl($filter, $boardStops) ?? self::PATH;
+    }
+
+    /**
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     * @param callable(Port): bool $matches
+     */
+    private function findDeparturePort(array $boardStops, callable $matches): ?Port
+    {
         foreach ($this->departurePorts($boardStops) as $port) {
-            if ($port->getSlug() === $slug) {
+            if ($matches($port)) {
                 return $port;
             }
         }
@@ -224,17 +243,32 @@ class PortFilterResolver
      */
     private function url(PortFilter $filter, array $boardStops): string
     {
-        foreach ($this->departurePorts($boardStops) as $port) {
-            if ($port->getId() === $filter->portId) {
-                $dir = $filter->direction !== null ? '?' . http_build_query(['dir' => $filter->direction->value]) : '';
-
-                return self::PATH . '/' . $port->getSlug() . $dir;
-            }
+        $pageUrl = $this->portPageUrl($filter, $boardStops);
+        if ($pageUrl !== null) {
+            return $pageUrl;
         }
 
         $query = $filter->toQuery() ?: ['port' => 'all'];
 
         return self::PATH . '?' . http_build_query($query);
+    }
+
+    /**
+     * 港のページの URL（/ports/{slug}、方向があれば ?dir=）。港が無い・出発港の一覧に無ければ null。
+     *
+     * @param list<array{direction: RouteDirectionEnum, departurePorts: list<Port>, arrivalPort: Port}> $boardStops
+     */
+    private function portPageUrl(PortFilter $filter, array $boardStops): ?string
+    {
+        $port = $filter->portId !== null
+            ? $this->findDeparturePort($boardStops, static fn (Port $p) => $p->getId() === $filter->portId)
+            : null;
+        if ($port === null) {
+            return null;
+        }
+        $dir = $filter->direction !== null ? '?' . http_build_query(['dir' => $filter->direction->value]) : '';
+
+        return self::PATH . '/' . $port->getSlug() . $dir;
     }
 
     private function writeCookie(PortFilter $filter): Cookie

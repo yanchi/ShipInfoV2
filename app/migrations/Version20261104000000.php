@@ -19,8 +19,8 @@ final class Version20261104000000 extends AbstractMigration
         '亀徳'   => ['kametoku', '徳之島（亀徳港）'],
         '和泊'   => ['wadomari', '沖永良部島（和泊港）'],
         '与論'   => ['yoron', '与論島（与論港）'],
-        '本部'   => ['motobu', '沖縄・本部港'],
-        '那覇'   => ['naha', null],
+        '本部'   => ['motobu', '沖縄（本部港）'],
+        '那覇'   => ['naha', '沖縄（那覇港）'],
     ];
 
     public function getDescription(): string

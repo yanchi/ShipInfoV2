@@ -63,6 +63,7 @@ class StatusController extends AbstractController
             'portFilter'      => $resolution->filter,
             'portOptions'     => $portFilterResolver->departurePorts($boardStops),
             'savedToday'      => $savedToday,
+            'moreUrl'         => $portFilterResolver->moreUrl($resolution->filter, $boardStops),
             'companies'       => $companies,
             'idleCompanies'   => $idleCompanies,
             'routeBadges'     => $this->routeBadges($companies, $fullBoard->days[0] ?? null),

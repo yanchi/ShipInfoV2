@@ -1181,6 +1181,7 @@ class StatusControllerTest extends WebTestCase
         $crawler = $this->client->request('GET', '/ports');
         $this->assertCount(0, $crawler->filter('nav.port-links span[aria-current]'));
         $this->assertCount(1, $crawler->filter('nav.port-links a[href="/ports/naze"]'));
+        $this->assertSame('沖縄（那覇港）', trim($crawler->filter('nav.port-links a[href="/ports/naha"]')->text()));
     }
 
     public function testPortPageIgnoresSavedCookieButOffersToClearIt(): void

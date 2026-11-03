@@ -39,9 +39,7 @@
                     </ul>
                 </div>
             {% endfor %}
-            {%- set savedPort = portOptions|filter(p => p.id == portFilter.portId)|first -%}
-            {%- set moreQuery = portFilter.direction ? {dir: portFilter.direction.value} : {} -%}
-            <a href="{{ savedPort ? path('app_status_port', {slug: savedPort.slug}|merge(moreQuery)) : path('app_status_ports') }}" class="saved-today-more">4日分を見る →</a>
+            <a href="{{ moreUrl }}" class="saved-today-more">4日分を見る →</a>
         </section>
     {% else %}
         {# FR-017: 港別ページへの導線はボタン相当の大きさで #}
