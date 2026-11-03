@@ -311,6 +311,18 @@ def test_heading_line_is_joined_with_next_line(resolver):
     assert all(n.sentence.startswith("・条件付寄港地 :") for n in notices.values())
 
 
+def test_empty_heading_followed_by_heading_is_dropped(resolver):
+    """中身が空の見出し（「・抜港地 :」）のすぐ後ろが見出しなら、前の見出しはつながない。"""
+    text = "・抜港地 :\n・条件付寄港地 :\n与論港、和泊港"
+
+    notices = _names(extract_port_notices(text, resolver), resolver)
+
+    assert {name: n.kind for name, n in notices.items()} == {
+        "与論": "conditional",
+        "和泊": "conditional",
+    }
+
+
 def test_conditional_ports_on_detail_page_20261104(resolver):
     """保存版 2026-11-04：波之上の 11/4 那覇発上りは与論・和泊・亀徳が条件付寄港（那覇は便の説明）。"""
     text = extract_notice_text(
