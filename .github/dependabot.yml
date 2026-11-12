@@ -35,7 +35,10 @@ updates:
       interval: monthly
       timezone: Asia/Tokyo
 
-  # 本番イメージの PHP（パッチ版まで固定している）。セキュリティ修正の版を取りこぼさないように毎週見る
+  # 本番イメージの PHP（パッチ版まで固定している）。セキュリティ修正の版を取りこぼさないように毎週見る。
+  # app/composer.json の config.platform.php も本番と同じ版にしてある（Composer と Dependabot が
+  # 8.4 専用のパッケージを選ばないように）。この PR を入れるときは platform.php もそろえる
+  # （そろえたら composer update --lock）
   - package-ecosystem: docker
     directory: /docker/production/app
     schedule:

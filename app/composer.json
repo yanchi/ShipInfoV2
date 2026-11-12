@@ -53,6 +53,9 @@
             "symfony/runtime": true,
             "phpstan/extension-installer": true
         },
+        "platform": {
+            "php": "8.3.36"
+        },
         "sort-packages": true
     },
     "autoload": {
