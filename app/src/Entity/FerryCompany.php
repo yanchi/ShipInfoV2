@@ -128,42 +128,46 @@ class FerryCompany
         return $this;
     }
 
-    /** @return list<string> 空の文字列は除く */
+    /** @return list<string> 前後の空白を除き、空の要素は捨てる */
     public function getShipNames(): array
     {
-        return self::nonEmpty($this->shipNames);
+        return self::clean($this->shipNames);
     }
 
-    /** @param list<string> $shipNames 空の配列は NULL で持つ */
+    /** @param list<string> $shipNames 掃除して空になれば NULL で持つ */
     public function setShipNames(array $shipNames): static
     {
-        $this->shipNames = [] === $shipNames ? null : $shipNames;
+        $this->shipNames = self::clean($shipNames) ?: null;
 
         return $this;
     }
 
-    /** @return list<string> 空の文字列は除く */
+    /** @return list<string> 前後の空白を除き、空の要素は捨てる */
     public function getAliases(): array
     {
-        return self::nonEmpty($this->aliases);
+        return self::clean($this->aliases);
     }
 
-    /** @param list<string> $aliases 空の配列は NULL で持つ */
+    /** @param list<string> $aliases 掃除して空になれば NULL で持つ */
     public function setAliases(array $aliases): static
     {
-        $this->aliases = [] === $aliases ? null : $aliases;
+        $this->aliases = self::clean($aliases) ?: null;
 
         return $this;
     }
 
     /**
-     * @param list<string>|null $values
+     * マイグレーションや手の SQL で入った値も読むので、文字列以外の要素（null・数値・配列）も捨てる
+     *
+     * @param array<mixed>|null $values
      *
      * @return list<string>
      */
-    private static function nonEmpty(?array $values): array
+    private static function clean(?array $values): array
     {
-        return array_values(array_filter($values ?? [], static fn (string $v): bool => '' !== trim($v)));
+        $strings = array_map(trim(...), array_filter($values ?? [], is_string(...)));
+
+        return array_values(array_filter($strings, static fn (string $v): bool => $v !== ''));
     }
 
     public function getCreatedAt(): ?\DateTimeInterface

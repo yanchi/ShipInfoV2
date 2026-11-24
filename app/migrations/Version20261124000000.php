@@ -29,6 +29,9 @@ final class Version20261124000000 extends AbstractMigration
     public function up(Schema $schema): void
     {
         $this->addSql('ALTER TABLE ferry_companies ADD ship_names JSON DEFAULT NULL, ADD aliases JSON DEFAULT NULL');
+        // 配列でない JSON（文字列など）が入ると、FerryCompany を読むとき（ヘッダーで全ページ）に型エラーになる。DB で止める
+        $this->addSql("ALTER TABLE ferry_companies ADD CONSTRAINT chk_ferry_companies_ship_names CHECK (ship_names IS NULL OR JSON_TYPE(ship_names) = 'ARRAY')");
+        $this->addSql("ALTER TABLE ferry_companies ADD CONSTRAINT chk_ferry_companies_aliases CHECK (aliases IS NULL OR JSON_TYPE(aliases) = 'ARRAY')");
         foreach (self::COMPANIES as $scraperClass => [$shipNames, $aliases]) {
             $this->addSql(
                 'UPDATE ferry_companies SET ship_names = ?, aliases = ? WHERE scraper_class = ?',
@@ -39,12 +42,13 @@ final class Version20261124000000 extends AbstractMigration
 
     public function down(Schema $schema): void
     {
+        $this->addSql('ALTER TABLE ferry_companies DROP CHECK chk_ferry_companies_ship_names, DROP CHECK chk_ferry_companies_aliases');
         $this->addSql('ALTER TABLE ferry_companies DROP ship_names, DROP aliases');
     }
 
     /** @param list<string>|null $values */
     private static function json(?array $values): ?string
     {
-        return null === $values ? null : json_encode($values, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        return $values === null ? null : json_encode($values, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     }
 }

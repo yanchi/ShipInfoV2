@@ -673,9 +673,10 @@ class StatusControllerTest extends WebTestCase
     /**
      * 船の名前・別名の1行と説明文の「運航船：」（19-search-query-wording FR-005〜FR-007、contracts/seo-meta.md の表）
      *
-     * @param list<string> $shipNames
-     * @param list<string>           $aliases
-     * @param non-empty-string|null  $expectedDescriptionTail
+     * @param list<string>          $shipNames
+     * @param list<string>          $aliases
+     * @param string|null           $expectedLine            null なら1行を出さない
+     * @param non-empty-string|null $expectedDescriptionTail null なら説明文に「運航船：」が無い
      */
     #[DataProvider('aliasLineCases')]
     public function testCompanyShipNamesAndAliases(array $shipNames, array $aliases, ?string $expectedLine, ?string $expectedDescriptionTail): void
@@ -691,7 +692,7 @@ class StatusControllerTest extends WebTestCase
 
         $line        = $crawler->filter('.company-aliases');
         $description = (string) $crawler->filter('meta[name="description"]')->attr('content');
-        if (null === $expectedLine) {
+        if ($expectedLine === null) {
             $this->assertCount(0, $line);
             $this->assertCount(1, $crawler->filter('.page-heading.mb-4'));
         } else {
@@ -699,7 +700,7 @@ class StatusControllerTest extends WebTestCase
             $this->assertSame($expectedLine, trim($line->text()));
             $this->assertCount(1, $crawler->filter('.page-heading.mb-1'));
         }
-        if (null === $expectedDescriptionTail) {
+        if ($expectedDescriptionTail === null) {
             $this->assertStringNotContainsString('運航船：', $description);
         } else {
             $this->assertStringEndsWith($expectedDescriptionTail, $description);

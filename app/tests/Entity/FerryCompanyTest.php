@@ -26,6 +26,32 @@ class FerryCompanyTest extends TestCase
         $this->assertSame(['Aライン（エーライン）'], $company->getAliases());
     }
 
+    public function testValuesAreTrimmed(): void
+    {
+        $company = (new FerryCompany())->setShipNames([' フェリー波之上 ', 'フェリーあけぼの']);
+
+        $this->assertSame(['フェリー波之上', 'フェリーあけぼの'], $company->getShipNames());
+    }
+
+    /** setter は掃除して空なら NULL で持つ（data-model.md） */
+    public function testBlankOnlyListIsStoredAsNull(): void
+    {
+        $company = (new FerryCompany())->setShipNames(['', ' '])->setAliases(['']);
+
+        $ref = new \ReflectionClass($company);
+        $this->assertNull($ref->getProperty('shipNames')->getValue($company));
+        $this->assertNull($ref->getProperty('aliases')->getValue($company));
+    }
+
+    /** マイグレーションや手の SQL で文字列以外の要素が入っても落ちない */
+    public function testNonStringElementsAreIgnored(): void
+    {
+        $company = new FerryCompany();
+        (new \ReflectionClass($company))->getProperty('shipNames')->setValue($company, ['船A', null, 1, ['x']]);
+
+        $this->assertSame(['船A'], $company->getShipNames());
+    }
+
     public function testSettingEmptyArrayClearsValues(): void
     {
         $company = (new FerryCompany())->setShipNames(['船A'])->setAliases(['別名A']);
