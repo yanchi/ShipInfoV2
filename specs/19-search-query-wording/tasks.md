@@ -38,7 +38,7 @@
 - [ ] T010 [US2] `make migrate`・`make lint-php`（Doctrine スキーマの検証で差分が出ないこと）・`make check-schema`（スクレイパーのモデルが通ること）を通す。`make test-scraper` も通して、スクレイパーのテストが `ferry_companies` に行を入れても落ちないことを確かめる（research R2）
 - [ ] T011 [US2] app/templates/status/company.html.twig：description の最後に、`company.shipNames` が空でなければ `運航船：{{ company.shipNames|join('・') }}。` を足す（T001 の文の後ろ。空なら何も足さない）
 - [ ] T012 [US2] app/templates/status/company.html.twig：`.page-heading` の div のすぐ後に、船の名前か別名があれば `<p class="company-aliases small text-muted mb-4">` を出す。中身は contracts/seo-meta.md の表のとおり（`運航船：A・B`、`別名：C・D`、両方あれば ` ／ ` でつなぐ）。1行を出すときは `.page-heading` の `mb-4` を `mb-1` にして、運航状況の位置がほとんど変わらないようにする。両方無ければ `<p>` を出さず、`.page-heading` は `mb-4` のまま
-- [ ] T013 [US2] app/tests/Controller/StatusControllerTest.php：テストの会社に `setShipNames()`・`setAliases()` を付けて、(1) 両方あり：`.company-aliases` の文字が `運航船：船A・船B ／ 別名：別名A・別名B`、description の最後が `運航船：船A・船B。`、(2) 船だけ：`運航船：船A` だけで「別名：」が無い、(3) 別名だけ：`別名：別名A` だけで description に「運航船：」が無い、(4) 両方無し：`.company-aliases` が 0 個・description に「運航船：」が無い、(5) 船の名前に `<b>&` を入れてもエスケープされる、を確かめる
+- [ ] T013 [US2] app/tests/Controller/StatusControllerTest.php：テストの会社に `setShipNames()`・`setAliases()` を付けて、(1) 両方あり：`.company-aliases` の文字が `運航船：船A・船B ／ 別名：別名A・別名B`、description の最後が `運航船：船A・船B。`、(2) 船だけ：`運航船：船A` だけで「別名：」が無い、(3) 別名だけ：`別名：別名A` だけで description に「運航船：」が無い、(4) 両方無し：`.company-aliases` が 0 個・description に「運航船：」が無い、(5) 船の名前に `<b>&` を入れても `.company-aliases` ではエスケープされ、meta description・og:description には `<b>&` のまま入る（二重にエスケープされない）、を確かめる
 - [ ] T014 [P] [US2] app/tests/Entity/FerryCompanyTest.php（新規）：`getShipNames()`・`getAliases()` が NULL で `[]`、空の文字列を除く、`setShipNames([])` のあと `getShipNames()` が `[]` を確かめる
 - [ ] T015 [US2] `make test-php`・`make phpstan`・`make cs-php` を通してコミット
 
@@ -48,7 +48,7 @@
 
 - [ ] T016 [P] specs/18-port-seo-pages/spec.md：Clarifications の「運行」の項目の下に「→ 19-search-query-wording で、description（と og:description）にだけ『運航（運行）状況』を 1 回出すように変えた。title・h1・本文は『運航』のまま」と追記する
 - [ ] T017 [P] CLAUDE.md：「重要な設計決定」のサイト名・OG の行の「（タイトル・説明文は 18-port-seo-pages で検索向けにした）」を「（タイトル・説明文は 18-port-seo-pages・19-search-query-wording で検索向けにした。『運行』は description にだけ出す）」にする。会社の船の名前・別名が `ferry_companies.ship_names`・`aliases` にあり、船が変わったらマイグレーションで直すことも 1 行で足す
-- [ ] T018 quickstart.md の「公開前に確かめる」を実行する（curl でタイトル・説明文・1行・「運行」の数が各ページ 2、375px 幅で横スクロールが出ない）
+- [ ] T018 quickstart.md の「公開前に確かめる」を実行する（curl でタイトル・説明文・1行・「運行」の数が各ページ 2、375px 幅で横スクロールが出ない）。あわせて `SELECT scraper_class, ship_names, aliases FROM ferry_companies` で 2 社の値が data-model.md の表どおりで、他社の船が入っていないことを見る（FR-008）
 - [ ] T019 `make test-php`・`make phpstan`・`make cs-php`・`make lint-php`・`make verify-prod` を通してコミット
 
 ## Dependencies & Execution Order
