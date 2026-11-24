@@ -1,7 +1,8 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}{{ company.name }} 運航状況（今日・明日）{% endblock %}
-{% block description %}{{ company.name }}（鹿児島〜奄美・沖縄）の今日・明日の運航状況。航路ごとの欠航・遅延と出港時刻を4日分、毎時更新で確認できます。{% endblock %}
+{# 19-search-query-wording: 「運行」は説明文にだけ 1 回（contracts/seo-meta.md） #}
+{% block title %}{{ company.name }} 運航状況 リアルタイム（今日・明日）{% endblock %}
+{% block description %}{{ company.name }}の運航（運行）状況をリアルタイムで。今日・明日の欠航・遅延を毎時更新し、今日から4日分を航路ごとにまとめて確認できます。{% endblock %}
 
 {% block body %}
 <div class="container pt-3 pb-4">

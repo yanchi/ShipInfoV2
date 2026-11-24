@@ -18,13 +18,13 @@
 **Goal**: 会社ページのタイトルに「リアルタイム」、説明文に公式にない価値を入れる。トップ・港別・港・会社の説明文に「運航（運行）状況」を 1 回だけ入れ、それ以外には「運行」を出さない（FR-001〜FR-004）
 **Independent Test**: 会社ページの title が `<会社名> 運航状況 リアルタイム（今日・明日）` + suffix。`/`・`/ports`・`/ports/naze`・会社ページで、「運行」は meta description と og:description にだけあり、description に「運航（運行）状況」がちょうど 1 回
 
-- [ ] T001 [US1] app/templates/status/company.html.twig：title を `{{ company.name }} 運航状況 リアルタイム（今日・明日）`、description を `{{ company.name }}の運航（運行）状況をリアルタイムで。今日・明日の欠航・遅延を毎時更新し、今日から4日分を航路ごとにまとめて確認できます。` にする（contracts/seo-meta.md。「運航船：」の文は T009 で足す）
-- [ ] T002 [P] [US1] app/templates/status/index.html.twig：description の「（奄美航路）のフェリー運航状況。」を「（奄美航路）のフェリー運航（運行）状況。」にする。title は変えない
-- [ ] T003 [P] [US1] app/templates/status/ports.html.twig：description の全港版「出港時刻と運航状況。」→「出港時刻と運航（運行）状況。」、港版「今日・明日の運航状況と出港時刻。」→「今日・明日の運航（運行）状況と出港時刻。」にする。title・h1 は変えない
-- [ ] T004 [US1] app/tests/Controller/StatusControllerTest.php：期待値を直す。`testTopTitleAndDescription` の説明文、`testPageTitleFormat` と `testOgTagsAreNotDoubleEscaped` の会社ページのタイトル（`… 運航状況 リアルタイム（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報`）。`grep -n "運航状況（今日・明日）\|運航状況。\|運航状況と" app/tests` でほかに古い文言を見ているテストが無いかも確かめる
-- [ ] T005 [US1] app/tests/Controller/StatusControllerTest.php：`testNoUnkoSpellingOnAnyPage` を `testUnkoSpellingOnlyInDescription` に書き換える（research R6）。`/`・`/ports`・`/ports/naze`・会社ページそれぞれで、(1) meta description に「運航（運行）状況」がちょうど 1 回、(2) og:description も同じ値、(3) レスポンスの本文から `<meta name="description" …>` と `<meta property="og:description" …>` の 2 つのタグを正規表現で消したあとに「運行」が無い（title・h1・本文に無い）、を確かめる
-- [ ] T006 [US1] app/tests/Controller/StatusControllerTest.php：会社ページの description が「<会社名>の運航（運行）状況をリアルタイムで。」で始まり、「今日・明日の欠航・遅延を毎時更新」「今日から4日分」を含むことを確かめるテストを足す
-- [ ] T007 [US1] `make test-php`・`make cs-php`・`make lint-php` を通してコミット
+- [X] T001 [US1] app/templates/status/company.html.twig：title を `{{ company.name }} 運航状況 リアルタイム（今日・明日）`、description を `{{ company.name }}の運航（運行）状況をリアルタイムで。今日・明日の欠航・遅延を毎時更新し、今日から4日分を航路ごとにまとめて確認できます。` にする（contracts/seo-meta.md。「運航船：」の文は T009 で足す）
+- [X] T002 [P] [US1] app/templates/status/index.html.twig：description の「（奄美航路）のフェリー運航状況。」を「（奄美航路）のフェリー運航（運行）状況。」にする。title は変えない
+- [X] T003 [P] [US1] app/templates/status/ports.html.twig：description の全港版「出港時刻と運航状況。」→「出港時刻と運航（運行）状況。」、港版「今日・明日の運航状況と出港時刻。」→「今日・明日の運航（運行）状況と出港時刻。」にする。title・h1 は変えない
+- [X] T004 [US1] app/tests/Controller/StatusControllerTest.php：期待値を直す。`testTopTitleAndDescription` の説明文、`testPageTitleFormat` と `testOgTagsAreNotDoubleEscaped` の会社ページのタイトル（`… 運航状況 リアルタイム（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報`）。`grep -n "運航状況（今日・明日）\|運航状況。\|運航状況と" app/tests` でほかに古い文言を見ているテストが無いかも確かめる
+- [X] T005 [US1] app/tests/Controller/StatusControllerTest.php：`testNoUnkoSpellingOnAnyPage` を `testUnkoSpellingOnlyInDescription` に書き換える（research R6）。`/`・`/ports`・`/ports/naze`・会社ページそれぞれで、(1) meta description に「運航（運行）状況」がちょうど 1 回、(2) og:description も同じ値、(3) レスポンスの本文から `<meta name="description" …>` と `<meta property="og:description" …>` の 2 つのタグを正規表現で消したあとに「運行」が無い（title・h1・本文に無い）、を確かめる
+- [X] T006 [US1] app/tests/Controller/StatusControllerTest.php：会社ページの description が「<会社名>の運航（運行）状況をリアルタイムで。」で始まり、「今日・明日の欠航・遅延を毎時更新」「今日から4日分」を含むことを確かめるテストを足す
+- [X] T007 [US1] `make test-php`・`make cs-php`・`make lint-php` を通してコミット
 
 **Checkpoint**: US1 だけで公開できる（船の名前の無い今の会社ページでも FR-001〜FR-004 を満たす）
 

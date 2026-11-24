@@ -615,7 +615,7 @@ class StatusControllerTest extends WebTestCase
 
         $this->assertSame('鹿児島〜奄美・沖縄 フェリー運航状況（今日・明日）| 欠航・遅延をリアルタイム確認', $crawler->filter('title')->text());
         $this->assertSame(
-            '鹿児島〜奄美大島・徳之島・沖永良部・与論・沖縄（奄美航路）のフェリー運航状況。マルエーフェリー・マリックスラインの今日・明日の欠航・遅延を毎時更新し、リアルタイムで確認できます。',
+            '鹿児島〜奄美大島・徳之島・沖永良部・与論・沖縄（奄美航路）のフェリー運航（運行）状況。マルエーフェリー・マリックスラインの今日・明日の欠航・遅延を毎時更新し、リアルタイムで確認できます。',
             $crawler->filter('meta[name="description"]')->attr('content'),
         );
     }
@@ -628,20 +628,45 @@ class StatusControllerTest extends WebTestCase
         $this->createPortBoardData();
         $id      = $this->companyId('港別テスト運航会社');
         $crawler = $this->client->request('GET', "/company/{$id}");
-        $this->assertSame('港別テスト運航会社 運航状況（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報', $crawler->filter('title')->text());
+        $this->assertSame('港別テスト運航会社 運航状況 リアルタイム（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報', $crawler->filter('title')->text());
         $this->assertStringContainsString('港別テスト運航会社', $crawler->filter('meta[name="description"]')->attr('content'));
     }
 
-    /** 表記は「運航」。「運行」はどのページにも出さない（18-port-seo-pages SC-005） */
-    public function testNoUnkoSpellingOnAnyPage(): void
+    /**
+     * 「運行」は説明文（meta description・og:description）にだけ「運航（運行）状況」の形で 1 回出す。
+     * title・h1・本文には出さない（19-search-query-wording FR-003・FR-004。18-port-seo-pages SC-005 を置き換え）
+     */
+    public function testUnkoSpellingOnlyInDescription(): void
     {
         $this->createPortBoardData();
         $id = $this->companyId('港別テスト運航会社');
         foreach (['/', '/ports', '/ports/naze', "/company/{$id}"] as $url) {
-            $this->client->request('GET', $url);
+            $crawler = $this->client->request('GET', $url);
             $this->assertResponseIsSuccessful($url);
-            $this->assertStringNotContainsString('運行', (string) $this->client->getResponse()->getContent(), $url);
+
+            $description = (string) $crawler->filter('meta[name="description"]')->attr('content');
+            $this->assertSame(1, substr_count($description, '運航（運行）状況'), $url);
+            $this->assertSame(1, substr_count($description, '運行'), $url);
+            $this->assertSame($description, $crawler->filter('meta[property="og:description"]')->attr('content'), $url);
+
+            $html = (string) $this->client->getResponse()->getContent();
+            $rest = preg_replace('#<meta (?:name="description"|property="og:description") content="[^"]*">#u', '', $html, -1, $removed);
+            $this->assertSame(2, $removed, $url);
+            $this->assertStringNotContainsString('運行', (string) $rest, $url);
         }
+    }
+
+    /** 会社ページの説明文は公式にない価値（リアルタイム・毎時更新・4日分）を前に出す（19-search-query-wording FR-002） */
+    public function testCompanyDescriptionHighlightsRealtime(): void
+    {
+        $this->createPortBoardData();
+        $id      = $this->companyId('港別テスト運航会社');
+        $crawler = $this->client->request('GET', "/company/{$id}");
+
+        $description = (string) $crawler->filter('meta[name="description"]')->attr('content');
+        $this->assertStringStartsWith('港別テスト運航会社の運航（運行）状況をリアルタイムで。', $description);
+        $this->assertStringContainsString('今日・明日の欠航・遅延を毎時更新', $description);
+        $this->assertStringContainsString('今日から4日分', $description);
     }
 
     /** 社名に & < " ' を含んでも og タグが二重にエスケープされない */
@@ -651,7 +676,7 @@ class StatusControllerTest extends WebTestCase
 
         $crawler = $this->client->request('GET', "/company/{$id}");
 
-        $this->assertSame("A&B<汽船>\"' 運航状況（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報", $crawler->filter('title')->text());
+        $this->assertSame("A&B<汽船>\"' 運航状況 リアルタイム（今日・明日） | 鹿児島〜奄美・沖縄フェリー運航情報", $crawler->filter('title')->text());
         $this->assertSame($crawler->filter('title')->text(), $crawler->filter('meta[property="og:title"]')->attr('content'));
         $this->assertSame($crawler->filter('meta[name="description"]')->attr('content'), $crawler->filter('meta[property="og:description"]')->attr('content'));
         $this->assertStringContainsString('A&B<汽船>"\'', $crawler->filter('meta[property="og:description"]')->attr('content'));
