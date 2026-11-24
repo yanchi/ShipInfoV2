@@ -40,7 +40,7 @@ class FerryCompany
     private ?array $shipNames = null;
 
     /**
-     * 検索で使われる会社の別の呼び方（表示用の文字列。例: 「大島運輸（旧社名）」）。NULL は「無し」
+     * 検索で使われる会社の別の呼び方（表示用の文字列。例: 「Aライン（エーライン）」）。NULL は「無し」
      *
      * @var list<string>|null
      */

@@ -35,7 +35,7 @@ og:title・og:description はタイトル・説明文と同じ（base.html.twig 
 h1 と「公式サイト ↗」の行（`.page-heading`）のすぐ下、最初の日付の見出しより上に置く。
 
 ```html
-<p class="company-aliases small text-muted mb-4">運航船：フェリー波之上・フェリーあけぼの ／ 別名：Aライン（エーライン）・大島運輸（旧社名）</p>
+<p class="company-aliases small text-muted mb-4">運航船：フェリー波之上・フェリーあけぼの ／ 別名：Aライン（エーライン）</p>
 ```
 
 | 船の名前 | 別名 | 出すもの |

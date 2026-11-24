@@ -17,7 +17,7 @@ final class Version20261124000000 extends AbstractMigration
 {
     /** scraper_class => [ship_names, aliases]。値は specs/19-search-query-wording/data-model.md */
     private const COMPANIES = [
-        'MarueFerry' => [['フェリー波之上', 'フェリーあけぼの'], ['Aライン（エーライン）', '大島運輸（旧社名）']],
+        'MarueFerry' => [['フェリー波之上', 'フェリーあけぼの'], ['Aライン（エーライン）']],
         'MarixLine'  => [['クイーンコーラルクロス', 'クイーンコーラルプラス'], null],
     ];
 

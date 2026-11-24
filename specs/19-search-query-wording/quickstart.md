@@ -14,7 +14,7 @@ curl -s http://localhost:8080/company/2 | grep -o '<meta name="description" cont
 
 # 船の名前・別名の1行
 curl -s http://localhost:8080/company/1 | grep -o '<p class="company-aliases[^<]*</p>'
-# → 運航船：フェリー波之上・フェリーあけぼの ／ 別名：Aライン（エーライン）・大島運輸（旧社名）
+# → 運航船：フェリー波之上・フェリーあけぼの ／ 別名：Aライン（エーライン）
 
 # 「運行」は description と og:description にだけある（各ページ 2 回）
 for p in / /ports /ports/kametoku /company/1 /company/2; do
@@ -36,7 +36,7 @@ make verify-prod
 |---|---|---|
 | `/company/2` の CTR | ページ | 1.62% → 3% 以上（順位が ±1 位のとき） |
 | `/company/1` の CTR | ページ | 2.12% → 3% 以上 |
-| 船の名前・別名のクエリのクリック | クエリ（「波之上」「あけぼの」「クイーンコーラル」「Aライン」「エーライン」「大島運輸」で絞る） | 5 回より多い |
+| 船の名前・別名のクエリのクリック | クエリ（「波之上」「あけぼの」「クイーンコーラル」「Aライン」「エーライン」で絞る） | 4 回より多い |
 | 平均掲載順位 | 全体 | 7.5 位より悪くならない |
 
 ## 船が入れ替わったとき

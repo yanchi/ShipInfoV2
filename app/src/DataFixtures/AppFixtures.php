@@ -67,7 +67,7 @@ class AppFixtures extends Fixture
         // 船の名前・別名は Version20261124000000 と同じ値（fixtures:load は全テーブルを消すので入れ直す）
         $marue = $this->makeCompany('マルエーフェリー', 'https://www.aline-ferry.com', 'MarueFerry')
             ->setShipNames(['フェリー波之上', 'フェリーあけぼの'])
-            ->setAliases(['Aライン（エーライン）', '大島運輸（旧社名）']);
+            ->setAliases(['Aライン（エーライン）']);
         $marix = $this->makeCompany('マリックスライン', 'https://marixline.com', 'MarixLine')
             ->setShipNames(['クイーンコーラルクロス', 'クイーンコーラルプラス']);
 

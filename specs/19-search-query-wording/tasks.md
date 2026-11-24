@@ -31,7 +31,7 @@
 ## Phase 4: User Story 2 - 船の名前・会社の別名で検索して、その会社のページにたどり着く（P2）
 
 **Goal**: 会社ごとに船の名前・別名を持ち、会社ページの h1 のすぐ下の1行と description に出す（FR-005〜FR-008）
-**Independent Test**: マルエーフェリーの会社ページに「運航船：フェリー波之上・フェリーあけぼの ／ 別名：Aライン（エーライン）・大島運輸（旧社名）」の1行があり、description の最後が「運航船：フェリー波之上・フェリーあけぼの。」。船の名前・別名が無い会社には1行も「運航船：」も出ない
+**Independent Test**: マルエーフェリーの会社ページに「運航船：フェリー波之上・フェリーあけぼの ／ 別名：Aライン（エーライン）」の1行があり、description の最後が「運航船：フェリー波之上・フェリーあけぼの。」。船の名前・別名が無い会社には1行も「運航船：」も出ない
 
 - [X] T008 [US2] app/migrations/Version20261124000000.php（新規）：`ALTER TABLE ferry_companies ADD ship_names JSON DEFAULT NULL, ADD aliases JSON DEFAULT NULL`。そのあと data-model.md の表の値を `UPDATE ferry_companies SET ship_names = ?, aliases = ? WHERE scraper_class = ?` で入れる（`MarixLine` の `aliases` は NULL）。JSON は `json_encode($v, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)` で作る。down は 2 列を消す。クラスの doc コメントに目的と「スクレイパーは読み書きしない」を書く（Version20261104000000.php と同じ書き方）
 - [X] T009 [US2] app/src/Entity/FerryCompany.php：`#[ORM\Column(type: 'json', nullable: true)] private ?array $shipNames = null;` と `aliases` を足す。`getShipNames(): array`・`getAliases(): array`（`@return list<string>`。NULL は `[]`、空の文字列の要素は除いて `array_values`）、`setShipNames(array $names): static`・`setAliases(array $aliases): static`（`@param list<string>`。空の配列は NULL で持つ）

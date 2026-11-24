@@ -15,7 +15,7 @@
 
 | `scraper_class` | `ship_names` | `aliases` |
 |---|---|---|
-| `MarueFerry` | `["フェリー波之上", "フェリーあけぼの"]` | `["Aライン（エーライン）", "大島運輸（旧社名）"]` |
+| `MarueFerry` | `["フェリー波之上", "フェリーあけぼの"]` | `["Aライン（エーライン）"]` |
 | `MarixLine` | `["クイーンコーラルクロス", "クイーンコーラルプラス"]` | NULL |
 
 - `UPDATE ferry_companies SET ... WHERE scraper_class = ?`。該当する行が無い環境（テスト DB など）では何もしない
