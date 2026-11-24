@@ -32,6 +32,7 @@ V2 に切り替えたあとの検索の状況（Search Console、2026-11-01 の1
 ### Session 2026-11-04
 
 - Q: 画面に出る文言を検索語に合わせて「運行」にするか → A: しない。正しいのは「運航」なので、タイトル・説明文・本文はすべて「運航」のまま。見えない文字（隠しテキスト・meta keywords）で「運行」を足すこともしない
+  - → [19-search-query-wording](../19-search-query-wording/spec.md) で、説明文（meta description と、同じ値の og:description）にだけ「運航（運行）状況」を 1 回出すように変えた。タイトル・h1・本文は「運航」のまま
 
 ## User Scenarios & Testing *(mandatory)*
 

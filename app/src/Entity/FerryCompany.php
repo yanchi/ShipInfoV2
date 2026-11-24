@@ -31,6 +31,22 @@ class FerryCompany
     #[ORM\Column(type: 'boolean')]
     private bool $active = true;
 
+    /**
+     * 運航している船の名前（表示の順）。NULL は「無し」（specs/19-search-query-wording/data-model.md）
+     *
+     * @var list<string>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $shipNames = null;
+
+    /**
+     * 検索で使われる会社の別の呼び方（表示用の文字列。例: 「Aライン（エーライン）」）。NULL は「無し」
+     *
+     * @var list<string>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $aliases = null;
+
     #[ORM\Column(type: 'datetime')]
     private ?\DateTimeInterface $createdAt = null;
 
@@ -110,6 +126,48 @@ class FerryCompany
         $this->active = $active;
 
         return $this;
+    }
+
+    /** @return list<string> 前後の空白を除き、空の要素は捨てる */
+    public function getShipNames(): array
+    {
+        return self::clean($this->shipNames);
+    }
+
+    /** @param list<string> $shipNames 掃除して空になれば NULL で持つ */
+    public function setShipNames(array $shipNames): static
+    {
+        $this->shipNames = self::clean($shipNames) ?: null;
+
+        return $this;
+    }
+
+    /** @return list<string> 前後の空白を除き、空の要素は捨てる */
+    public function getAliases(): array
+    {
+        return self::clean($this->aliases);
+    }
+
+    /** @param list<string> $aliases 掃除して空になれば NULL で持つ */
+    public function setAliases(array $aliases): static
+    {
+        $this->aliases = self::clean($aliases) ?: null;
+
+        return $this;
+    }
+
+    /**
+     * マイグレーションや手の SQL で入った値も読むので、文字列以外の要素（null・数値・配列）も捨てる
+     *
+     * @param array<mixed>|null $values
+     *
+     * @return list<string>
+     */
+    private static function clean(?array $values): array
+    {
+        $strings = array_map(trim(...), array_filter($values ?? [], is_string(...)));
+
+        return array_values(array_filter($strings, static fn (string $v): bool => $v !== ''));
     }
 
     public function getCreatedAt(): ?\DateTimeInterface

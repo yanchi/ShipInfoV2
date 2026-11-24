@@ -1,11 +1,15 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}{{ company.name }} 運航状況（今日・明日）{% endblock %}
-{% block description %}{{ company.name }}（鹿児島〜奄美・沖縄）の今日・明日の運航状況。航路ごとの欠航・遅延と出港時刻を4日分、毎時更新で確認できます。{% endblock %}
+{# 19-search-query-wording: 「運行」は説明文にだけ 1 回（contracts/seo-meta.md） #}
+{% block title %}{{ company.name }} 運航状況 リアルタイム（今日・明日）{% endblock %}
+{% block description %}{{ company.name }}の運航（運行）状況をリアルタイムで。今日・明日の欠航・遅延を毎時更新し、今日から4日分を航路ごとにまとめて確認できます。{% if company.shipNames is not empty %}運航船：{{ company.shipNames|join('・') }}。{% endif %}{% endblock %}
 
 {% block body %}
 <div class="container pt-3 pb-4">
-    <div class="page-heading d-flex flex-wrap align-items-baseline column-gap-2 mb-4">
+    {%- set shipNames = company.shipNames -%}
+    {%- set aliases = company.aliases -%}
+    {%- set hasAliasLine = shipNames is not empty or aliases is not empty %}
+    <div class="page-heading d-flex flex-wrap align-items-baseline column-gap-2 {{ hasAliasLine ? 'mb-1' : 'mb-4' }}">
         <h1 class="h4 mb-0">{{ company.name }} 運航状況</h1>
         {% if company.websiteUrl %}
             <a href="{{ company.websiteUrl }}" target="_blank" rel="noopener noreferrer" class="text-muted small text-nowrap">
@@ -13,6 +17,14 @@
             </a>
         {% endif %}
     </div>
+    {#- 19-search-query-wording FR-005〜FR-007: 船の名前・別名を h1 のすぐ下に小さい1行で。両方無ければ出さない -#}
+    {% if hasAliasLine %}
+        <p class="company-aliases small text-muted mb-4">
+            {%- if shipNames is not empty %}運航船：{{ shipNames|join('・') }}{% endif -%}
+            {%- if shipNames is not empty and aliases is not empty %} ／ {% endif -%}
+            {%- if aliases is not empty %}別名：{{ aliases|join('・') }}{% endif -%}
+        </p>
+    {% endif %}
 
     {# FR-019〜021: 今日〜3日先。日付ごとに航路の要約行と便の行。便あり・便なし・情報なしを区別する #}
     {% for day in days %}
