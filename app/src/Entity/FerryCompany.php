@@ -31,6 +31,22 @@ class FerryCompany
     #[ORM\Column(type: 'boolean')]
     private bool $active = true;
 
+    /**
+     * 運航している船の名前（表示の順）。NULL は「無し」（specs/19-search-query-wording/data-model.md）
+     *
+     * @var list<string>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $shipNames = null;
+
+    /**
+     * 検索で使われる会社の別の呼び方（表示用の文字列。例: 「大島運輸（旧社名）」）。NULL は「無し」
+     *
+     * @var list<string>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $aliases = null;
+
     #[ORM\Column(type: 'datetime')]
     private ?\DateTimeInterface $createdAt = null;
 
@@ -110,6 +126,44 @@ class FerryCompany
         $this->active = $active;
 
         return $this;
+    }
+
+    /** @return list<string> 空の文字列は除く */
+    public function getShipNames(): array
+    {
+        return self::nonEmpty($this->shipNames);
+    }
+
+    /** @param list<string> $shipNames 空の配列は NULL で持つ */
+    public function setShipNames(array $shipNames): static
+    {
+        $this->shipNames = [] === $shipNames ? null : $shipNames;
+
+        return $this;
+    }
+
+    /** @return list<string> 空の文字列は除く */
+    public function getAliases(): array
+    {
+        return self::nonEmpty($this->aliases);
+    }
+
+    /** @param list<string> $aliases 空の配列は NULL で持つ */
+    public function setAliases(array $aliases): static
+    {
+        $this->aliases = [] === $aliases ? null : $aliases;
+
+        return $this;
+    }
+
+    /**
+     * @param list<string>|null $values
+     *
+     * @return list<string>
+     */
+    private static function nonEmpty(?array $values): array
+    {
+        return array_values(array_filter($values ?? [], static fn (string $v): bool => '' !== trim($v)));
     }
 
     public function getCreatedAt(): ?\DateTimeInterface

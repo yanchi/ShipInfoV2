@@ -11,6 +11,7 @@ use App\Entity\RouteStop;
 use App\Enum\OperationStatusEnum;
 use App\Enum\RouteDirectionEnum;
 use Doctrine\ORM\EntityManagerInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\BrowserKit\Cookie as BrowserCookie;
@@ -667,6 +668,70 @@ class StatusControllerTest extends WebTestCase
         $this->assertStringStartsWith('港別テスト運航会社の運航（運行）状況をリアルタイムで。', $description);
         $this->assertStringContainsString('今日・明日の欠航・遅延を毎時更新', $description);
         $this->assertStringContainsString('今日から4日分', $description);
+    }
+
+    /**
+     * 船の名前・別名の1行と説明文の「運航船：」（19-search-query-wording FR-005〜FR-007、contracts/seo-meta.md の表）
+     *
+     * @param list<string> $shipNames
+     * @param list<string>           $aliases
+     * @param non-empty-string|null  $expectedDescriptionTail
+     */
+    #[DataProvider('aliasLineCases')]
+    public function testCompanyShipNamesAndAliases(array $shipNames, array $aliases, ?string $expectedLine, ?string $expectedDescriptionTail): void
+    {
+        $id = $this->persistCompany((new FerryCompany())
+            ->setName('船名テスト会社')
+            ->setActive(true)
+            ->setShipNames($shipNames)
+            ->setAliases($aliases));
+
+        $crawler = $this->client->request('GET', "/company/{$id}");
+        $this->assertResponseIsSuccessful();
+
+        $line        = $crawler->filter('.company-aliases');
+        $description = (string) $crawler->filter('meta[name="description"]')->attr('content');
+        if (null === $expectedLine) {
+            $this->assertCount(0, $line);
+            $this->assertCount(1, $crawler->filter('.page-heading.mb-4'));
+        } else {
+            $this->assertCount(1, $line);
+            $this->assertSame($expectedLine, trim($line->text()));
+            $this->assertCount(1, $crawler->filter('.page-heading.mb-1'));
+        }
+        if (null === $expectedDescriptionTail) {
+            $this->assertStringNotContainsString('運航船：', $description);
+        } else {
+            $this->assertStringEndsWith($expectedDescriptionTail, $description);
+        }
+    }
+
+    /** @return iterable<string, array{list<string>, list<string>, ?string, non-empty-string|null}> */
+    public static function aliasLineCases(): iterable
+    {
+        yield '両方あり' => [['船A', '船B'], ['別名A', '別名B'], '運航船：船A・船B ／ 別名：別名A・別名B', '運航船：船A・船B。'];
+        yield '船だけ' => [['船A'], [], '運航船：船A', '運航船：船A。'];
+        yield '別名だけ' => [[], ['別名A'], '別名：別名A', null];
+        yield '両方無し' => [[], [], null, null];
+        yield '空の文字列だけ' => [['', ' '], [''], null, null];
+    }
+
+    /** 船の名前に HTML の文字があっても、1行ではエスケープされ、説明文・og:description では二重にエスケープされない */
+    public function testCompanyShipNamesAreEscaped(): void
+    {
+        $id = $this->persistCompany((new FerryCompany())
+            ->setName('船名エスケープテスト会社')
+            ->setActive(true)
+            ->setShipNames(['<b>&船']));
+
+        $crawler = $this->client->request('GET', "/company/{$id}");
+        $html    = (string) $this->client->getResponse()->getContent();
+
+        $this->assertSame('運航船：<b>&船', trim($crawler->filter('.company-aliases')->text()));
+        $this->assertCount(0, $crawler->filter('.company-aliases b'));
+        $this->assertStringContainsString('運航船：&lt;b&gt;&amp;船</p>', $html);
+        $this->assertStringEndsWith('運航船：<b>&船。', (string) $crawler->filter('meta[name="description"]')->attr('content'));
+        $this->assertStringEndsWith('運航船：<b>&船。', (string) $crawler->filter('meta[property="og:description"]')->attr('content'));
     }
 
     /** 社名に & < " ' を含んでも og タグが二重にエスケープされない */
