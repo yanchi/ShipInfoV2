@@ -12,7 +12,7 @@
 # 上げるときは vendor と runtime を同じ版にそろえる。Dependabot（docker）が PR を作る
 
 # ---------- 1. PHP の依存を解決 ----------
-FROM php:8.3.36-cli-alpine AS vendor
+FROM php:8.3.37-cli-alpine AS vendor
 
 RUN apk add --no-cache git unzip
 
@@ -33,7 +33,7 @@ COPY app/ .
 RUN composer dump-autoload --optimize --no-dev --classmap-authoritative
 
 # ---------- 2. 実行イメージ ----------
-FROM php:8.3.36-fpm-alpine AS runtime
+FROM php:8.3.37-fpm-alpine AS runtime
 
 RUN apk add --no-cache nginx supervisor icu-libs tzdata \
     && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS icu-dev \
